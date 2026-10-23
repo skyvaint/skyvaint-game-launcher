@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>skyvaint game launcher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Black+Ops+One&family=JetBrains+Mono:wght@400;700&family=Manrope:wght@400;600;800&family=Orbitron:wght@800&family=Press+Start+2P&family=Rajdhani:wght@700&family=Russo+One&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-mode="home" data-input="kb" class="preinit">
+
+<canvas id="bg"></canvas>
+<div class="fx-vig"></div>
+<div class="fx-tex"></div>
+
+<!-- HOME: fullscreen console-style dashboard -->
+<main id="home">
+  <header id="topbar">
+    <div class="brand">
+      <svg class="bolt" viewBox="0 0 100 140"><path d="M62 4 18 78h28l-12 58 50-82H54z"/></svg><img class="app-logo" alt="" draggable="false">
+      <div class="brand-name">SKYVAINT</div>
+      <div class="tag">[ GAME LAUNCHER ]</div>
+    </div>
+    <nav id="funcs"></nav>
+    <div class="status">
+      <div class="live"><i></i><span id="statusText">READY</span></div>
+      <div class="who"><span class="avatar" id="avatar"></span><span id="profileName"></span></div>
+      <div id="clock">00:00</div>
+    </div>
+  </header>
+
+  <section id="shelf">
+    <div class="shelf-head">
+      <div class="tag" id="shelfLabel">[ 01 — CHOOSE YOUR GAME ]</div>
+      <div id="filters"></div>
+    </div>
+    <div id="tiles"></div>
+  </section>
+
+  <section id="detail">
+    <div class="info">
+      <div class="tag-row"><span id="gIcon"></span><div class="tag" id="gTag"></div></div>
+      <h1 id="gTitle"></h1>
+      <div id="gStats"></div>
+      <div id="actions"></div>
+      <div id="homeClips"></div>
+    </div>
+    <div id="hero">
+      <div class="hero-layer"></div>
+      <div class="hero-layer"></div>
+      <div class="hero-dots"></div>
+      <div class="hero-num" id="heroNum">01</div>
+      <div class="hero-cap"><span class="tag" id="heroTag"></span><b id="heroName"></b></div>
+    </div>
+  </section>
+
+  <div id="ticker"><div class="ticker-run" id="tickerRun"></div></div>
+  <footer id="hints"></footer>
+</main>
+
+<!-- MINI: compact always-available widget -->
+<section id="mini">
+  <div class="mini-bar">
+    <button class="mini-home" id="miniHome" title="Open HOME fullscreen">
+      <svg viewBox="0 0 24 24"><path d="M3 11.2 12 3l9 8.2V21h-6v-6H9v6H3z"/></svg><span>HOME</span>
+    </button>
+    <div class="mini-title"><img class="app-logo mini-logo" alt="" draggable="false"><span class="mini-name">SKYVAINT</span></div>
+    <div class="mini-clock" id="miniClock"></div>
+    <button class="mini-x" id="miniHide" title="Hide to tray"><svg viewBox="0 0 24 24"><path d="M5 12h14" /></svg></button>
+  </div>
+  <div class="mini-tiles" id="miniTiles"></div>
+</section>
+
+<div id="overlays"></div>
+
+<div id="launchfx">
+  <div class="lf-slabs"><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="lf-mid">
+    <div class="tag">[ NOW STARTING ]</div>
+    <div class="lf-title" id="lfTitle"></div>
+    <div class="lf-sub tag" id="lfSub"></div>
+    <div class="lf-list" id="lfList"></div>
+    <div class="lf-steps" id="lfSteps"></div>
+    <div class="lf-bar"><i></i></div>
+    <div class="lf-status tag" id="lfStatus"></div>
+  </div>
+  <div class="lf-banner" id="lfBanner"></div>
+</div>
+
+<canvas id="fx"></canvas>
+
+<div id="boot">
+  <div class="boot-welcome tag" id="bootWelcome"></div>
+  <svg class="boot-bolt" viewBox="0 0 100 140"><path pathLength="1" d="M62 4 18 78h28l-12 58 50-82H54z"/></svg><img class="app-logo boot-logo" alt="" draggable="false">
+  <div class="boot-name" id="bootName"></div>
+  <div class="tag boot-sub">[ GAME LAUNCHER ]</div>
+  <div class="boot-bar"><i></i></div>
+</div>
+
+<canvas id="space"></canvas>
+<div id="toasts"></div>
+
+<script src="js/host.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/bg.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/space.js"></script>
+<script src="js/input.js"></script>
+<script src="js/app.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/clips.js"></script>
+<script src="js/discover.js"></script>
+<script src="js/quests.js"></script>
+<script src="js/nexus.js"></script>
+<script src="js/title.js"></script>
+<script src="js/rails.js"></script>
+<script src="js/lists.js"></script>
+<script>SV.host.send('ready'); // everything above is loaded, so the shell's reply can use all of it</script>
+</body>
+</html>
