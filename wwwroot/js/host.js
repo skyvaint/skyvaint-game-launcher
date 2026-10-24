@@ -108,6 +108,15 @@ SV.host = (() => {
       setTimeout(() => emit({ type: 'robloxPlayDone', ok: true }), d.ids.length * 1400);
     } else if (type === 'robloxCloseClients') {
       emit({ type: 'robloxClients', count: 0 });
+    } else if (type === 'robloxFriends') {
+      const names = ['TheKing_13', 'EgoStriker', 'PredatorMode', 'NightOwl', 'BlockBuilder', 'Zappy', 'Mira', 'Voltage'];
+      setTimeout(() => emit({ type: 'robloxFriends', id: d.id, ok: true, me: 1, friends: names.map((name, i) => ({
+        id: 2000 + i, name, displayName: name, state: [2, 2, 1, 3, 0, 1, 0, 0][i], where: ['Future Soccer', 'Blox Fruits', '', 'Roblox Studio', '', '', '', ''][i],
+        placeId: 1000 + i, rootPlaceId: 1000 + i, universeId: i < 2 ? 500 + i : 0, gameId: i < 2 ? 'job-' + i : '', head: '', gameIcon: '' })) }), 400);
+    } else if (type === 'gameDetails') {
+      setTimeout(() => emit({ type: 'gameDetails', token: d.token, details: d.kind === 'roblox'
+        ? { universeId: 500, placeId: d.placeId, name: 'Future Soccer', description: 'A mock description of the game.\nSecond line.', creator: 'Mock Studio', playing: 12345, visits: 98765432, maxPlayers: 12, created: '2023-01-02', updated: new Date().toISOString(), genre: 'Sports', upVotes: 900, downVotes: 100, favorites: 45000, shots: [], icon: '' }
+        : { name: 'Mock', description: 'A mock Steam description.', developers: 'Mock Dev', publishers: 'Mock Pub', genres: 'Action, Shooter', released: 'Aug 21, 2012', metacritic: 83, recommendations: 4200000, shots: [] } }), 500);
     } else if (type === 'clipsScan') {
       setTimeout(() => emit({ type: 'clips', clips: mockClips(), medal: 'C:\\Medal' }), 300);
     } else if (type === 'clipDelete') {

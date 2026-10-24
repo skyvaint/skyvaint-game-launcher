@@ -581,7 +581,29 @@ case "open":
         Send(reply.DeepClone().AsObject());
     }
 
-    static async Task<JsonNode?> GetJson(string url) => JsonNode.Parse(await Web.GetStringAsync(url));
+    // Roblox's public APIs answer 429 (too many requests) or a 5xx now and then, which used to turn into missing art,
+    // blank rows or "couldn't reach Roblox". Those get a few tries with a growing pause; anything else fails at once.
+    static Task<JsonNode?> GetJson(string url) => GetJsonWith(Web, url);
+
+    internal static async Task<JsonNode?> GetJsonWith(HttpClient http, string url, int tries = 4)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            HttpResponseMessage? resp = null;
+            try
+            {
+                resp = await http.GetAsync(url);
+                int code = (int)resp.StatusCode;
+                if (resp.IsSuccessStatusCode) return JsonNode.Parse(await resp.Content.ReadAsStringAsync());
+                if (attempt >= tries || (code != 429 && code < 500)) resp.EnsureSuccessStatusCode();
+                var wait = resp.Headers.RetryAfter?.Delta ?? TimeSpan.FromMilliseconds(700 * Math.Pow(2, attempt - 1));
+                await Task.Delay(wait > TimeSpan.FromSeconds(8) ? TimeSpan.FromSeconds(8) : wait);
+            }
+            catch (TaskCanceledException) when (attempt < tries) { await Task.Delay(600 * attempt); }
+            catch (HttpRequestException ex) when (attempt < tries && ex.StatusCode == null) { await Task.Delay(600 * attempt); } // network blip
+            finally { resp?.Dispose(); }
+        }
+    }
 
     static async Task<JsonArray> DiscoverEpic()
     {

@@ -9,7 +9,7 @@
   let open = false, railIdx = 0, feeds = { upcoming: null, news: null }, commissions = { items: null, error: '', channelName: '' }, fetchedAt = 0, hasBot = false;
   const cardIdx = {};
 
-  const root = el(`<section id="rails"><div class="rails-head"><div class="tag">[ MORE ]</div><div class="rails-hint"></div></div><div class="rails-body"></div></section>`);
+  const root = el(`<section id="rails"><div class="rails-sweep"></div><div class="rails-head"><div class="rails-frame"><div class="tag">[ 02 — MORE ]</div><b class="rails-now"></b><span class="rails-dots"></span></div><div class="rails-hint"></div></div><div class="rails-body"></div></section>`);
   document.body.append(root);
   const body = $('.rails-body', root);
 
@@ -27,9 +27,71 @@
   const openUrl = (url) => { audio.play('confirm'); host.send('openUrl', { url }); };
   const ago = (iso) => { const ms = Date.now() - new Date(iso).getTime(), h = Math.floor(ms / 3.6e6); return h < 1 ? Math.max(1, Math.floor(ms / 6e4)) + 'M AGO' : h < 48 ? h + 'H AGO' : Math.floor(h / 24) + 'D AGO'; };
 
+  const timeAgo = (ms) => { if (!ms) return ''; const m = Math.floor((Date.now() - ms) / 6e4); return m < 60 ? Math.max(1, m) + 'M AGO' : m < 2880 ? Math.floor(m / 60) + 'H AGO' : Math.floor(m / 1440) + 'D AGO'; };
+
+  // What you played last, games and Roblox places together, newest first.
+  function recentCards() {
+    const stats = A.stats, games = A.cfg.games.filter((g) => (stats[g.id] || {}).lastPlayed).map((g) => ({ g, at: stats[g.id].lastPlayed }));
+    const places = SV.roblox.places().map((p, i) => ({ p, i, at: p.lastPlayed || 0 })).filter((x) => x.at);
+    return [...games, ...places].sort((a, b) => b.at - a.at).slice(0, 14).map((x) => x.g ? {
+      img: A.artSrc(x.g, 'hero') || A.artSrc(x.g, 'cover'), title: x.g.name, cls: 'wide' + (A.running.has(x.g.id) ? ' live' : ''),
+      sub: `${A.running.has(x.g.id) ? 'RUNNING' : A.lastPlayed(x.at)} · ${A.playtime((stats[x.g.id] || {}).seconds)} PLAYED`,
+      run: () => { close(); setTimeout(() => A.launch(x.g), 250); },
+      options: () => A.openMenu(x.g.name, [
+        { label: 'START', run: () => { close(); A.launch(x.g); } },
+        { label: 'DETAILS', run: () => SV.details.game(x.g) },
+        { label: 'GO TO IT', run: () => { close(); A.jumpTo(x.g); } },
+      ]),
+    } : {
+      img: x.p.thumb || x.p.icon, title: x.p.name, cls: 'wide', sub: `ROBLOX · ${A.lastPlayed(x.at)}`,
+      run: () => { close(); SV.roblox.openAt(null, x.i); },
+      options: () => A.openMenu(x.p.name, [
+        { label: 'PLAY', run: () => { close(); SV.roblox.openAt(null, x.i); } },
+        { label: 'DETAILS', run: () => SV.details.place(x.p) },
+      ]),
+    });
+  }
+
+  const PRESENCE = { 2: 'IN GAME', 3: 'IN STUDIO', 1: 'ONLINE', 0: 'OFFLINE' };
+  function friendCards() {
+    const F = SV.friends, st = F.state;
+    if (st === 'noaccount') return [{ glyph: '+', title: 'ADD A ROBLOX ACCOUNT', sub: 'SEE WHO IS ONLINE AND JOIN THEM', cls: 'friend add', run: () => { close(); A.openSettings('accounts'); } }];
+    if (st === 'signedout') return [{ glyph: '!', title: 'SIGN IN AGAIN', sub: (SV.roblox.label(F.account()) || '').toUpperCase() + ' IS SIGNED OUT', cls: 'friend add', run: () => { close(); A.openSettings('accounts'); } }];
+    if (st === 'error' && !F.list.length) return [{ glyph: '↻', title: "COULDN'T LOAD FRIENDS", sub: 'ENTER TO TRY AGAIN', cls: 'friend add', run: () => { F.refresh(true); toast('Asking Roblox again…'); } }];
+    return F.list.slice(0, 60).map((f) => {
+      const live = f.state === F.IN_GAME, name = f.displayName || f.name;
+      return {
+        cls: 'friend p' + (f.state || 0), run: () => (live ? F.join(f) : f.universeId ? SV.details.roblox({ placeId: f.rootPlaceId || f.placeId, universeId: f.universeId, name: f.where }) : toast(`${name} is ${PRESENCE[f.state || 0].toLowerCase()}.`)),
+        html: `<div class="fr-face" ${f.head ? `style="background-image:url('${esc(f.head)}')"` : ''}>${f.head ? '' : `<span>${esc((name[0] || '?').toUpperCase())}</span>`}<i></i></div>
+          <div class="fr-meta"><b>${esc(name)}</b><small>${live || f.state === F.STUDIO ? esc(f.where || PRESENCE[f.state]) : PRESENCE[f.state || 0]}</small>
+          ${live ? `<span class="fr-join">${f.gameIcon ? `<img src="${esc(f.gameIcon)}" alt="">` : ''}JOIN</span>` : ''}</div>`,
+        options: () => A.openMenu(name, [
+          ...(live ? [{ label: 'JOIN', sub: f.where || 'Their game', run: () => F.join(f) }] : []),
+          ...(f.universeId ? [{ label: 'GAME DETAILS', sub: f.where, run: () => SV.details.roblox({ placeId: f.rootPlaceId || f.placeId, universeId: f.universeId, name: f.where }) }] : []),
+          { label: 'VIEW PROFILE', run: () => openUrl(`https://www.roblox.com/users/${f.id}/profile`) },
+          ...(SV.roblox.accounts().length > 1 ? [{ label: 'SHOW ANOTHER ACCOUNT\'S FRIENDS', run: () => F.chooseAccount(render) }] : []),
+          { label: 'REFRESH', run: () => { F.refresh(true); toast('Refreshing friends…'); } },
+        ]),
+      };
+    });
+  }
+
   // Each row: { id, title, note, cards: [{ img, title, sub, cls, html, run, options }] }
   function rails() {
     const out = [], show = rs().show;
+    if (show.recent !== false) {
+      const cards = recentCards();
+      if (cards.length) out.push({ id: 'recent', title: 'JUMP BACK IN', note: 'LAST PLAYED · ENTER STARTS IT', cards });
+    }
+    if (show.friends !== false && SV.friends) {
+      const F = SV.friends, list = F.list, a = F.account();
+      const inGame = list.filter((f) => f.state === F.IN_GAME).length, online = list.filter((f) => f.state && f.state !== F.IN_GAME).length;
+      out.push({
+        id: 'friends', title: 'FRIENDS',
+        note: F.state === 'loading' && !list.length ? 'LOADING…' : list.length ? `${inGame} IN GAME · ${online} ONLINE · ${list.length} FRIENDS${a ? ' · AS @' + a.username.toUpperCase() : ''}${F.updated ? ' · ' + timeAgo(F.updated) : ''}` : 'ROBLOX',
+        cards: friendCards(),
+      });
+    }
     if (show.roblox) {
       const places = SV.roblox.places();
       SV.lists && SV.lists.ensureArt();
@@ -48,7 +110,7 @@
         id: 'studio', title: 'STUDIO PROJECTS', note: s.loaded ? `${s.cloud.length} CLOUD · ${s.local.length} FILES` : 'READING STUDIO…',
         cards: [
           ...s.cloud.map((c) => ({ img: c.thumb || c.icon, title: c.name, sub: `CLOUD · ${SV.lists.num(c.visits)} VISITS`, cls: 'wide', run: () => SV.lists.openCloud(c),
-            options: () => A.openMenu(c.name, [{ label: 'EDIT IN STUDIO', run: () => SV.lists.openCloud(c) }, { label: 'PLAY', run: () => { close(); SV.roblox.playPlace({ placeId: c.placeId, name: c.name, icon: c.icon }); } }, { label: 'OPEN ON ROBLOX.COM', run: () => openUrl(`https://www.roblox.com/games/${c.placeId}`) }]) })),
+            options: () => A.openMenu(c.name, [{ label: 'EDIT IN STUDIO', run: () => SV.lists.openCloud(c) }, { label: 'PLAY', run: () => { close(); SV.roblox.playPlace({ placeId: c.placeId, name: c.name, icon: c.icon }); } }, { label: 'DETAILS', run: () => SV.details.roblox({ placeId: c.placeId, universeId: c.universeId, name: c.name, icon: c.icon, thumb: c.thumb }) }, { label: 'OPEN ON ROBLOX.COM', run: () => openUrl(`https://www.roblox.com/games/${c.placeId}`) }]) })),
           ...s.local.filter((f) => f.exists).map((f) => ({ title: f.name, sub: 'FILE · ' + (f.folder || '').toUpperCase(), cls: 'wide file', glyph: '.rbxl', run: () => SV.lists.openFile(f),
             options: () => A.openMenu(f.name, [{ label: 'OPEN IN STUDIO', run: () => SV.lists.openFile(f) }, { label: 'SHOW IN FOLDER', run: () => host.send('revealFile', { path: f.path }) }]) })),
         ],
@@ -81,7 +143,7 @@
       }));
       out.push({ id: 'commissions', title: 'COMMISSIONS', note: c.items ? `#${(c.channelName || 'channel').toUpperCase()} · ${c.items.length} LATEST` : 'DISCORD', cards });
     }
-    return out.filter((r) => r.cards.length || r.id === 'upcoming' || r.id === 'news');
+    return out.filter((r) => r.cards.length || r.id === 'upcoming' || r.id === 'news' || r.id === 'friends');
   }
 
   let current = [];
@@ -90,7 +152,7 @@
     current = rails();
     railIdx = clamp(railIdx, 0, Math.max(0, current.length - 1));
     body.innerHTML = current.map((r, ri) => `
-      <div class="rail" data-r="${ri}">
+      <div class="rail" data-r="${ri}" style="--ri:${ri}">
         <div class="rail-head"><b>${esc(r.title)}</b><span class="tag">${esc(r.note || '')}</span></div>
         <div class="rail-row">${r.cards.length ? r.cards.map((c, ci) => `
           <button class="rail-card ${esc(c.cls || '')}" data-c="${ci}">
@@ -108,28 +170,42 @@
       const ci = clamp(cardIdx[ri] || 0, 0, Math.max(0, n - 1));
       railEl.querySelectorAll('.rail-card').forEach((c, k) => c.classList.toggle('focus', ri === railIdx && k === ci));
       if (scroll && ri === railIdx) {
-        railEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        railEl.scrollIntoView({ block: ri === 0 ? 'start' : 'center', behavior: 'smooth' });
         const f = railEl.querySelectorAll('.rail-card')[ci];
         f && f.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
       }
     });
     $('.rails-hint', root).innerHTML = A.hints([['confirm', 'Open'], ['move', 'Move'], ['options', 'Options'], ['back', 'Back up']]);
+    const now = $('.rails-now', root), title = current[railIdx] ? current[railIdx].title : '';
+    if (now.textContent !== title) { now.textContent = title; now.classList.remove('swap'); void now.offsetWidth; now.classList.add('swap'); }
+    $('.rails-dots', root).innerHTML = current.map((r, i) => `<i class="${i === railIdx ? 'on' : ''}"></i>`).join('') + `<em>${String(railIdx + 1).padStart(2, '0')} / ${String(current.length).padStart(2, '0')}</em>`;
   }
 
   function show() {
     if (open || !rs().enabled) return;
     open = true;
-    document.body.classList.add('rails-on');
+    // Frame 1 → 2: HOME lifts and falls back while a slash sweeps across and the rows rise in one after another.
+    const b = document.body;
+    b.classList.remove('rails-enter');
+    void b.offsetWidth;
+    b.classList.add('rails-on', 'rails-enter');
+    clearTimeout(enterTimer);
+    enterTimer = setTimeout(() => b.classList.remove('rails-enter'), 1100);
     audio.play('open');
+    railIdx = 0;
+    body.scrollTop = 0;
+    SV.friends && SV.friends.refresh(false);
     fetchAll(false);
     host.send('discordBotState');
     render();
     paint();
   }
+  let enterTimer = 0;
   function close() {
     if (!open) return;
     open = false;
-    document.body.classList.remove('rails-on');
+    clearTimeout(enterTimer);
+    document.body.classList.remove('rails-on', 'rails-enter');
     audio.play('back');
   }
 
@@ -181,6 +257,8 @@
     return [
       heading('ROWS UNDER HOME'),
       R.toggle('Rows under HOME', 'Scroll down on HOME (or press down past the buttons) to slide up rows of cards.', A.at('rails.enabled')),
+      t('recent', 'Jump back in', 'The games and Roblox places you played last.'),
+      t('friends', 'Friends', 'Your Roblox friends: who is online, what they play, and JOIN.'),
       t('roblox', 'Roblox games', 'Your saved places. Enter opens the account and server picker.'),
       t('studio', 'Studio projects', 'Cloud games and recent files from Roblox Studio.'),
       t('upcoming', 'Coming soon', "Steam's coming-soon list and Epic's next free games."),

@@ -40,18 +40,19 @@
     phantom:   { name: 'Phantom',   accent: '#9aa7ff', accent2: '#4b4f8f', bg: '#05060b' },
   };
 
-  const DEFAULT_GAMES = [
-    { id: 'rematch', scanId: 'steam_2138720', name: 'REMATCH', platform: 'steam', target: 'steam://rungameid/2138720',
-      process: 'RuntimeClient-Win64-Shipping', tagline: 'Five a side. No fouls, no offsides, no excuses.', c1: '#19c37d', c2: '#0b2f4a' },
-    { id: 'fortnite', scanId: 'epic_Fortnite', name: 'Fortnite', platform: 'epic',
-      target: 'com.epicgames.launcher://apps/Fortnite?action=launch&silent=true',
-      process: 'FortniteClient-Win64-Shipping', tagline: 'Drop in. Build up. Be the last one standing.', c1: '#8b3dff', c2: '#1fb6ff' },
-    { id: 'rocketleague', scanId: 'epic_Sugar', name: 'Rocket League', platform: 'epic',
-      target: 'com.epicgames.launcher://apps/Sugar?action=launch&silent=true',
-      process: 'RocketLeague', tagline: 'Rocket-powered cars. One oversized ball.', c1: '#0a66ff', c2: '#ff7a00' },
-  ];
-  const TAGLINES = { roblox_player: 'Pick an account, pick a place, jump in.', roblox_studio: 'Build it. Script it. Ship it.' };
-  const COLOURS = { roblox_player: ['#e2231a', '#3a3a3a'], roblox_studio: ['#00a2ff', '#0b2f4a'] };
+  // A fresh install starts with an empty shelf: games only come from what the scan finds on this PC (or what
+  // you add yourself). These only dress up well-known games when they are found.
+  const TAGLINES = {
+    roblox_player: 'Pick an account, pick a place, jump in.', roblox_studio: 'Build it. Script it. Ship it.',
+    steam_2138720: 'Five a side. No fouls, no offsides, no excuses.', epic_Fortnite: 'Drop in. Build up. Be the last one standing.',
+    epic_Sugar: 'Rocket-powered cars. One oversized ball.',
+  };
+  const COLOURS = {
+    roblox_player: ['#e2231a', '#3a3a3a'], roblox_studio: ['#00a2ff', '#0b2f4a'],
+    steam_2138720: ['#19c37d', '#0b2f4a'], epic_Fortnite: ['#8b3dff', '#1fb6ff'], epic_Sugar: ['#0a66ff', '#ff7a00'],
+  };
+  // Games older versions put on every new shelf, whether this PC had them or not.
+  const OLD_STARTERS = { rematch: 'steam_2138720', fortnite: 'epic_Fortnite', rocketleague: 'epic_Sugar' };
 
   const LAYERS = ['mesh', 'terrain', 'plexus', 'shapes', 'rings', 'aurora', 'comets', 'stars', 'rain', 'waves', 'dots', 'bolts', 'embers', 'storm', 'art', 'arcs'];
   // Ready-made mixes of backdrop layers. "Website" is the skyvaint.com look: storm lightning, faint art, halftone arcs.
@@ -82,8 +83,8 @@
   };
 
   const defaults = () => ({
-    v: 5,
-    profile: { name: 'skyvaint', avatar: '' },
+    v: 6,
+    profile: { name: 'Player', avatar: '' },
     theme: { preset: 'predator', ...PRESETS.predator, tileShape: 'cut', font: 'anton', uiScale: 1, vignette: true, hero: true, ticker: true, meshStyle: 'mixed',
       tileSize: 1, heroSide: 'right', glow: 1, cut: 1.1, tickerSpeed: 1, tickerText: '', texture: 'grain', textureOpacity: 0.6 },
     appIcon: { style: 'bolt', shape: 'rounded', useTheme: true, letter: 'S', image: '', markColor: '#ffffff', fit: 'cover', zoom: 100, offsetX: 0, offsetY: 0, bare: false, logo: 'auto' },
@@ -101,16 +102,16 @@
     perf: { smooth: true, meter: false, uncapped: false, dgpu: false },
     fx: { trail: true, ripple: true, tilt: true, glitch: true, scramble: true, rgb: true, chroma: false, scan: false, shake: true, confetti: true, warp: true, pulse: true,
       launchStyle: 'slabs', sparks: 1, space: true, focusFx: true, bootStyle: 'space', fadeWindow: true, wipe: true },
-    sound: { master: 0.6, pack: 'pulse', events: { nav: true, confirm: true, back: true, boot: true, launch: true }, custom: { boot: '', launch: '', nav: '', confirm: '', back: '', toggle: '', open: '', pick: '', star: '', error: '', slam: '' }, ambient: 0, haptics: true, hover: true, library: [],
+    sound: { master: 0.6, pack: 'pulse', events: { nav: true, confirm: true, back: true, boot: true, launch: true }, custom: { boot: '', launch: '', nav: '', confirm: '', back: '', toggle: '', open: '', pick: '', star: '', error: '', slam: '' }, ambient: 0, haptics: true, hover: true, hoverGap: 140, library: [],
       pitch: 0, echo: 0 },
     behavior: { bootAnim: true, afterLaunch: 'hidden', onGameExit: 'home', closeAction: 'hidden', autostartMode: 'hidden', miniOnTop: true, miniSize: 'm', clock24: true,
       promptAccount: true, hideUninstalled: false, waitForGame: true, launchWait: 120, launchSettle: 2 },
-    games: DEFAULT_GAMES.map((g) => ({ args: '', cover: '', hero: '', ...g })),
-    imported: { steam: false, roblox: false, robloxManager: false },
+    games: [],
+    imported: { steam: false, epic: false, roblox: false, robloxManager: false },
     epic: { accounts: [], last: {} },
     roblox: { accounts: [], selected: [], places: [], placeIdx: 0, multiInstance: true, launchDelay: 5 },
     lists: { roblox: true, studio: true },
-    rails: { enabled: true, show: { roblox: true, studio: true, upcoming: true, news: true, commissions: true } },
+    rails: { enabled: true, show: { recent: true, friends: true, roblox: true, studio: true, upcoming: true, news: true, commissions: true } },
     clips: { favorites: [], categories: [], tagged: {}, folders: [], videos: true, medal: '', autoplay: true },
   });
 
@@ -435,7 +436,41 @@
 
   function visibleGames() {
     if (sub) return sub.p.items(sub.parent);
-    return cfg.games.filter((g) => (filter === 'all' || platformOf(g) === filter) && !(cfg.behavior.hideUninstalled && !isInstalled(g)));
+    const games = cfg.games.filter((g) => (filter === 'all' || platformOf(g) === filter) && !(cfg.behavior.hideUninstalled && !isInstalled(g)));
+    return filter === 'all' ? [...games, ...setupCards()] : games;
+  }
+
+  // Store cards for platforms with nothing on the shelf yet: get the launcher, sign in, and the games come in by
+  // themselves on the next scan. Nobody starts with someone else's games.
+  const STORES = {
+    steam: { name: 'Steam', get: 'https://store.steampowered.com/about/', open: 'steam://open/games', c: ['#1b2838', '#66c0f4'],
+      installed: () => SV.steam && SV.steam.installed },
+    epic: { name: 'Epic Games', get: 'https://store.epicgames.com/download', open: 'com.epicgames.launcher://store', c: ['#2a2a2a', '#0078f2'],
+      installed: () => SV.epic && SV.epic.installed },
+  };
+  function rescanStores(quiet) {
+    host.send('steamState');
+    host.send('epicState');
+    if (!quiet) toast('Looking for games on this PC…');
+    if (host.native) host.send('rescan');
+  }
+  function setupCards() {
+    if (sub) return [];
+    return Object.entries(STORES).filter(([k]) => !cfg.games.some((g) => g.platform === k)).map(([k, s]) => {
+      const have = !!s.installed();
+      return {
+        id: 'setup_' + k, setup: k, name: have ? `Link ${s.name}` : `Get ${s.name}`, platform: k, c1: s.c[0], c2: s.c[1],
+        foot: have ? 'LINK' : 'GET', tag: `[ SET UP · ${s.name.toUpperCase()} ]`, heroTag: have ? 'MODE: NO GAMES FOUND YET' : 'MODE: NOT INSTALLED',
+        tagline: have ? `Sign in to ${s.name} and install a game. It shows up here by itself.` : `Install ${s.name}, sign in, and your games show up here.`,
+        stats: [['STORE', s.name.toUpperCase()], ['ON THIS PC', have ? 'INSTALLED' : 'NOT INSTALLED'], ['GAMES FOUND', '0']],
+        actions: [
+          have ? { label: 'OPEN ' + s.name.toUpperCase(), primary: true, run: () => { audio.play('confirm'); host.send('openUrl', { url: s.open }); toast(`Sign in to ${s.name}, then come back here.`); } }
+            : { label: 'GET ' + s.name.toUpperCase(), primary: true, run: () => { audio.play('confirm'); host.send('openUrl', { url: s.get }); toast(`Install ${s.name}, sign in, then come back here.`); } },
+          { label: 'LOOK AGAIN', run: () => rescanStores() },
+          { label: 'HIDE', run: () => { cfg.setupHidden = [...(cfg.setupHidden || []), k]; changed('games'); } },
+        ].filter((a) => a.label !== 'HIDE' || cfg.games.length),
+      };
+    }).filter((c) => !(cfg.setupHidden || []).includes(c.setup));
   }
 
   function renderHome() {
@@ -465,7 +500,7 @@
 
     const own = cfg.theme.tickerText.split(',').map((w) => w.trim()).filter(Boolean);
     const words = own.length ? [...own, ...own, ...own].slice(0, Math.max(6, own.length))
-      : [...shown.slice(0, 14).map((g) => g.name), cfg.texts.shelf, cfg.profile.name, cfg.texts.ticker, (PRESETS[cfg.theme.preset]?.name || 'CUSTOM') + ' MODE'];
+      : [...shown.filter((g) => !g.setup).slice(0, 14).map((g) => g.name), cfg.texts.shelf, cfg.profile.name, cfg.texts.ticker, (PRESETS[cfg.theme.preset]?.name || 'CUSTOM') + ' MODE'];
     const run = words.map((w, i) => `<span class="${i % 2 ? 'solid' : ''}">${esc(w)}</span><i>✦</i>`).join('');
     $('#tickerRun').innerHTML = run + run;
 
@@ -572,6 +607,7 @@
     const g = current(), s = (g && stats[g.id]) || {};
     let items;
     if (sub) items = g ? g.stats || [] : [[sub.p.label, String(shown.length)]];
+    else if (g && g.setup) items = g.stats;
     else if (!g) items = [['GAMES', String(cfg.games.length)], ['DETECTED ON THIS PC', String(scan.length)]];
     else {
       const status = running.has(g.id) ? 'RUNNING' : isInstalled(g) ? 'READY' : 'NOT INSTALLED';
@@ -590,9 +626,11 @@
       return [...g.actions, ...(sub.p.extra ? sub.p.extra(sub.parent) : []), back];
     }
     if (!g) return [{ label: 'ADD GAME', primary: true, run: () => addGame() }, { label: 'SCAN THIS PC', run: () => openScan() }];
+    if (g.setup) return g.actions;
     const list = [{ label: running.has(g.id) ? 'RESUME' : isInstalled(g) ? 'START' : 'INSTALL', primary: true, run: () => launch(g) }];
     if (g.platform === 'epic' && cfg.epic.accounts.length) list.push({ label: 'ACCOUNT', run: () => SV.epic.choose(g, launchAs(g)) });
     if (running.has(g.id)) list.push({ label: 'STOP', run: () => stopGame(g) });
+    list.push({ label: 'DETAILS', run: () => SV.details.game(g) });
     list.push({ label: 'OPTIONS', run: () => openGameMenu(g) });
     return list;
   }
@@ -623,7 +661,7 @@
     if (a === 'clips' || a === 'alt') return SV.clips.open();
     if (a === 'tasks') return openTasks();
     if (a === 'tabPrev' || a === 'tabNext') return cycleFilter(a === 'tabPrev' ? -1 : 1);
-    if (a === 'options') return sub ? (current() && sub.p.options ? sub.p.options(current()) : null) : current() ? openGameMenu(current()) : openScan();
+    if (a === 'options') return sub ? (current() && sub.p.options ? sub.p.options(current()) : null) : current() && !current().setup ? openGameMenu(current()) : openScan();
     if (a === 'back') return zone === 'shelf' ? (sub ? exitList() : openPower()) : (audio.play('back'), setZone('shelf'));
 
     if (zone === 'shelf') {
@@ -1279,6 +1317,7 @@
         R.slider('Ambient hum', 'Low drone under the HOME screen.', at('sound.ambient'), 0, 1, 0.05, pct),
         R.toggle('Controller rumble', 'Vibrate on launch.', at('sound.haptics')),
         R.toggle('Hover sounds', 'The cursor tick also plays when the mouse moves onto a button or tile.', at('sound.hover')),
+        R.slider('Hover sound gap', 'Shortest time between two hover ticks, so sweeping the mouse across a row stays clean.', at('sound.hoverGap'), 40, 400, 20, (v) => Math.round(v) + 'ms'),
         R.button('Preview slam', 'The impact used by the opening and the wipe.', 'PLAY', () => audio.play('slam')),
         heading('BT3 SOUNDS'),
         R.button('Use the BT3 sounds', 'The real Budokai Tenkaichi 3 menu sounds, pulled from your own ISO into BT3 Modding\Exports\Launcher Sounds.', 'LOAD', () => {
@@ -1624,10 +1663,24 @@
     return added;
   }
 
+  // Brings in each store's games the first time the scan finds any (installed ones first). Runs at start-up and
+  // after every scan, so installing Steam or Epic later and signing in fills the shelf without any setup.
+  function autoImport() {
+    let added = 0;
+    const take = (list) => list.filter((s) => !known(s)).forEach((s) => { cfg.games.push(fromScan(s)); added++; });
+    for (const k of ['roblox', 'epic', 'steam']) {
+      const found = scan.filter((s) => s.platform === k);
+      if (cfg.imported[k] || !found.length) continue;
+      take([...found.filter((s) => s.installed !== false), ...found.filter((s) => s.installed === false)]);
+      cfg.imported[k] = true;
+    }
+    return added + importSteamAccounts();
+  }
+
   host.on('scan', (m) => {
     scan = m.scan || [];
-    const added = importSteamAccounts();
-    if (added) { save(); toast(added === 1 ? 'Found 1 game from another Steam account' : `Found ${added} games from another Steam account`); }
+    const added = autoImport();
+    if (added) { save(); toast(added === 1 ? 'Found 1 new game on this PC' : `Found ${added} new games on this PC`); }
     if (scanWaiter) { scanWaiter(); scanWaiter = null; }
     else if ((m.art || added) && !launching) { renderHome(); renderMini(); } // artwork finished downloading, or new games
   });
@@ -1721,7 +1774,7 @@
   let rolling = false;
   function roll() {
     if (rolling || launching || stack.length) return;
-    let pool = shown.map((g, i) => i).filter((i) => isInstalled(shown[i]));
+    let pool = shown.map((g, i) => i).filter((i) => !shown[i].setup && isInstalled(shown[i]));
     if (pool.length > 1) pool = pool.filter((i) => i !== sel); // always land somewhere new
     if (!pool.length) { audio.play('error'); return toast('Nothing installed on this shelf to pick from.', 'bad'); }
 
@@ -1878,19 +1931,22 @@
     if (from < 4) applyBackdrop('website');
     // 2.3: the backdrop draws in a worker and follows the display's own rate, with its resolution adapting itself.
     if (from < 5) { cfg.backdrop.quality = 'auto'; cfg.backdrop.fps = 0; cfg.backdrop.slowFps = 60; cfg.sound.pack = 'tenkaichi'; }
-    cfg.v = 5;
-    let added = 0;
-    const take = (list) => list.filter((s) => !known(s)).forEach((s) => { cfg.games.push(fromScan(s)); added++; });
-    if (!cfg.imported.roblox && scan.some((s) => s.platform === 'roblox')) { take(scan.filter((s) => s.platform === 'roblox')); cfg.imported.roblox = true; }
-    if (!cfg.imported.steam && scan.some((s) => s.platform === 'steam')) {
-      const steam = scan.filter((s) => s.platform === 'steam');
-      take([...steam.filter((s) => s.installed !== false), ...steam.filter((s) => s.installed === false)]);
-      cfg.imported.steam = true;
+    // 2.4: no more built-in games. Drop the old starter entries from shelves on PCs that don't have those games
+    // (not found by the scan, never played, no picture chosen). Libraries that already hold Epic games were
+    // picked by hand, so the new Epic import leaves them alone.
+    if (saved && from < 6) {
+      cfg.games = cfg.games.filter((g) => {
+        const scanId = OLD_STARTERS[g.id];
+        if (!scanId || g.scanId !== scanId) return true;
+        return scan.some((s) => s.scanId === scanId) || ((stats[g.id] || {}).seconds || 0) > 0 || g.cover || g.hero;
+      });
+      if (cfg.games.some((g) => g.platform === 'epic')) cfg.imported.epic = true;
     }
+    cfg.v = 6;
     // Configs from before per-account import: whichever Steam accounts already have games on the shelf count as done.
     if (!cfg.imported.steamAccounts)
       cfg.imported.steamAccounts = [...new Set(scan.filter((s) => s.platform === 'steam' && known(s)).flatMap((s) => s.owners || []))];
-    added += importSteamAccounts();
+    let added = autoImport();
     // Scanned artwork is looked up live (see artSrc), so only pictures the user picked are kept in the config.
     for (const g of cfg.games) {
       const s = scanOf(g);
@@ -1922,14 +1978,19 @@
     host.send('appIcon');
     boot();
     setTimeout(() => { SV.clips.ensure(); SV.quests.badge(); }, 3600);
-    if (added) setTimeout(() => toast(`${added} games added from Steam and Roblox`), 3400);
+    if (added) setTimeout(() => toast(`${added} games found on this PC`), 3400);
+    else if (!cfg.games.length) setTimeout(() => toast('No games found yet — link Steam or Epic, or add any game yourself.'), 3400);
     if (imported) setTimeout(() => toast('Roblox manager accounts and places brought over'), 4200);
   });
   host.on('mode', (m) => setMode(m.mode));
   // Leaving HOME by other means (tray, hotkey, closing the window): the shell waits for this warp-out.
   host.on('leave', () => { if (mode === 'home') SV.title.slash(() => { if (cfg.fx.space) softLeave(); }, 60); });
   // Alt-tabbing to a game dims and pauses HOME; coming back plays a short re-entry.
+  // Coming back after installing or signing in to a store: look again, so its games appear without a restart.
+  const setupShown = () => mode === 'home' && !sub && shown.some((g) => g.setup);
+  for (const t of ['steamState', 'epicState']) host.on(t, () => setTimeout(() => { if (setupShown() && !stack.length && !launching) { const keep = sel; renderHome(); select(keep, true); } }, 0));
   host.on('focus', (m) => {
+    if (m.on && setupShown()) rescanStores(true);
     if (!cfg.fx.focusFx || mode !== 'home') return;
     document.body.classList.toggle('away', !m.on);
     bg.setActive(m.on);
@@ -1970,12 +2031,21 @@
     toast(`${keys.length} sound${keys.length > 1 ? 's' : ''} loaded: ${keys.join(', ')}`);
   });
   // Hover sounds: the cursor tick when the mouse lands on something you can pick.
-  let hoverEl = null;
+  // Only real mouse movement counts (not tiles sliding under a still cursor), and there is a short gap between
+  // ticks, so sweeping across a row plays a few clean ticks instead of a burst.
+  let hoverEl = null, hoverAt = 0, movedAt = 0, mx = -1, my = -1;
+  document.addEventListener('mousemove', (e) => {
+    if (Math.abs(e.clientX - mx) + Math.abs(e.clientY - my) < 3) return;
+    mx = e.clientX; my = e.clientY; movedAt = performance.now();
+  }, { passive: true });
   document.addEventListener('mouseover', (e) => {
     if (!cfg.sound.hover || mode !== 'home') return;
-    const t = e.target.closest('.btn, .func, .tile, [data-row], .pcard, .ts-item, .lv-btn, .rail-card, .chip, .hc, .q-card, .mt');
+    const t = e.target.closest('.btn, .func, .tile, [data-row], [data-card], .pcard, .ts-item, .lv-btn, .rail-card, .chip, .hc, .qc, .q-card, .mt');
     if (!t || t === hoverEl) return;
     hoverEl = t;
+    const now = performance.now();
+    if (now - movedAt > 80 || now - hoverAt < (cfg.sound.hoverGap ?? 140)) return;
+    hoverAt = now;
     audio.play('nav');
   }, { passive: true });
   host.on('notice', (m) => { audio.play(m.ok ? 'pick' : 'error'); toast(m.text, m.ok ? '' : 'bad'); });
@@ -2004,7 +2074,8 @@
     $, el, esc, clamp, hash, shiftHue, meshSVG, toast, hints, at, prop, lastPlayed,
     stack, push, pop, isTop, panel, row, heading, R, pick, ask, openMenu, confirmMenu, changed, save, openSettings, leaveTo, openTasks, refreshList, launchDirect, exitList,
     get inList() { return !!sub; },
-    launchFx, endLaunch, armLaunchTimeout, renderStats, renderActions, artSrc, scanOf, isInstalled,
+    launchFx, endLaunch, armLaunchTimeout, renderStats, renderActions, artSrc, scanOf, isInstalled, launch, jumpTo, playtime,
+    get running() { return running; },
     get stats() { return stats; },
   };
 })();

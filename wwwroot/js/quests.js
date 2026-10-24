@@ -112,7 +112,7 @@
     for (const g of top) {
       const have = (A.stats[g.id] || {}).seconds || 0;
       const step = STEPS.find((s) => !q().claimed.includes(`m:play-${g.id}-${s}`));
-      if (step) out.push({ id: `play-${g.id}-${step}`, type: 'milestone', game: g.id, target: step, value: have, text: `${step / 3600} hours in ${g.name}`, xp: 150 + STEPS.indexOf(step) * 150, unit: 'time' });
+      if (step) out.push({ id: `play-${g.id}-${step}`, type: 'milestone', game: g.id, target: step, value: have, text: `${step / 3600} hour${step > 3600 ? "s" : ""} in ${g.name}`, xp: 150 + STEPS.indexOf(step) * 150, unit: 'time' });
     }
     const clips = SV.clips.list().length, CS = [10, 50, 100, 250, 500, 1000];
     const cs = CS.find((s) => !q().claimed.includes(`m:clips-${s}`));
@@ -199,11 +199,13 @@
         <div class="qb-head"></div>
         <div class="qb-tabs"></div>
         <div class="qb-body"></div>
-        <div class="hints">${hints([['confirm', 'Claim / tick'], ['move', 'Move'], ['tabs', 'Section'], ['options', 'Options'], ['back', 'Close']])}</div>
+        <div class="hints">${hints([['confirm', 'Claim / tick'], ['move', 'Move'], ['tabs', 'Jump to section'], ['random', 'Claim all'], ['options', 'Options'], ['back', 'Close']])}</div>
       </div></div>`);
     const body = $('.qb-body', root), head = $('.qb-head', root), tabsBox = $('.qb-tabs', root);
     const SECTIONS = [['daily', 'DAILY'], ['weekly', 'WEEKLY'], ['challenges', 'CHALLENGES'], ['milestones', 'MILESTONES'], ['mine', 'YOUR QUESTS']];
-    let section = 'daily', idx = 0;
+    // The board is one page of rows, one row per section: up/down moves between rows, left/right along a row.
+    let rowIdx = 0;
+    const colIdx = {};
     const until = (end) => { const ms = end - Date.now(), h = Math.floor(ms / 3.6e6), m = Math.floor((ms % 3.6e6) / 6e4); return h >= 24 ? `${Math.floor(h / 24)}D ${h % 24}H` : `${h}H ${m}M`; };
 
     function card(scope, quest) {
@@ -279,20 +281,32 @@
         done: (text) => {
           const games = A.cfg.games.filter((g) => norm(text).includes(norm(g.name)));
           q().custom.push({ id: Date.now().toString(36), text, game: games[0] ? games[0].id : '', xp: 150, done: false });
-          A.save(); section = 'mine'; build();
+          A.save(); build(); setSection('mine');
         },
       });
     }
 
-    function cards() {
+    function cards(k) {
       const s = q();
-      if (section === 'daily') return daily().map((x) => card('d', x));
-      if (section === 'weekly') return weekly().map((x) => card('w', x));
-      if (section === 'challenges') return challenges().map((x) => card('c', x));
-      if (section === 'milestones') return milestones().map((x) => card('m', x));
+      if (k === 'daily') return daily().map((x) => card('d', x));
+      if (k === 'weekly') return weekly().map((x) => card('w', x));
+      if (k === 'challenges') return challenges().map((x) => card('c', x));
+      if (k === 'milestones') return milestones().map((x) => card('m', x));
       const add = el(`<div class="qc add" data-card><div class="qc-type">${svg('custom')}</div><b class="qc-text">ADD A QUEST</b><small>Your own goal, like a rank to reach.</small></div>`);
       add._activate = addCustom;
       return [...s.custom.map(custom), add];
+    }
+
+    // Every finished quest still waiting, claimed in one go.
+    function claimAll() {
+      const s = q();
+      const ready = [...daily().map((x) => ['d', x]), ...weekly().map((x) => ['w', x]), ...milestones().map((x) => ['m', x])]
+        .filter(([sc, x]) => progress(x, sc)[0] >= 1 && !s.claimed.includes(sc + ':' + x.id));
+      if (!ready.length) { audio.play('error'); return toast('Nothing to claim yet.'); }
+      let xp = 0;
+      for (const [sc, x] of ready) { s.claimed.push(sc + ':' + x.id); xp += x.xp; if (sc === 'd') bumpStreak(); }
+      award(xp, ready.length === 1 ? ready[0][1].text : `${ready.length} quests claimed`, head.querySelector('.qb-claim'));
+      build();
     }
 
     function build() {
@@ -312,34 +326,74 @@
         </div>`;
       const nextDay = new Date(s.day + 'T00:00:00').getTime() + 864e5, nextWeek = weekStart().getTime() + 7 * 864e5;
       const note = { daily: `RESETS IN ${until(nextDay)}`, weekly: `RESETS IN ${until(nextWeek)}`, challenges: `IN-GAME · NEW ONES IN ${until(nextWeek)}`, milestones: 'LIFETIME', mine: `${s.custom.length} WRITTEN` };
-      tabsBox.innerHTML = SECTIONS.map(([k, label]) => {
-        const n = k === 'daily' ? daily().filter((x) => progress(x, 'd')[0] >= 1 && !s.claimed.includes('d:' + x.id)).length
-          : k === 'weekly' ? weekly().filter((x) => progress(x, 'w')[0] >= 1 && !s.claimed.includes('w:' + x.id)).length
-          : k === 'milestones' ? milestones().filter((x) => progress(x, 'm')[0] >= 1 && !s.claimed.includes('m:' + x.id)).length : 0;
-        return `<button class="qb-tab ${k === section ? 'on' : ''}" data-k="${k}">${label}${n ? `<i>${n}</i>` : ''}<small>${k === section ? note[k] : ''}</small></button>`;
-      }).join('');
-      const list = cards();
-      if (!pool().length && (section === 'daily' || section === 'weekly')) list.unshift(el('<div class="row-note">Play a game from the launcher to get quests for it.</div>'));
-      body.replaceChildren(...list);
-      focus(idx);
+      const readyIn = (k) => k === 'daily' ? daily().filter((x) => progress(x, 'd')[0] >= 1 && !s.claimed.includes('d:' + x.id)).length
+        : k === 'weekly' ? weekly().filter((x) => progress(x, 'w')[0] >= 1 && !s.claimed.includes('w:' + x.id)).length
+        : k === 'milestones' ? milestones().filter((x) => progress(x, 'm')[0] >= 1 && !s.claimed.includes('m:' + x.id)).length : 0;
+      const totalReady = SECTIONS.reduce((n, [k]) => n + readyIn(k), 0);
+      head.insertAdjacentHTML('beforeend', `<button class="qb-claim ${totalReady ? 'on' : ''}">${svg('check')}<span>${totalReady ? `CLAIM ALL · ${totalReady}` : 'NOTHING TO CLAIM'}</span></button>`);
+      tabsBox.innerHTML = SECTIONS.map(([k, label], i) =>
+        `<button class="qb-tab" data-k="${k}" data-i="${i}">${label}${readyIn(k) ? `<i>${readyIn(k)}</i>` : ''}</button>`).join('');
+      const scrollTop = body.scrollTop;
+      body.replaceChildren(...SECTIONS.map(([k, label]) => {
+        const sec = el(`<section class="qs" data-k="${k}"><div class="qs-head"><b>${label}</b><span class="tag">${note[k]}</span></div><div class="qs-row"></div></section>`);
+        const list = cards(k);
+        if (!list.length || (!pool().length && (k === 'daily' || k === 'weekly')))
+          list.unshift(el(`<div class="row-note">${k === 'challenges' || k === 'milestones' ? 'Nothing here yet. Play some games first.' : 'Play a game from the launcher to get quests for it.'}</div>`));
+        $('.qs-row', sec).append(...list);
+        return sec;
+      }));
+      body.scrollTop = scrollTop;
+      focus(rowIdx, colIdx[rowIdx] || 0, false);
     }
 
-    const nodes = () => [...body.querySelectorAll('[data-card]')];
-    function focus(i) {
-      const list = nodes();
-      if (!list.length) return;
-      idx = clamp(i, 0, list.length - 1);
-      list.forEach((n, k) => n.classList.toggle('focus', k === idx));
-      list[idx].scrollIntoView({ block: 'nearest' });
+    const rowsEls = () => [...body.querySelectorAll('.qs')];
+    const cardsIn = (r) => (rowsEls()[r] ? [...rowsEls()[r].querySelectorAll('[data-card]')] : []);
+    function focus(r, c, scroll = true) {
+      const rows = rowsEls();
+      if (!rows.length) return;
+      rowIdx = clamp(r, 0, rows.length - 1);
+      const list = cardsIn(rowIdx);
+      colIdx[rowIdx] = clamp(c, 0, Math.max(0, list.length - 1));
+      rows.forEach((sec, i) => sec.classList.toggle('on', i === rowIdx));
+      body.querySelectorAll('[data-card].focus').forEach((n) => n.classList.remove('focus'));
+      const n = list[colIdx[rowIdx]];
+      if (n) n.classList.add('focus');
+      tabsBox.querySelectorAll('.qb-tab').forEach((b, i) => b.classList.toggle('on', i === rowIdx));
+      if (scroll) {
+        rows[rowIdx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        if (n) n.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+      }
     }
-    const cols = () => { const list = nodes(); if (list.length < 2) return 1; const top = list[0].offsetTop; return Math.max(1, list.filter((n) => n.offsetTop === top).length); };
-    const setSection = (k) => { if (k === section) return; section = k; idx = 0; audio.play('nav'); build(); };
+    // Moving to another row lands on the card closest to the one you left, so up/down goes straight up and down.
+    const moveRow = (d) => {
+      const next = clamp(rowIdx + d, 0, rowsEls().length - 1);
+      if (next === rowIdx) return audio.play('error');
+      audio.play('nav');
+      const cur = cardsIn(rowIdx)[colIdx[rowIdx] || 0], target = cardsIn(next);
+      let col = colIdx[next] || 0;
+      if (cur && target.length) {
+        const x = cur.getBoundingClientRect().left;
+        col = target.reduce((best, n, i) => Math.abs(n.getBoundingClientRect().left - x) < Math.abs(target[best].getBoundingClientRect().left - x) ? i : best, 0);
+      }
+      focus(next, col);
+    };
+    const current = () => cardsIn(rowIdx)[colIdx[rowIdx] || 0];
 
-    tabsBox.addEventListener('click', (e) => { const b = e.target.closest('.qb-tab'); if (b) setSection(b.dataset.k); });
-    body.addEventListener('click', (e) => { const n = e.target.closest('[data-card]'); if (n) { idx = nodes().indexOf(n); focus(idx); n._activate && n._activate(); } });
-    body.addEventListener('mousemove', (e) => { const n = e.target.closest('[data-card]'), i = n ? nodes().indexOf(n) : -1; if (i >= 0 && i !== idx) focus(i); });
+    tabsBox.addEventListener('click', (e) => { const b = e.target.closest('.qb-tab'); if (b) { audio.play('nav'); focus(+b.dataset.i, colIdx[+b.dataset.i] || 0); } });
+    head.addEventListener('click', (e) => { if (e.target.closest('.qb-claim')) claimAll(); });
+    const locate = (n) => { const r = rowsEls().indexOf(n.closest('.qs')); return [r, cardsIn(r).indexOf(n)]; };
+    body.addEventListener('click', (e) => { const n = e.target.closest('[data-card]'); if (!n) return; const [r, c] = locate(n); focus(r, c, false); n._activate && n._activate(); });
+    body.addEventListener('mousemove', (e) => {
+      const n = e.target.closest('[data-card]');
+      if (!n || n.classList.contains('focus')) return;
+      const [r, c] = locate(n);
+      focus(r, c, false);
+    });
+    // Shift + wheel scrolls a row sideways; the plain wheel scrolls the board.
+    body.addEventListener('wheel', (e) => { const row = e.target.closest('.qs-row'); if (row && e.shiftKey) { row.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
 
     const refresh = () => { if (view) build(); };
+    const setSection = (k) => focus(SECTIONS.findIndex((x) => x[0] === k), 0);
     view = { refresh };
     root.addEventListener('mousedown', (e) => { if (e.target === root) A.pop(); });
     build();
@@ -347,12 +401,16 @@
       el: root,
       onClose: () => { view = null; SV.quests.badge(); },
       action(a) {
-        const c = cols(), keys = SECTIONS.map((x) => x[0]);
-        if (a === 'left' || a === 'right') { audio.play('nav'); focus(idx + (a === 'left' ? -1 : 1)); }
-        else if (a === 'up' || a === 'down') { audio.play('nav'); focus(idx + (a === 'up' ? -c : c)); }
-        else if (a === 'tabPrev' || a === 'tabNext') setSection(keys[(keys.indexOf(section) + (a === 'tabPrev' ? -1 : 1) + keys.length) % keys.length]);
-        else if (a === 'confirm') { const n = nodes()[idx]; n && n._activate && n._activate(); }
-        else if (a === 'options') { const n = nodes()[idx]; if (n && n._options) n._options(); else addCustom(); }
+        if (a === 'left' || a === 'right') {
+          const n = cardsIn(rowIdx).length, c = (colIdx[rowIdx] || 0) + (a === 'left' ? -1 : 1);
+          if (c < 0 || c >= n) return audio.play('error');
+          audio.play('nav'); focus(rowIdx, c);
+        }
+        else if (a === 'up' || a === 'down') moveRow(a === 'up' ? -1 : 1);
+        else if (a === 'tabPrev' || a === 'tabNext') { const n = rowsEls().length; audio.play('nav'); focus((rowIdx + (a === 'tabPrev' ? -1 : 1) + n) % n, 0); }
+        else if (a === 'confirm') { const n = current(); n && n._activate && n._activate(); }
+        else if (a === 'random') claimAll();
+        else if (a === 'options') { const n = current(); if (n && n._options) n._options(); else addCustom(); }
         else if (a === 'back') A.pop();
       },
     });

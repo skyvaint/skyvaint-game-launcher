@@ -15,7 +15,7 @@ Your settings and accounts are saved in `%APPDATA%\SkyvaintGameLauncher` on your
 
 ## What it does
 
-- **Games:** finds your whole Steam library, Epic games, Roblox and Roblox Studio, and you can add any .exe. Banners and icons are fetched automatically, and your own pictures always take priority.
+- **Games:** finds your whole Steam library, Epic games, Roblox and Roblox Studio, and you can add any .exe. A new install starts empty and fills itself from what's on the PC. Stores with nothing found yet show a card to get or link them. Banners and icons are fetched automatically, and your own pictures always take priority.
 - **Accounts:**
   - Pick which Epic account plays Fortnite or Rocket League, and switch smoothly between them.
   - Steam account switching.
@@ -27,7 +27,8 @@ Your settings and accounts are saved in `%APPDATA%\SkyvaintGameLauncher` on your
   - In-game challenges, lifetime milestones, and quests you write yourself.
   - XP and ranks.
 - **Discover:** free Epic games, Steam top sellers and deals, trending Roblox games.
-- **Rows under HOME:** scroll down for your Roblox games, Studio projects, upcoming releases, Roblox Studio news and Discord commission requests (needs your own bot).
+- **Details:** any game opens a details screen with your playtime plus the store's or Roblox's description, stats and screenshots.
+- **Rows under HOME:** scroll down for what you played last, your Roblox friends (online status, the game they're in, JOIN), your Roblox games, Studio projects, upcoming releases, Roblox Studio news and Discord commission requests (needs your own bot).
 - **NEXUS bar:** a see-through desktop dock with just the logos of the apps, games and sites you pick.
 - **Discord Rich Presence:** you write the text and buttons yourself.
 - **Looks:**

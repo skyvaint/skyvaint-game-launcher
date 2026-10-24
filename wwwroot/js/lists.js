@@ -17,6 +17,13 @@
     want.forEach((id) => artAsked.add(id));
     host.send('robloxPlaceArt', { placeIds: want });
   }
+  // Player counts go stale, and a lookup that failed (Roblox busy) should be tried again: ask for every place.
+  function refreshArt() {
+    const ids = SV.roblox.places().map((p) => p.placeId).filter(Boolean);
+    if (!ids.length) return;
+    ids.forEach((id) => artAsked.add(id));
+    host.send('robloxPlaceArt', { placeIds: ids });
+  }
   host.on('robloxPlaceArt', (m) => {
     let changed = false;
     for (const it of m.items || []) {
@@ -49,6 +56,7 @@
         { label: 'PLAY', primary: true, run: () => SV.roblox.openAt(parent, i) },
         { label: p.server ? 'CHANGE SERVER' : 'PRIVATE SERVER', run: () => SV.roblox.setServer(p, refresh) },
         ...(p.server ? [{ label: 'PUBLIC', run: () => { delete p.server; A.save(); refresh(); toast('Using public servers for ' + p.name); } }] : []),
+        { label: 'DETAILS', run: () => SV.details.place(p) },
         { label: 'OPTIONS', run: () => placeOptions(p) },
       ],
       _place: p,
@@ -58,6 +66,7 @@
   function placeOptions(p) {
     A.openMenu(p.name, [
       { label: 'PLAY', sub: 'Pick accounts and join', run: () => SV.roblox.openAt(null, SV.roblox.places().indexOf(p)) },
+      { label: 'DETAILS', sub: 'Description, players, votes, screenshots', run: () => SV.details.place(p) },
       { label: p.server ? 'CHANGE PRIVATE SERVER' : 'JOIN A PRIVATE SERVER', sub: 'Paste its link or code', run: () => SV.roblox.setServer(p, refresh) },
       ...(p.server ? [{ label: 'BACK TO PUBLIC SERVERS', run: () => { delete p.server; A.save(); refresh(); } }] : []),
       { label: 'OPEN ON ROBLOX.COM', run: () => host.send('openUrl', { url: `https://www.roblox.com/games/${p.placeId}` }) },
@@ -106,6 +115,7 @@
         actions: [
           { label: 'EDIT IN STUDIO', primary: true, run: () => openCloud(c) },
           { label: 'PLAY', run: () => SV.roblox.playPlace({ placeId: c.placeId, name: c.name, icon: c.icon }) },
+          { label: 'DETAILS', run: () => SV.details.roblox({ placeId: c.placeId, universeId: c.universeId, name: c.name, icon: c.icon, thumb: c.thumb }) },
           { label: 'PAGE', run: () => host.send('openUrl', { url: `https://www.roblox.com/games/${c.placeId}` }) },
         ],
         _cloud: c,
@@ -144,6 +154,6 @@
       return null;
     },
     studioData: () => { loadStudio(); return studio; },
-    loadStudio, openFile, openCloud, placeOptions, ensureArt, num,
+    loadStudio, openFile, openCloud, placeOptions, ensureArt, refreshArt, num,
   };
 })();
