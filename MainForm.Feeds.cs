@@ -334,7 +334,7 @@ public sealed partial class MainForm
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bot", token);
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("DiscordBot (https://skyvaint.com, 2.3)");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("DiscordBot (https://skyvaint.com, 2.4)");
             var chanResp = await http.GetAsync($"https://discord.com/api/v10/channels/{channel}");
             if (!chanResp.IsSuccessStatusCode)
             {
