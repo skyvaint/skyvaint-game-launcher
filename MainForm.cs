@@ -244,7 +244,7 @@ public sealed partial class MainForm : Form
 			List<string> ids = (from text in (m["ids"] as JsonArray)?.Select((JsonNode jsonNode) => jsonNode?.ToString() ?? "")
 				where text != ""
 				select text).ToList() ?? new List<string>();
-			RobloxPlay(ids, m["placeId"]?.GetValue<long>() ?? 0, PrivateServer.From(m["server"]), Str("game"), mode == "home");
+			RobloxPlay(ids, Long(m["placeId"]), PrivateServer.From(m["server"]), Str("game"), mode == "home", Long(m["followUserId"]), Str("jobId"));
 			return true;
 		}
 		case "robloxCloseClients":
@@ -892,9 +892,9 @@ public sealed partial class MainForm : Form
 		}
 	}
 
-	private async Task RobloxPlay(List<string> ids, long placeId, PrivateServer? server, string gameId, bool applyAfterLaunch)
+	private async Task RobloxPlay(List<string> ids, long placeId, PrivateServer? server, string gameId, bool applyAfterLaunch, long followUserId = 0, string jobId = "")
 	{
-		if (robloxPlaying || ids.Count == 0 || placeId <= 0)
+		if (robloxPlaying || ids.Count == 0 || (placeId <= 0 && followUserId <= 0))
 		{
 			return;
 		}
@@ -923,7 +923,13 @@ public sealed partial class MainForm : Form
 				["status"] = "launching"
 			});
 			DateTime at = DateTime.Now;
-			var (ok, error) = await LaunchAccount(id, placeId, server);
+			var (ok, error) = await LaunchAccount(id, placeId, server, start: true, followUserId, jobId);
+			// A page that didn't load or answer is usually a blip: one more go before giving up.
+			if (!ok && error != null && (error.Contains("didn't load") || error.Contains("didn't respond") || error.Contains("didn't hand over")))
+			{
+				await Task.Delay(1500);
+				(ok, error) = await LaunchAccount(id, placeId, server, start: true, followUserId, jobId);
+			}
 			if (ok)
 			{
 				robloxPending.Enqueue((id, at));
@@ -1078,7 +1084,7 @@ public sealed partial class MainForm : Form
 		return false;
 	}
 
-	private async Task<(bool ok, string? error)> LaunchAccount(string id, long placeId, PrivateServer? server, bool start = true)
+	private async Task<(bool ok, string? error)> LaunchAccount(string id, long placeId, PrivateServer? server, bool start = true, long followUserId = 0, string jobId = "")
 	{
 		WebView2 view = null;
 		try
@@ -1186,7 +1192,11 @@ public sealed partial class MainForm : Form
 				}
 			}
 			long tracker = Random.Shared.NextInt64(100000000000L, 999999999999L);
-			string request = ((code != null) ? $"request=RequestPrivateGame&browserTrackerId={tracker}&placeId={placeId}&accessCode=&linkCode={Uri.EscapeDataString(code)}" : $"request=RequestGame&browserTrackerId={tracker}&placeId={placeId}&isPlayTogetherGame=false");
+			// Joining a friend: straight into their server when Roblox says which one, otherwise follow them in.
+			string request = (code != null) ? $"request=RequestPrivateGame&browserTrackerId={tracker}&placeId={placeId}&accessCode=&linkCode={Uri.EscapeDataString(code)}"
+				: (jobId != "" && placeId > 0) ? $"request=RequestGameJob&browserTrackerId={tracker}&placeId={placeId}&gameId={Uri.EscapeDataString(jobId)}&isPlayTogetherGame=false"
+				: followUserId > 0 ? $"request=RequestFollowUser&browserTrackerId={tracker}&userId={followUserId}"
+				: $"request=RequestGame&browserTrackerId={tracker}&placeId={placeId}&isPlayTogetherGame=false";
 			string join = Uri.EscapeDataString("https://assetgame.roblox.com/game/PlaceLauncher.ashx?" + request);
 			Process.Start(new ProcessStartInfo($"roblox-player:1+launchmode:play+gameinfo:{ticket.Task.Result}+launchtime:{DateTimeOffset.Now.ToUnixTimeMilliseconds()}+placelauncherurl:{join}+browsertrackerid:{tracker}+robloxLocale:en_us+gameLocale:en_us+channel:+LaunchExp:InGame")
 			{
@@ -1946,7 +1956,7 @@ public sealed partial class MainForm : Form
 			Quit();
 			break;
 		default:
-			if (!OnAccountMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m))
+			if (!OnAccountMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m))
 			{
 				OnClipMessage(m);
 			}

@@ -147,6 +147,7 @@
 
   SV.epic = {
     init(state) { if (state) epicState = state; },
+    get installed() { return !!(epicState && epicState.installed); },
 
     statFor() {
       const list = cfg().epic.accounts;
@@ -255,6 +256,7 @@
 
   SV.steam = {
     init(state) { if (state) steam = state; },
+    get installed() { return !!(steam && steam.installed); },
     get accounts() { return steam.accounts; },
     accountFor: steamAccountFor,
 
@@ -504,6 +506,25 @@
     },
 
     nameFor(accountId) { const a = rb().accounts.find((x) => x.id === accountId); return a ? label(a) : ''; },
+    accounts: () => rb().accounts,
+    label,
+    face,
+
+    // Joins a friend's game as the account they are friends with: straight into their server when Roblox says
+    // which one, otherwise by following them in.
+    joinFriend(f, accountId) {
+      const a = rb().accounts.find((x) => x.id === accountId);
+      if (!a) { audio.play('error'); return toast('Add a Roblox account first.', 'bad'); }
+      if (A.launching) return;
+      while (A.stack.length) A.pop();
+      const game = cfg().games.find((x) => x.target === 'sv:roblox') || null, who = f.displayName || f.name;
+      A.launchFx(f.where || 'JOINING ' + who.toUpperCase(), 'WITH ' + who.toUpperCase(),
+        `<div class="lf-acct" data-id="${esc(a.id)}"><div class="lf-face">${face(a)}</div><b>${esc(label(a))}</b><span>QUEUED</span></div>`, game);
+      a.lastPlayed = Date.now();
+      A.save();
+      setTimeout(() => host.send('robloxPlay', { ids: [a.id], placeId: +(f.rootPlaceId || f.placeId || 0), followUserId: f.id, jobId: f.gameId || '', server: null, game: game ? game.id : '' }), 900);
+      A.armLaunchTimeout(240);
+    },
 
     // For the game lists and the rows under HOME.
     places: () => rb().places,

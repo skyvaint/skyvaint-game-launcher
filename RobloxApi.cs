@@ -14,9 +14,9 @@ internal static class RobloxApi
 		Timeout = TimeSpan.FromSeconds(15L)
 	};
 
-	private static async Task<JsonNode?> Get(string url)
+	private static Task<JsonNode?> Get(string url)
 	{
-		return JsonNode.Parse(await Http.GetStringAsync(url));
+		return MainForm.GetJsonWith(Http, url);
 	}
 
 	private static async Task<string?> Thumbnail(string url)

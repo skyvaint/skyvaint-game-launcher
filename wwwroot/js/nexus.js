@@ -33,16 +33,15 @@
   const addGame = (g) => add({ kind: 'game', gameId: g.id, name: g.name, icon: gameIcon(g) });
 
   // First run (and "Fill with my apps"): the launcher itself, your main games, the apps you use with them and the site.
-  const SEED_GAMES = [['fortnite', /^fortnite$/i], ['rocketleague', /^rocket league$/i], ['rematch', /^rematch$/i], ['roblox_player', /^roblox$/i], ['roblox_studio', /^roblox studio$/i]];
+  // Your five most recently played installed games (or the first five on the shelf when nothing has been played).
+  const seedGames = () => A.cfg.games.filter((g) => A.isInstalled(g))
+    .map((g, i) => [g, (A.stats[g.id] || {}).lastPlayed || 0, i]).sort((x, y) => y[1] - x[1] || x[2] - y[2]).slice(0, 5).map((x) => x[0]);
   function seed(apps) {
     const items = nx().items, has = (fn) => items.some(fn);
     let n = 0;
     const push = (item) => { items.push({ id: newId(), ...item }); n++; };
     if (!has((x) => x.kind === 'home')) { items.unshift({ id: newId(), kind: 'home', name: 'Skyvaint', icon: '' }); n++; }
-    for (const [id, name] of SEED_GAMES) {
-      const g = A.cfg.games.find((x) => x.id === id) || A.cfg.games.find((x) => name.test(x.name));
-      if (g && !has((x) => x.kind === 'game' && x.gameId === g.id)) push({ kind: 'game', gameId: g.id, name: g.name, icon: gameIcon(g) });
-    }
+    for (const g of seedGames()) if (!has((x) => x.kind === 'game' && x.gameId === g.id)) push({ kind: 'game', gameId: g.id, name: g.name, icon: gameIcon(g) });
     for (const a of apps) if (!has((x) => x.target && x.target.toLowerCase() === a.target.toLowerCase())) push({ kind: 'app', name: a.name, target: a.target, args: a.args || '', process: a.process || '', icon: a.icon || '' });
     if (!has((x) => x.kind === 'url' && /skyvaint\.com/i.test(x.target)))
       push({ kind: 'url', name: 'skyvaint.com', target: 'https://skyvaint.com', icon: 'https://www.google.com/s2/favicons?domain=skyvaint.com&sz=128' });
@@ -136,7 +135,7 @@
       R.button('Add a game', 'One of your launcher games.', 'PICK GAME', addGameMenu),
       R.button('Add a website', 'Opens in your browser.', 'ADD URL', addSite),
       R.button('Add the launcher', 'A logo that opens HOME. Uses your app icon.', 'ADD', () => add({ kind: 'home', name: 'Skyvaint', icon: '', target: '' })),
-      R.button('Fill with my apps', 'Fortnite, Rocket League, REMATCH, Roblox, Studio, Epic, Steam, Discord, Medal, Bloxstrap and skyvaint.com — whatever is missing.', 'FILL', () => askSeed(true)),
+      R.button('Fill with my apps', 'Your most played games, plus Epic, Steam, Discord, Medal and Bloxstrap if they are on this PC — whatever is missing.', 'FILL', () => askSeed(true)),
     ];
   }
 
