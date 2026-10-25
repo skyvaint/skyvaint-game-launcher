@@ -295,7 +295,9 @@ public sealed partial class MainForm
         foreach (var id in wanted)
             if (!docks.ContainsKey(id)) { docks[id] = new DockForm(this, LocalImageFile, CacheDir) { Icon = Icon, BarId = id }; made = true; }
         if (made) await Task.Yield();
+        WatchForeground();
         PushDock(force: true);
+        UpdateBarVisibility();
     }
 
     internal void OnDockMessage(JsonObject m)
@@ -455,20 +457,39 @@ public sealed partial class MainForm
         return DesktopClasses.Contains(name.ToString());
     }
 
+    /// <summary>Shows or hides each bar for what is in front right now (desktop-only bars, fullscreen games).</summary>
+    void UpdateBarVisibility()
+    {
+        bool? full = null, desk = null;
+        foreach (var (id, bar) in Bars())
+        {
+            if (!docks.TryGetValue(id, out var d)) continue;
+            bool hideInGame = true;
+            try { hideInGame = bar["hideFullscreen"]?.GetValue<bool>() ?? true; } catch { }
+            var vis = bar["visibility"]?.ToString() ?? "always";
+            bool hide = (hideInGame && (full ??= SomethingFullscreen())) || (vis == "desktop" && !(desk ??= DesktopInFront()));
+            d.Suppress(hide);
+        }
+    }
+
+    // Windows says the moment another window comes to the front (clicking the launcher, opening an app), so
+    // desktop-only bars hide straight away instead of on the next 3-second check.
+    delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int obj, int child, uint thread, uint time);
+    [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr module, WinEventProc proc, uint pid, uint thread, uint flags);
+    WinEventProc? foregroundProc;
+    IntPtr foregroundHook;
+    void WatchForeground()
+    {
+        if (foregroundHook != IntPtr.Zero) return;
+        foregroundProc = (_, _, _, _, _, _, _) => { if (docks.Count > 0) UpdateBarVisibility(); };
+        foregroundHook = SetWinEventHook(3 /* EVENT_SYSTEM_FOREGROUND */, 3, IntPtr.Zero, foregroundProc, 0, 0, 0 /* out of context */);
+    }
+
     void PollExtras()
     {
         if (docks.Count > 0)
         {
-            bool? full = null, desk = null;
-            foreach (var (id, bar) in Bars())
-            {
-                if (!docks.TryGetValue(id, out var d)) continue;
-                bool hideInGame = true;
-                try { hideInGame = bar["hideFullscreen"]?.GetValue<bool>() ?? true; } catch { }
-                var vis = bar["visibility"]?.ToString() ?? "always";
-                bool hide = (hideInGame && (full ??= SomethingFullscreen())) || (vis == "desktop" && !(desk ??= DesktopInFront()));
-                d.Suppress(hide);
-            }
+            UpdateBarVisibility();
             PushDock();
         }
         _ = UpdatePresence();

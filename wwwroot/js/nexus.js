@@ -37,8 +37,10 @@
   // Your five most recently played installed games (or the first five on the shelf when nothing has been played).
   const seedGames = () => A.cfg.games.filter((g) => A.isInstalled(g))
     .map((g, i) => [g, (A.stats[g.id] || {}).lastPlayed || 0, i]).sort((x, y) => y[1] - x[1] || x[2] - y[2]).slice(0, 5).map((x) => x[0]);
+  // Fills the bar being edited (the main bar on first run).
   function seed(apps) {
-    const items = nx().items, has = (fn) => items.some(fn);
+    const bar = seedInto || nx(), items = bar.items || (bar.items = []), has = (fn) => items.some(fn);
+    seedInto = null;
     let n = 0;
     const push = (item) => { items.push({ id: newId(), ...item }); n++; };
     if (!has((x) => x.kind === 'home')) { items.unshift({ id: newId(), kind: 'home', name: 'Skyvaint', icon: '' }); n++; }
@@ -46,15 +48,15 @@
     for (const a of apps) if (!has((x) => x.target && x.target.toLowerCase() === a.target.toLowerCase())) push({ kind: 'app', name: a.name, target: a.target, args: a.args || '', process: a.process || '', icon: a.icon || '' });
     if (!has((x) => x.kind === 'url' && /skyvaint\.com/i.test(x.target)))
       push({ kind: 'url', name: 'skyvaint.com', target: 'https://skyvaint.com', icon: 'https://www.google.com/s2/favicons?domain=skyvaint.com&sz=128' });
-    nx().enabled = true;
+    bar.enabled = true;
     nx().seeded = true;
     A.changed();
-    if (n && seedAsked) toast(`${n} added to the NEXUS bar`);
+    if (n && seedAsked) toast(`${n} added to ${bar.name || 'the bar'}`); else if (seedAsked) toast('Everything is already on this bar');
     seedAsked = false;
     refresh && refresh();
   }
-  let seedAsked = false;
-  const askSeed = (manual) => { seedAsked = manual; host.send('nexusSeed'); };
+  let seedAsked = false, seedInto = null;
+  const askSeed = (manual) => { seedAsked = manual; seedInto = manual ? cur() : null; host.send('nexusSeed'); };
   host.on('nexusSeed', (m) => seed(m.apps || []));
 
   host.on('init', () => {
@@ -221,7 +223,7 @@
       R.button('Add a game', 'One of your launcher games.', 'PICK GAME', addGameMenu),
       R.button('Add a website', 'Opens in your browser.', 'ADD URL', addSite),
       R.button('Add the launcher', 'A logo that opens HOME. Uses your app icon.', 'ADD', () => add({ kind: 'home', name: 'Skyvaint', icon: '', target: '' })),
-      ...(b === nx() ? [R.button('Fill with my apps', 'Your most played games, plus Epic, Steam, Discord, Medal and Bloxstrap if they are on this PC — whatever is missing.', 'FILL', () => askSeed(true))] : []),
+      R.button('Fill with my apps', 'Your most played games, plus Epic, Steam, Discord, Medal and Bloxstrap if they are on this PC — whatever is missing from this bar.', 'FILL', () => askSeed(true)),
     ];
   }
 
