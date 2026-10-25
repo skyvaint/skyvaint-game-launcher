@@ -71,6 +71,13 @@ public sealed partial class MainForm
             case "openBackups":
                 try { Directory.CreateDirectory(DataSafety.BackupDir); Process.Start("explorer.exe", $"\"{DataSafety.BackupDir}\"")?.Dispose(); } catch { }
                 return true;
+            case "safeGraphics":
+                StartupGuard.SetSafe(m["on"]?.GetValue<bool>() == true);
+                Send(new JsonObject { ["type"] = "notice", ["ok"] = true, ["text"] = "Takes effect the next time the launcher starts" });
+                return true;
+            case "openLog":
+                try { if (File.Exists(StartupGuard.LogFile)) Process.Start("explorer.exe", $"/select,\"{StartupGuard.LogFile}\"")?.Dispose(); } catch { }
+                return true;
             case "restoreBackup":
                 RestoreBackup(Str("file"));
                 return true;
@@ -126,6 +133,9 @@ public sealed partial class MainForm
         ["latest"] = latestRelease?.DeepClone(),
         ["roblox"] = (robloxInfo?.DeepClone() as JsonObject ?? new JsonObject()).Also(r => { r["checking"] = robloxChecking; r["updating"] = robloxUpdating; }),
         ["backups"] = DataSafety.Describe(ConfigPath),
+        ["safeGraphics"] = StartupGuard.SafeGraphics,
+        ["safeReason"] = StartupGuard.SafeReason,
+        ["logFile"] = StartupGuard.LogFile,
         ["backupDir"] = DataSafety.BackupDir,
     };
 

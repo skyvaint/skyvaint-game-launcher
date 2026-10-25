@@ -76,6 +76,14 @@
       rb.updating || rb.checking ? [] : [['UPDATE NOW', () => { audio.play('confirm'); host.send('updateRoblox'); }]]));
     if (rb.status && rb.bloxstrap === false) out.push(note('Bloxstrap isn\'t installed, so Roblox updates itself when it starts.'));
 
+    out.push(heading('GRAPHICS'));
+    out.push(R.buttons(`Safe graphics: ${st.safeGraphics ? 'ON' : 'OFF'}`,
+      st.safeGraphics
+        ? `Drawing without GPU acceleration because ${st.safeReason || 'it was switched on'}. Smoother with it off, if your graphics driver allows. Changes apply on the next start.`
+        : 'Turn on if the launcher ever shows a black screen. Changes apply on the next start.',
+      [[st.safeGraphics ? 'TURN OFF' : 'TURN ON', () => { audio.play('toggle'); host.send('safeGraphics', { on: !st.safeGraphics }); st.safeGraphics = !st.safeGraphics; rerender(); }],
+       ['OPEN LOG', () => host.send('openLog'), 'ghost']]));
+
     out.push(heading(`BACKUPS · ${(st.backups || []).length}`));
     out.push(R.buttons('Your settings are backed up',
       'Games, accounts, bars, playtime and your own pictures are copied outside the settings folder every 30 minutes and at every start. If they ever go missing, the launcher puts them back by itself.',

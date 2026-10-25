@@ -8,7 +8,44 @@ SV.host = (() => {
   const on = (type, fn) => (handlers[type] = handlers[type] || []).push(fn);
   const emit = (msg) => (handlers[msg.type] || []).forEach((fn) => fn(msg));
 
-  if (wv) wv.addEventListener('message', (e) => emit(e.data));
+  // A handler that throws must not stop the others (or later messages): log it and carry on.
+  const emitSafe = (msg) => (handlers[msg.type] || []).forEach((fn) => {
+    try { fn(msg); } catch (err) { report(`${msg.type}: ${err && err.stack ? err.stack : err}`); }
+  });
+  if (wv) wv.addEventListener('message', (e) => emitSafe(e.data));
+
+  // Errors go to the shell's log (%LOCALAPPDATA%\SkyvaintGameLauncher\logs\launcher.log) and, while the page is
+  // still starting, onto the screen, instead of leaving it black.
+  const errors = [];
+  function report(text) {
+    errors.push(String(text).slice(0, 2000));
+    try { if (wv) wv.postMessage({ type: 'clientError', text: String(text).slice(0, 4000) }); } catch {}
+    if (document.body && document.body.classList.contains('preinit')) showStartError();
+  }
+  window.addEventListener('error', (e) => report(e.error && e.error.stack ? e.error.stack : `${e.message} (${e.filename}:${e.lineno})`));
+  window.addEventListener('unhandledrejection', (e) => report('Unhandled promise: ' + (e.reason && e.reason.stack ? e.reason.stack : e.reason)));
+  function showStartError() {
+    let box = document.getElementById('start-error');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'start-error';
+      box.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#0b0707;color:#f5efee;font:14px/1.5 Segoe UI,sans-serif;padding:8vh 8vw;overflow:auto;opacity:1';
+      document.documentElement.appendChild(box);
+    }
+    box.innerHTML = '<div style="font:700 28px Segoe UI,sans-serif;margin-bottom:12px">The launcher hit a problem while starting</div>'
+      + '<div style="opacity:.8;margin-bottom:18px">Please send a screenshot of this (or the file %LOCALAPPDATA%\\SkyvaintGameLauncher\\logs\\launcher.log) to the developer. Closing and opening the launcher again may help.</div>'
+      + '<pre style="white-space:pre-wrap;background:#1a1111;padding:14px;border-radius:8px;font:12px/1.45 Consolas,monospace"></pre>'
+      + '<button style="margin-top:16px;padding:10px 18px;background:#e2231a;color:#fff;border:0;border-radius:6px;font:600 14px Segoe UI,sans-serif;cursor:pointer">CONTINUE ANYWAY</button>';
+    box.querySelector('pre').textContent = errors.join('\n\n');
+    box.querySelector('button').onclick = () => { box.remove(); document.body && document.body.classList.remove('preinit'); };
+  }
+  // Still invisible long after start: the page never got going. Show why (or at least that it's stuck).
+  setTimeout(() => {
+    if (document.body && document.body.classList.contains('preinit')) {
+      if (!errors.length) errors.push(wv ? 'The launcher did not send its start-up data within 20 seconds.' : 'Still starting after 20 seconds.');
+      report('Start-up timed out (page still hidden).');
+    }
+  }, 20000);
 
   function send(type, data = {}) {
     if (wv) wv.postMessage({ type, ...data });
@@ -131,5 +168,5 @@ SV.host = (() => {
     }
   }
 
-  return { on, send, native: !!wv };
+  return { on, send, native: !!wv, report };
 })();
