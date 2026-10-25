@@ -67,6 +67,8 @@
       R.toggle('Include beta versions', 'Pre-releases count as updates too.', A.prop(u, 'beta')),
     );
 
+    out.push(R.button('Apps on this PC', 'What the launcher works with (Bloxstrap, Medal, Steam, Epic, Discord) and what is still missing.', 'OPEN', () => SV.setup && SV.setup.open()));
+
     out.push(heading('ROBLOX'));
     out.push(R.toggle('Keep Roblox updated', 'Checks for a new Roblox version and installs it through Bloxstrap in the background, so games start without the update wait. Never while Roblox is open or you are playing.', A.prop(u, 'roblox')));
     out.push(R.buttons(`Roblox ${rb.latest || ''}`.trim(),

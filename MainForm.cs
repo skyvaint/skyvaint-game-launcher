@@ -1616,6 +1616,13 @@ public sealed partial class MainForm : Form
 	private async Task InitWebView()
 	{
 		_ = 1;
+		// No WebView2 runtime: nothing could be drawn, so offer Microsoft's download page instead of a cryptic error.
+		if (!EnsureWebView2(this, Text))
+		{
+			quitting = true;
+			Close();
+			return;
+		}
 		try
 		{
 			CoreWebView2EnvironmentOptions options = ((DebugPort > 0) ? new CoreWebView2EnvironmentOptions(BrowserArgs() + $" --remote-debugging-port={DebugPort}") : WebOptions());
@@ -1998,7 +2005,7 @@ public sealed partial class MainForm : Form
 			Quit();
 			break;
 		default:
-			if (!OnAccountMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m) && !OnUpdateMessage(m))
+			if (!OnAccountMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m) && !OnUpdateMessage(m) && !OnSetupMessage(m))
 			{
 				OnClipMessage(m);
 			}

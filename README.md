@@ -29,6 +29,7 @@ Your settings and accounts are saved in `%APPDATA%\SkyvaintGameLauncher` on your
 - **Discover:** free Epic games, Steam top sellers and deals, trending Roblox games.
 - **Details:** any game opens a details screen with your playtime plus the store's or Roblox's description, stats and screenshots.
 - **Rows under HOME:** scroll down for what you played last, your Roblox friends (online status, the game they're in, JOIN), your Roblox games, Studio projects, upcoming releases, Roblox Studio news and Discord commission requests (needs your own bot).
+- **Set up and updates:** on first start it lists what's missing (Bloxstrap when there's no Roblox, Medal, Steam, Epic, Discord) with links to get them. Settings → UPDATES checks for new versions, updates in one click, keeps Roblox updated through Bloxstrap and manages backups of your settings.
 - **NEXUS bar:** a see-through desktop dock with just the logos of the apps, games and sites you pick.
 - **Discord Rich Presence:** you write the text and buttons yourself.
 - **Looks:**

@@ -141,6 +141,8 @@
     dev: { enabled: false, commissions: [], showStudioHome: true, promptData: false },
     // UPDATES tab: the launcher's GitHub releases, keeping Roblox up to date.
     updates: { auto: true, notify: true, beta: false, skipped: '', lastSeen: '', roblox: true },
+    // First-start setup check: shown once, then only for recommended apps that are missing and not skipped.
+    setup: { seen: false, skipped: [] },
     language: 'en',
   });
 
