@@ -68,7 +68,7 @@ public sealed partial class MainForm : Form
 
 	private static readonly string RobloxOldData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SkyvaintRobloxManager");
 
-	private static readonly string RobloxCacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SkyvaintRobloxManager", "webview");
+	private static readonly string RobloxCacheDir = DataSafety.RobloxLocal;
 
 	private CoreWebView2Environment? robloxEnv;
 
@@ -110,7 +110,8 @@ public sealed partial class MainForm : Form
 
 	private const int PollSeconds = 3;
 
-	private static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SkyvaintGameLauncher");
+	// All of these follow DataSafety: the real folders normally, a throw-away folder for a --data test run.
+	private static readonly string DataDir = DataSafety.Roaming;
 
 	private static readonly string MediaDir = Path.Combine(DataDir, "media");
 
@@ -118,7 +119,7 @@ public sealed partial class MainForm : Form
 
 	private static readonly string StatePath = Path.Combine(DataDir, "state.json");
 
-	private static readonly string CacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SkyvaintGameLauncher", "webview");
+	private static readonly string CacheDir = Path.Combine(DataSafety.Local, "webview");
 
 	private readonly WebView2 web = new WebView2
 	{
@@ -166,6 +167,12 @@ public sealed partial class MainForm : Form
 	private DateTime lastStateSave = DateTime.Now;
 
 	private bool artBusy;
+
+	/// <summary>The backup the settings were put back from at start (null when nothing was wrong).</summary>
+	private string? recoveredFrom;
+
+	/// <summary>Set while a backup is being put back: the page's old settings must not be saved over it.</summary>
+	private bool restoring;
 
 	private static readonly HashSet<string> NotGames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 	{
@@ -1533,8 +1540,20 @@ public sealed partial class MainForm : Form
 		base.Controls.Add(web);
 		Directory.CreateDirectory(MediaDir);
 		Directory.CreateDirectory(CacheDir);
+		// Before anything reads the data: put back a config or stats that went missing, broke, or were replaced by
+		// something else (a fresh start, a test file), and any custom pictures that disappeared. See DataSafety.
+		recoveredFrom = DataSafety.RecoverOnStart(ConfigPath, StatePath, MediaDir);
 		config = ReadJson(ConfigPath);
+		if (config != null)
+		{
+			bool marked = config[DataSafety.MarkKey] != null;
+			DataSafety.Stamp(config);
+			if (!marked) WriteJson(ConfigPath, config);
+			DataSafety.Snapshot(ConfigPath, force: true);
+		}
 		state = ReadJson(StatePath) ?? new JsonObject();
+		DataSafety.Snapshot(StatePath, force: true);
+		Task.Run(() => DataSafety.MirrorMedia(MediaDir));
 		if (background)
 		{
 			mode = Behavior("autostartMode", "hidden");
@@ -1905,9 +1924,15 @@ public sealed partial class MainForm : Form
 			SetMode(mode, notify: false);
 			base.Opacity = 1.0;
 			PollGames();
+			OnPageReadyUpdates();
 			break;
 		case "saveConfig":
-			config = m["config"]?.DeepClone() as JsonObject;
+		{
+			// While a backup is being put back the page still holds the old settings; don't let it write them.
+			if (restoring) break;
+			var incoming = m["config"]?.DeepClone() as JsonObject;
+			if (incoming != null) DataSafety.Stamp(incoming, config);
+			config = incoming;
 			if (config != null)
 			{
 				WriteJson(ConfigPath, config);
@@ -1922,6 +1947,7 @@ public sealed partial class MainForm : Form
 			PushDock();
 			UpdatePresence();
 			break;
+		}
 		case "launch":
 			Launch(Str("id"), m["account"]?.ToString(), applyAfterLaunch: true, m["wait"]?.GetValue<bool>() ?? true);
 			break;
@@ -1972,7 +1998,7 @@ public sealed partial class MainForm : Form
 			Quit();
 			break;
 		default:
-			if (!OnAccountMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m))
+			if (!OnAccountMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m) && !OnUpdateMessage(m))
 			{
 				OnClipMessage(m);
 			}
@@ -2771,6 +2797,7 @@ public sealed partial class MainForm : Form
 
 	private void SaveState()
 	{
+		if (restoring) return; // a backup's stats were just put back; don't write the old ones over them
 		WriteJson(StatePath, state);
 		stateDirty = false;
 		lastStateSave = DateTime.Now;
@@ -2790,6 +2817,8 @@ public sealed partial class MainForm : Form
 
 	private static void WriteJson(string path, JsonObject json)
 	{
+		// The settings and the stats keep dated backups outside the data folder (see DataSafety).
+		if (path == ConfigPath || path == StatePath) DataSafety.Snapshot(path);
 		try
 		{
 			string text = path + ".tmp";

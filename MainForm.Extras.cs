@@ -401,10 +401,13 @@ public sealed partial class MainForm
                     live ??= LiveProcessNames();
                     on = live.Contains(proc);
                 }
+                var icon = i["icon"]?.ToString() ?? "";
+                if (icon == "" && kind == "home") icon = appIconUrl;
+                else if (icon == "" && kind == "app") icon = AutoIcon(i["target"]?.ToString() ?? "");
                 items.Add(new JsonObject
                 {
                     ["id"] = i["id"]?.DeepClone(), ["name"] = i["name"]?.DeepClone(),
-                    ["icon"] = kind == "home" && (i["icon"]?.ToString() ?? "") == "" ? appIconUrl : i["icon"]?.DeepClone(),
+                    ["icon"] = icon,
                     ["kind"] = kind, ["running"] = on,
                 });
             }
@@ -417,6 +420,22 @@ public sealed partial class MainForm
             dockSigs[id] = sig;
             d.SetState(stateJson);
         }
+    }
+
+    // Apps put on a bar without a picture (by hand in config.json, or when the icon couldn't be read at the time)
+    // get the logo Windows shows for them: the program, the shortcut, or a shell folder such as the Recycle Bin.
+    readonly Dictionary<string, string> autoIcons = new(StringComparer.OrdinalIgnoreCase);
+    string AutoIcon(string target)
+    {
+        if (target == "") return "";
+        if (autoIcons.TryGetValue(target, out var known)) return known;
+        var path = Environment.ExpandEnvironmentVariables(target);
+        // "calc.exe" and friends: the copy in System32.
+        if (!path.Contains('\\') && !path.Contains(':')) path = Path.Combine(Environment.SystemDirectory, path);
+        var key = "nexus_" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(target.ToLowerInvariant())), 0, 8).ToLowerInvariant();
+        var url = ShellImage.SaveIcon(path, MediaDir, MediaHost, key);
+        autoIcons[target] = url;
+        return url;
     }
 
     static HashSet<string> LiveProcessNames()
@@ -446,9 +465,14 @@ public sealed partial class MainForm
         return r.Left <= screen.Left && r.Top <= screen.Top && r.Right >= screen.Right && r.Bottom >= screen.Bottom;
     }
 
-    // The desktop (or the taskbar and its pop-ups) is in front: what "desktop only" bars wait for.
-    static readonly HashSet<string> DesktopClasses = new(StringComparer.OrdinalIgnoreCase)
-        { "Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "NotifyIconOverflowWindow", "TopLevelWindowForOverflowXamlIsland", "XamlExplorerHostIslandWindow" };
+    // The desktop itself is in front: what "desktop only" bars wait for.
+    static readonly HashSet<string> DesktopClasses = new(StringComparer.OrdinalIgnoreCase) { "Progman", "WorkerW" };
+    // The taskbar and its pop-ups. Having one of these in front does NOT mean the desktop is showing: pressing (or
+    // holding) a taskbar button gives the taskbar the focus while the app window is still on screen. So for these we
+    // look at what is actually open instead (this was what made the desktop bar flash up and fade out again).
+    static readonly HashSet<string> ShellClasses = new(StringComparer.OrdinalIgnoreCase)
+        { "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "NotifyIconOverflowWindow", "TopLevelWindowForOverflowXamlIsland", "XamlExplorerHostIslandWindow" };
+    static bool IsShellClass(string name) => DesktopClasses.Contains(name) || ShellClasses.Contains(name);
     [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc proc, IntPtr param);
     delegate bool EnumProc(IntPtr hWnd, IntPtr param);
     [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hWnd, uint cmd);
@@ -462,14 +486,24 @@ public sealed partial class MainForm
     {
         if (!IsWindowVisible(h) || IsIconic(h) || GetTitleLength(h) == 0) return false;
         if (GetWindow(h, 4 /* GW_OWNER */) != IntPtr.Zero) return false;
-        if ((GetWindowLong32(h, -20 /* GWL_EXSTYLE */) & 0x80 /* WS_EX_TOOLWINDOW */) != 0) return false;
+        int ex = GetWindowLong32(h, -20 /* GWL_EXSTYLE */);
+        if ((ex & 0x80 /* WS_EX_TOOLWINDOW */) != 0) return false;
+        // Click-through and never-focused windows are overlays (Discord, Medal, GeForce, Steam...), not something
+        // covering the desktop. They used to keep desktop-only bars hidden until you clicked the desktop.
+        if ((ex & 0x20 /* WS_EX_TRANSPARENT */) != 0 || (ex & 0x08000000 /* WS_EX_NOACTIVATE */) != 0) return false;
         if (DwmGetWindowAttribute(h, 14 /* DWMWA_CLOAKED */, out int cloaked, 4) == 0 && cloaked != 0) return false;
         if (docks.Values.Any(d => d.Handle == h)) return false;
         if (h == Handle && mode != "home") return false; // the mini widget doesn't cover the desktop
         var name = new System.Text.StringBuilder(256);
         GetClassName(h, name, name.Capacity);
-        if (DesktopClasses.Contains(name.ToString())) return false;
-        return GetWindowRect(h, out var r) && r.Right - r.Left > 120 && r.Bottom - r.Top > 80;
+        if (IsShellClass(name.ToString())) return false;
+        if (!GetWindowRect(h, out var r) || r.Right - r.Left <= 120 || r.Bottom - r.Top <= 80) return false;
+        // Only windows on the screen the bars live on count: an app open on a second monitor shouldn't stop the
+        // desktop dock from showing on this one. Windows parked off-screen don't count either.
+        var screen = (Screen.PrimaryScreen ?? Screen.AllScreens[0]).Bounds;
+        int w = Math.Min(r.Right, screen.Right) - Math.Max(r.Left, screen.Left);
+        int hgt = Math.Min(r.Bottom, screen.Bottom) - Math.Max(r.Top, screen.Top);
+        return w > 120 && hgt > 80;
     }
 
     /// <summary>True when the desktop is what you see: it (or the taskbar) has the focus, the window in front was
@@ -481,7 +515,7 @@ public sealed partial class MainForm
         var name = new System.Text.StringBuilder(256);
         GetClassName(front, name, name.Capacity);
         if (DesktopClasses.Contains(name.ToString())) return true;
-        if (IsIconic(front) || !IsWindowVisible(front)) return !AnyAppWindow();
+        // The taskbar, a minimized or hidden window, anything else: the desktop shows only if nothing is open over it.
         return !AnyAppWindow();
     }
 
@@ -532,15 +566,27 @@ public sealed partial class MainForm
         };
         foregroundHook = SetWinEventHook(3 /* EVENT_SYSTEM_FOREGROUND */, 3, IntPtr.Zero, foregroundProc, 0, 0, 0 /* out of context */);
         minimizeHook = SetWinEventHook(0x16 /* EVENT_SYSTEM_MINIMIZESTART */, 0x17 /* MINIMIZEEND */, IntPtr.Zero, foregroundProc, 0, 0, 0);
+        // Closing the last window often leaves nothing in front, and Windows sends no event for that. Rather than
+        // waiting for the 3-second check (or for you to click the desktop), look twice a second while any bar
+        // depends on the desktop.
+        barWatch.Tick += (_, _) =>
+        {
+            if (docks.Count > 0 && Bars().Any(b => BarOn(b.bar) && (b.bar["visibility"]?.ToString() ?? "always") != "always"))
+                UpdateBarVisibility();
+        };
+        barWatch.Start();
     }
+    readonly System.Windows.Forms.Timer barWatch = new() { Interval = 500 };
 
     /// <summary>Something was opened from a bar: desktop-only bars fade away now, before its window appears.
     /// If nothing comes to the front after a few seconds, they come back.</summary>
     void OpenedFromBar()
     {
-        openingUntil = DateTime.Now.AddSeconds(4);
+        // Long enough for slower apps (Steam, Epic, games) to put up a window, so the bar doesn't come back and
+        // then fade out again when the window finally shows.
+        openingUntil = DateTime.Now.AddSeconds(7);
         UpdateBarVisibility();
-        var back = new System.Windows.Forms.Timer { Interval = 4100 };
+        var back = new System.Windows.Forms.Timer { Interval = 7100 };
         back.Tick += (_, _) => { back.Stop(); back.Dispose(); UpdateBarVisibility(); };
         back.Start();
     }
