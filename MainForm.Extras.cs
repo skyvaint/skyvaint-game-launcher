@@ -518,7 +518,8 @@ case "open":
         JsonObject? activity = null;
         if (playing != null || idle)
         {
-            string Get(string key, string fallback) => d?[key]?.ToString() is { Length: > 0 } v ? v : fallback;
+            // A line you cleared on purpose stays empty; only a setting that was never saved uses the default.
+            string Get(string key, string fallback) => d is JsonObject o && o.ContainsKey(key) ? o[key]?.ToString() ?? "" : fallback;
             activity = new JsonObject
             {
                 ["details"] = Clip(Fill(playing != null ? Get("details", "Playing {game}") : Get("idleDetails", "In the launcher"), playing), 128),
