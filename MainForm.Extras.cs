@@ -500,6 +500,7 @@ case "open":
             presenceSignature = "";
             return;
         }
+        discord.StatusChanged ??= s => { try { BeginInvoke(() => Send(new JsonObject { ["type"] = "discordStatus", ["status"] = s })); } catch { } };
         if (!discord.Connected || discord.ClientId != clientId)
         {
             if ((DateTime.Now - lastDiscordTry).TotalSeconds < 15 && !force) return;
@@ -545,6 +546,8 @@ case "open":
                     buttons.Add(new JsonObject { ["label"] = label.Length > 32 ? label[..32] : label, ["url"] = link });
             }
             if (buttons.Count > 0) activity["buttons"] = buttons;
+            // Discord rejects the whole activity if a line is sent as null, so empty lines are left out.
+            foreach (var key in activity.Where(kv => kv.Value == null).Select(kv => kv.Key).ToList()) activity.Remove(key);
         }
         var sig = activity?.ToJsonString() ?? "clear";
         if (sig == presenceSignature && !force) return;
