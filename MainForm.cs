@@ -68,7 +68,7 @@ public sealed partial class MainForm : Form
 
 	private static readonly string RobloxOldData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SkyvaintRobloxManager");
 
-	private static readonly string RobloxCacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SkyvaintRobloxManager", "webview");
+	private static readonly string RobloxCacheDir = DataSafety.RobloxLocal;
 
 	private CoreWebView2Environment? robloxEnv;
 
@@ -110,7 +110,8 @@ public sealed partial class MainForm : Form
 
 	private const int PollSeconds = 3;
 
-	private static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SkyvaintGameLauncher");
+	// All of these follow DataSafety: the real folders normally, a throw-away folder for a --data test run.
+	private static readonly string DataDir = DataSafety.Roaming;
 
 	private static readonly string MediaDir = Path.Combine(DataDir, "media");
 
@@ -118,7 +119,7 @@ public sealed partial class MainForm : Form
 
 	private static readonly string StatePath = Path.Combine(DataDir, "state.json");
 
-	private static readonly string CacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SkyvaintGameLauncher", "webview");
+	private static readonly string CacheDir = Path.Combine(DataSafety.Local, "webview");
 
 	private readonly WebView2 web = new WebView2
 	{
@@ -166,6 +167,12 @@ public sealed partial class MainForm : Form
 	private DateTime lastStateSave = DateTime.Now;
 
 	private bool artBusy;
+
+	/// <summary>The backup the settings were put back from at start (null when nothing was wrong).</summary>
+	private string? recoveredFrom;
+
+	/// <summary>Set while a backup is being put back: the page's old settings must not be saved over it.</summary>
+	private bool restoring;
 
 	private static readonly HashSet<string> NotGames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 	{
@@ -1533,8 +1540,20 @@ public sealed partial class MainForm : Form
 		base.Controls.Add(web);
 		Directory.CreateDirectory(MediaDir);
 		Directory.CreateDirectory(CacheDir);
+		// Before anything reads the data: put back a config or stats that went missing, broke, or were replaced by
+		// something else (a fresh start, a test file), and any custom pictures that disappeared. See DataSafety.
+		recoveredFrom = DataSafety.RecoverOnStart(ConfigPath, StatePath, MediaDir);
 		config = ReadJson(ConfigPath);
+		if (config != null)
+		{
+			bool marked = config[DataSafety.MarkKey] != null;
+			DataSafety.Stamp(config);
+			if (!marked) WriteJson(ConfigPath, config);
+			DataSafety.Snapshot(ConfigPath, force: true);
+		}
 		state = ReadJson(StatePath) ?? new JsonObject();
+		DataSafety.Snapshot(StatePath, force: true);
+		Task.Run(() => DataSafety.MirrorMedia(MediaDir));
 		if (background)
 		{
 			mode = Behavior("autostartMode", "hidden");
@@ -1597,6 +1616,13 @@ public sealed partial class MainForm : Form
 	private async Task InitWebView()
 	{
 		_ = 1;
+		// No WebView2 runtime: nothing could be drawn, so offer Microsoft's download page instead of a cryptic error.
+		if (!EnsureWebView2(this, Text))
+		{
+			quitting = true;
+			Close();
+			return;
+		}
 		try
 		{
 			CoreWebView2EnvironmentOptions options = ((DebugPort > 0) ? new CoreWebView2EnvironmentOptions(BrowserArgs() + $" --remote-debugging-port={DebugPort}") : WebOptions());
@@ -1643,31 +1669,47 @@ public sealed partial class MainForm : Form
 		poll.Start();
 	}
 
-	private void ServeMedia(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
+	// Pictures and videos the page shows (art, icons, clips, your own files). Reading them happens off the window's
+	// thread (a big GIF or video used to freeze the whole launcher while it loaded), and files you picked yourself
+	// never change, so the page keeps them cached instead of asking again on every redraw.
+	private async void ServeMedia(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
 	{
+		Uri uri;
+		try { uri = new Uri(e.Request.Uri); } catch { return; }
+		if (!uri.Host.Equals("media.skyvaint.example", StringComparison.OrdinalIgnoreCase)) return;
+		CoreWebView2Environment env = (sender as CoreWebView2)?.Environment ?? web.CoreWebView2.Environment;
+		CoreWebView2Deferral deferral = e.GetDeferral();
 		try
 		{
-			Uri uri = new Uri(e.Request.Uri);
-			if (uri.Host.Equals("media.skyvaint.example", StringComparison.OrdinalIgnoreCase))
+			string name = Path.GetFileName(Uri.UnescapeDataString(uri.AbsolutePath));
+			string file = Path.Combine(MediaDir, name);
+			string video = Path.GetExtension(name).ToLowerInvariant() switch { ".mp4" or ".m4v" => "video/mp4", ".webm" => "video/webm", ".mov" => "video/quicktime", _ => "" };
+			var (stream, mime) = await Task.Run<(Stream?, string)>(() =>
 			{
-				CoreWebView2Environment env = (sender as CoreWebView2)?.Environment ?? web.CoreWebView2.Environment;
-				string name = Path.GetFileName(Uri.UnescapeDataString(uri.AbsolutePath));
-				string file = Path.Combine(MediaDir, name);
-				if (name == "" || !File.Exists(file))
-				{
-					e.Response = env.CreateWebResourceResponse(null, 404, "Not Found", "");
-					return;
-				}
+				if (name == "" || !File.Exists(file)) return (null, "");
+				if (video != "") return (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.Asynchronous | FileOptions.SequentialScan), video);
 				byte[] bytes = File.ReadAllBytes(file);
-				CoreWebView2WebResourceResponse response = env.CreateWebResourceResponse(new MemoryStream(bytes), 200, "OK", "");
-				response.Headers.AppendHeader("Content-Type", MimeOf(name, bytes));
-				response.Headers.AppendHeader("Access-Control-Allow-Origin", "*");
-				response.Headers.AppendHeader("Cache-Control", "max-age=300");
-				e.Response = response;
+				return (new MemoryStream(bytes), MimeOf(name, bytes));
+			});
+			if (stream == null)
+			{
+				e.Response = env.CreateWebResourceResponse(null, 404, "Not Found", "");
+				return;
 			}
+			CoreWebView2WebResourceResponse response = env.CreateWebResourceResponse(stream, 200, "OK", "");
+			response.Headers.AppendHeader("Content-Type", mime);
+			response.Headers.AppendHeader("Access-Control-Allow-Origin", "*");
+			// Files you picked are saved under a unique name, so they can be cached for good.
+			bool picked = System.Text.RegularExpressions.Regex.IsMatch(name, @"^(image|media|video|audio|icon)_[0-9a-f]{32}\.", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+			response.Headers.AppendHeader("Cache-Control", picked ? "max-age=31536000, immutable" : "max-age=300");
+			e.Response = response;
 		}
 		catch (Exception)
 		{
+		}
+		finally
+		{
+			deferral.Complete();
 		}
 	}
 
@@ -1889,9 +1931,15 @@ public sealed partial class MainForm : Form
 			SetMode(mode, notify: false);
 			base.Opacity = 1.0;
 			PollGames();
+			OnPageReadyUpdates();
 			break;
 		case "saveConfig":
-			config = m["config"]?.DeepClone() as JsonObject;
+		{
+			// While a backup is being put back the page still holds the old settings; don't let it write them.
+			if (restoring) break;
+			var incoming = m["config"]?.DeepClone() as JsonObject;
+			if (incoming != null) DataSafety.Stamp(incoming, config);
+			config = incoming;
 			if (config != null)
 			{
 				WriteJson(ConfigPath, config);
@@ -1906,6 +1954,7 @@ public sealed partial class MainForm : Form
 			PushDock();
 			UpdatePresence();
 			break;
+		}
 		case "launch":
 			Launch(Str("id"), m["account"]?.ToString(), applyAfterLaunch: true, m["wait"]?.GetValue<bool>() ?? true);
 			break;
@@ -1956,7 +2005,7 @@ public sealed partial class MainForm : Form
 			Quit();
 			break;
 		default:
-			if (!OnAccountMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m))
+			if (!OnAccountMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m) && !OnUpdateMessage(m) && !OnSetupMessage(m))
 			{
 				OnClipMessage(m);
 			}
@@ -2121,7 +2170,7 @@ public sealed partial class MainForm : Form
 		UnregisterHotKey(base.Handle, 1);
 		tray.Visible = false;
 		try { discord.SetActivity(null); discord.Close(); } catch { }
-		dock?.Close();
+		foreach (var d in docks.Values) d.Close();
 		SaveState();
 		base.OnFormClosing(e);
 	}
@@ -2590,7 +2639,7 @@ public sealed partial class MainForm : Form
 		}
 		OpenFileDialog openFileDialog = new OpenFileDialog();
 		OpenFileDialog openFileDialog2 = openFileDialog;
-		string filter = ((kind == "image") ? "Images|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp" : ((!(kind == "audio")) ? "Games and shortcuts|*.exe;*.lnk;*.url;*.bat|All files|*.*" : "Audio|*.mp3;*.wav;*.ogg;*.m4a;*.flac"));
+		string filter = kind == "media" ? "Pictures, GIFs and videos|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico;*.mp4;*.webm;*.m4v;*.mov|Pictures|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico|Videos|*.mp4;*.webm;*.m4v;*.mov" : kind == "video" ? "Videos|*.mp4;*.webm;*.m4v;*.mov" : ((kind == "image") ? "Images|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico" : ((!(kind == "audio")) ? "Games and shortcuts|*.exe;*.lnk;*.url;*.bat|All files|*.*" : "Audio|*.mp3;*.wav;*.ogg;*.m4a;*.flac"));
 		openFileDialog2.Filter = filter;
 		using OpenFileDialog dlg = openFileDialog;
 		if (dlg.ShowDialog(this) == DialogResult.OK)
@@ -2755,6 +2804,7 @@ public sealed partial class MainForm : Form
 
 	private void SaveState()
 	{
+		if (restoring) return; // a backup's stats were just put back; don't write the old ones over them
 		WriteJson(StatePath, state);
 		stateDirty = false;
 		lastStateSave = DateTime.Now;
@@ -2774,6 +2824,8 @@ public sealed partial class MainForm : Form
 
 	private static void WriteJson(string path, JsonObject json)
 	{
+		// The settings and the stats keep dated backups outside the data folder (see DataSafety).
+		if (path == ConfigPath || path == StatePath) DataSafety.Snapshot(path);
 		try
 		{
 			string text = path + ".tmp";

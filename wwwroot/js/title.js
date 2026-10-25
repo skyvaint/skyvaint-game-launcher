@@ -20,20 +20,21 @@
   let wipeTimer = 0;
   // Covers the screen with three slashing slabs; `covered` runs once it is fully covered, then it slides away.
   function slash(covered, hold = 120) {
-    if (!A.cfg.fx.wipe) { covered && covered(); return; }
+    if (!A.cfg.fx.wipe || A.cfg.fx.transition === 'none') { covered && covered(); return; }
     clearTimeout(wipeTimer);
     wipe.className = '';
     void wipe.offsetWidth;
     wipe.className = 'cover';
+    document.body.classList.add('wiping');
     audio.play('slam');
     wipeTimer = setTimeout(() => {
       covered && covered();
-      wipeTimer = setTimeout(() => { wipe.className = 'open'; wipeTimer = setTimeout(() => { wipe.className = ''; }, 520); }, hold);
+      wipeTimer = setTimeout(() => { wipe.className = 'open'; document.body.classList.remove('wiping'); wipeTimer = setTimeout(() => { wipe.className = ''; }, 520); }, hold);
     }, 300);
   }
   // Coming back: start covered, then open up.
   function reveal() {
-    if (!A.cfg.fx.wipe) return;
+    if (!A.cfg.fx.wipe || A.cfg.fx.transition === 'none') return;
     clearTimeout(wipeTimer);
     wipe.className = 'held';
     void wipe.offsetWidth;

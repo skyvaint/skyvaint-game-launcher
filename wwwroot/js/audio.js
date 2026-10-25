@@ -43,6 +43,8 @@ SV.audio = (() => {
   // [semitones from base, start (s), length (s), gain, slide to semitone]
   const EVENTS = {
     nav:     [[12, 0, 0.06, 0.45]],
+    // The mouse-hover tick: one short, quiet note in every pack, so sweeping the pointer never gets loud.
+    hover:   [[19, 0, 0.025, 0.22]],
     confirm: [[0, 0, 0.08, 0.55], [7, 0.06, 0.16, 0.55]],
     back:    [[5, 0, 0.07, 0.45], [-2, 0.05, 0.13, 0.45]],
     toggle:  [[7, 0, 0.05, 0.4]],
@@ -113,7 +115,7 @@ SV.audio = (() => {
     const t0 = when + start, dur = len * pack.decay;
     const f = pack.base * Math.pow(2, (semi + (opt.pitch || 0)) / 12);
     const to = slide != null ? pack.base * Math.pow(2, (slide + (opt.pitch || 0)) / 12) : pack.drop ? f * Math.pow(2, -pack.drop / 12) : 0;
-    const voices = 1 + (pack.unison || 0), level = gain * 0.28 * (pack.gain || 1) / Math.sqrt(voices);
+    const voices = 1 + (pack.unison || 0), level = gain * 0.28 * (pack.gain || 1) * volume / Math.sqrt(voices);
     for (let v = 0; v < voices; v++) voice(pack, f, t0, dur, level, to, v ? (v % 2 ? 1 : -1) * 9 * Math.ceil(v / 2) : 0);
     if (pack.octave) voice(pack, f * 2, t0, dur * 0.8, level * pack.octave, to * 2, 0);
   }
@@ -157,21 +159,25 @@ SV.audio = (() => {
     return true;
   }
 
-  let lastAt = {};
-  function play(event) {
+  let lastAt = {}, volume = 1;
+  function play(event, vol = 1) {
     if (opt.master <= 0 || opt.events[event] === false) return;
     const now = performance.now();
     if (now - (lastAt[event] || 0) < 28) return; // the same sound twice in one frame is just louder, not useful
+    // Two cursor sounds right on top of each other (a hover just before a key press) only play once.
+    if ((event === 'hover' && now - (lastAt.nav || 0) < 120) || (event === 'nav' && now - (lastAt.hover || 0) < 40)) return;
     lastAt[event] = now;
     const custom = opt.custom && opt.custom[event];
     if (custom) { playFile(custom); return; }
     if (!ensure()) return;
-    const pack = PACKS[opt.pack] || PACKS.pulse, seq = (pack.events && pack.events[event]) || EVENTS[event];
+    volume = Math.max(0, vol);
+    const pack = PACKS[opt.pack] || PACKS.pulse, seq = event === 'hover' ? EVENTS.hover : (pack.events && pack.events[event]) || EVENTS[event];
     if (!seq) return;
     if (ctx.state === 'suspended') ctx.resume();
     const when = ctx.currentTime + 0.01, noisy = (pack.noisy || NOISY)[event];
     seq.forEach((n) => note(pack, n, when));
     if (noisy && (pack.noise > 0 || event !== 'confirm')) whoosh(pack, noisy, when, event !== 'boot' && event !== 'slam');
+    volume = 1;
   }
 
   // Low drone under the HOME screen. Two detuned voices through a slowly breathing filter.

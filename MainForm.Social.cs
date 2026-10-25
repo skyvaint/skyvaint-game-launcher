@@ -70,6 +70,19 @@ public sealed partial class MainForm
             case "gameDetails":
                 _ = GameDetails(m);
                 return true;
+            case "systemStats":
+                {
+                    var stats = SystemStats.Read();
+                    stats["type"] = "systemStats";
+                    Send(stats);
+                }
+                return true;
+            case "setVolume":
+                try { SystemStats.Volume.Set((float)((m["level"]?.GetValue<double>() ?? 50) / 100.0)); } catch { }
+                return true;
+            case "muteVolume":
+                try { SystemStats.Volume.Mute(m["on"]?.GetValue<bool>() ?? true); } catch { }
+                return true;
         }
         return false;
     }

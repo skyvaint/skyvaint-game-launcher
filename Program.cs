@@ -20,10 +20,29 @@ internal static class Program
 			Dump(args[dump + 1]);
 			return;
 		}
-		bool first;
-		using (new Mutex(initiallyOwned: true, "SkyvaintGameLauncher.Single", out first))
+		// --data <folder>: run on a separate, throw-away data folder (for testing a build) so the real settings,
+		// accounts, playtime and pictures in %APPDATA%\SkyvaintGameLauncher are never touched. Must be set before
+		// MainForm is used, because its paths are read from here.
+		int data = Array.IndexOf(args, "--data");
+		if (data >= 0 && data + 1 < args.Length)
 		{
-			using EventWaitHandle wake = new EventWaitHandle(initialState: false, EventResetMode.AutoReset, "SkyvaintGameLauncher.Wake");
+			DataSafety.Override = Path.GetFullPath(args[data + 1]);
+			Directory.CreateDirectory(DataSafety.Override);
+		}
+		// --data-chosen: restarted after picking which settings to load; the picker doesn't ask again.
+		DataSafety.SkipDataPrompt = args.Contains("--data-chosen");
+		// --wait-pid <id>: started by a restart (restoring a backup, finishing an update); wait for the old one to close.
+		int wait = Array.IndexOf(args, "--wait-pid");
+		if (wait >= 0 && wait + 1 < args.Length && int.TryParse(args[wait + 1], out var oldPid))
+		{
+			try { using var old = System.Diagnostics.Process.GetProcessById(oldPid); old.WaitForExit(20000); } catch { }
+		}
+		// A test run gets its own single-instance names, so it can run next to the real launcher.
+		string inst = DataSafety.IsTest ? ".Test" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(DataSafety.Override!.ToLowerInvariant())), 0, 4) : "";
+		bool first;
+		using (new Mutex(initiallyOwned: true, "SkyvaintGameLauncher.Single" + inst, out first))
+		{
+			using EventWaitHandle wake = new EventWaitHandle(initialState: false, EventResetMode.AutoReset, "SkyvaintGameLauncher.Wake" + inst);
 			if (!first)
 			{
 				wake.Set();

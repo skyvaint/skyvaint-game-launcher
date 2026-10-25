@@ -14,6 +14,8 @@
   const body = $('.rails-body', root);
 
   host.on('feeds', (m) => { feeds = { upcoming: m.upcoming || [], news: m.news || [] }; render(); });
+  let disc = null;
+  host.on('discover', (m) => { disc = m; render(); });
   host.on('commissions', (m) => { commissions = { items: m.items || null, error: m.error || '', channelName: m.channelName || '' }; render(); });
   host.on('discordBot', (m) => { hasBot = !!m.has; if (A.cfg) render(); });
 
@@ -21,6 +23,7 @@
     if (!force && Date.now() - fetchedAt < 10 * 60e3) return;
     fetchedAt = Date.now();
     host.send('feeds', { fresh: !!force });
+    host.send('discover', { fresh: !!force });
     SV.lists && SV.lists.loadStudio(force);
   }
 
@@ -50,6 +53,33 @@
         { label: 'DETAILS', run: () => SV.details.place(x.p) },
       ]),
     });
+  }
+
+  // A Roblox game from the explore lists: Enter opens its details (players, peak, votes), options play or save it.
+  function robloxCard(x) {
+    const info = { placeId: x.placeId, universeId: x.universeId, name: x.title, icon: x.image };
+    return {
+      img: x.image, title: x.title, sub: x.sub, cls: 'icon',
+      run: () => SV.details.roblox(info),
+      options: () => A.openMenu(x.title, [
+        { label: 'DETAILS', sub: 'Players, peak, votes, screenshots', run: () => SV.details.roblox(info) },
+        { label: 'PLAY', run: () => { close(); SV.roblox.playPlace({ placeId: x.placeId, name: x.title, icon: x.image }); } },
+        { label: 'SAVE TO MY ROBLOX GAMES', run: () => { if (!SV.roblox.places().some((p) => +p.placeId === +x.placeId)) { SV.roblox.places().push({ placeId: +x.placeId, name: x.title, icon: x.image || '' }); A.changed(); render(); } toast(x.title + ' saved'); } },
+        { label: 'ROBLOX PAGE', run: () => openUrl(x.url) },
+      ]),
+    };
+  }
+  // A Steam or Epic store item: Enter opens the store (Steam's app when it is installed).
+  function storeCard(x) {
+    const appId = (String(x.url || '').match(/store\.steampowered\.com\/app\/(\d+)/) || [])[1];
+    const open = () => openUrl(x.steam && SV.steam.installed ? x.steam : x.url);
+    return {
+      img: x.image, title: x.title, sub: x.sub, cls: 'wide' + (x.now ? ' live' : ''), run: appId ? () => SV.details.steam(appId, x.title, x.image, x) : open,
+      options: () => A.openMenu(x.title, [
+        ...(appId ? [{ label: 'DETAILS', run: () => SV.details.steam(appId, x.title, x.image, x) }] : []),
+        { label: 'OPEN THE STORE PAGE', run: open },
+      ]),
+    };
   }
 
   const PRESENCE = { 2: 'IN GAME', 3: 'IN STUDIO', 1: 'ONLINE', 0: 'OFFLINE' };
@@ -92,6 +122,14 @@
         cards: friendCards(),
       });
     }
+    const robloxRow = (id, title, list, note) => {
+      if (show[id] === false) return;
+      out.push({ id, title, note: list ? note : 'LOADING…', cards: (list || []).map((x) => robloxCard(x)) });
+    };
+    const storeRow = (id, title, list, note) => {
+      if (show[id] === false) return;
+      out.push({ id, title, note: list ? note : 'LOADING…', cards: (list || []).map((x) => storeCard(x)) });
+    };
     if (show.roblox) {
       const places = SV.roblox.places();
       SV.lists && SV.lists.ensureArt();
@@ -104,7 +142,15 @@
         ],
       });
     }
-    if (show.studio && SV.lists) {
+    const R2 = disc && disc.roblox, S2 = disc && disc.steam;
+    robloxRow('trending', 'TRENDING ON ROBLOX', R2 && R2.trending, 'WHAT EVERYONE IS JUMPING INTO · ENTER FOR DETAILS');
+    robloxRow('topPlaying', 'MOST PLAYED ON ROBLOX', R2 && R2.playing, 'BIGGEST PLAYER COUNTS RIGHT NOW');
+    robloxRow('rising', 'RISING ON ROBLOX', R2 && R2.rising, 'UP-AND-COMING GAMES');
+    storeRow('steamTop', 'TOP SELLERS ON STEAM', S2 && S2.top, 'STEAM · ENTER OPENS THE STORE');
+    storeRow('steamDeals', 'STEAM DEALS', S2 && S2.specials, 'ON SALE NOW');
+    storeRow('epicFree', 'FREE ON EPIC', disc && disc.epic, 'CLAIM THEM WHILE THEY LAST');
+    storeRow('steamNew', 'NEW ON STEAM', S2 && S2.new, 'FRESH RELEASES');
+    if (show.studio && SV.lists && A.cfg.dev.enabled) {
       const s = SV.lists.studioData();
       out.push({
         id: 'studio', title: 'STUDIO PROJECTS', note: s.loaded ? `${s.cloud.length} CLOUD · ${s.local.length} FILES` : 'READING STUDIO…',
@@ -116,15 +162,23 @@
         ],
       });
     }
+    if (show.clips !== false && SV.clips) {
+      const clips = SV.clips.list().slice().sort((a, b) => b.time - a.time).slice(0, 16);
+      if (clips.length) out.push({
+        id: 'clips', title: 'YOUR CLIPS', note: `${SV.clips.list().length} IN YOUR LIBRARY · ENTER PLAYS`,
+        cards: clips.map((c) => ({ img: c.thumb, title: c.name, sub: `${(c.game || '').toUpperCase()} · ${timeAgo(c.time)}`, cls: 'wide clip', glyph: '▶', run: () => SV.clips.play(c),
+          options: () => A.openMenu(c.name, [{ label: 'PLAY', run: () => SV.clips.play(c) }, { label: 'OPEN CLIPS', run: () => { close(); SV.clips.open(); } }]) })),
+      });
+    }
     if (show.upcoming) out.push({
       id: 'upcoming', title: 'COMING SOON', note: feeds.upcoming ? 'STEAM + EPIC' : 'LOADING…',
       cards: (feeds.upcoming || []).map((g) => ({ img: g.image, title: g.title, sub: g.sub, cls: 'wide', run: () => openUrl(g.steam && SV.app.cfg.games.some((x) => x.platform === 'steam') ? g.steam : g.url) })),
     });
-    if (show.news) out.push({
+    if (show.news && A.cfg.dev.enabled) out.push({
       id: 'news', title: 'ROBLOX STUDIO NEWS', note: feeds.news ? 'DEVFORUM ANNOUNCEMENTS' : 'LOADING…',
       cards: (feeds.news || []).map((n) => ({ img: n.image, title: n.title, sub: n.sub, cls: 'wide news' + (n.image ? '' : ' noimg'), glyph: 'DEVFORUM', run: () => openUrl(n.url) })),
     });
-    if (show.commissions) {
+    if (show.commissions && A.cfg.dev.enabled) {
       const c = commissions;
       let cards;
       if (c.error === 'nobot' || c.error === 'nochannel' || (!hasBot && !c.items))
@@ -143,7 +197,7 @@
       }));
       out.push({ id: 'commissions', title: 'COMMISSIONS', note: c.items ? `#${(c.channelName || 'channel').toUpperCase()} · ${c.items.length} LATEST` : 'DISCORD', cards });
     }
-    return out.filter((r) => r.cards.length || r.id === 'upcoming' || r.id === 'news' || r.id === 'friends');
+    return out.filter((r) => r.cards.length || r.note === 'LOADING…' || r.id === 'upcoming' || r.id === 'news' || r.id === 'friends');
   }
 
   let current = [];
@@ -153,10 +207,10 @@
     railIdx = clamp(railIdx, 0, Math.max(0, current.length - 1));
     body.innerHTML = current.map((r, ri) => `
       <div class="rail" data-r="${ri}" style="--ri:${ri}">
-        <div class="rail-head"><b>${esc(r.title)}</b><span class="tag">${esc(r.note || '')}</span></div>
+        <div class="rail-head"><b>${esc(A.T(r.title))}</b><span class="tag">${esc(r.note || '')}</span></div>
         <div class="rail-row">${r.cards.length ? r.cards.map((c, ci) => `
           <button class="rail-card ${esc(c.cls || '')}" data-c="${ci}">
-            ${c.html ? c.html : `<div class="rc-img" ${c.img ? `style="background-image:url('${esc(c.img)}')"` : ''}>${!c.img && c.glyph ? `<span>${esc(c.glyph)}</span>` : ''}</div>
+            ${c.html ? c.html : SV.media.animated(c.img) ? `<div class="rc-img">${SV.media.html(c.img, 'rc-media')}</div>` : `<div class="rc-img" ${c.img ? `style="background-image:url('${esc(c.img)}')"` : ''}>${!c.img && c.glyph ? `<span>${esc(c.glyph)}</span>` : ''}</div>
             <div class="rc-meta"><b>${esc(c.title)}</b><small>${esc(c.sub || '')}</small></div>`}
           </button>`).join('') : '<div class="rail-empty tag">LOADING…</div>'}</div>
       </div>`).join('');
@@ -176,7 +230,7 @@
       }
     });
     $('.rails-hint', root).innerHTML = A.hints([['confirm', 'Open'], ['move', 'Move'], ['options', 'Options'], ['back', 'Back up']]);
-    const now = $('.rails-now', root), title = current[railIdx] ? current[railIdx].title : '';
+    const now = $('.rails-now', root), title = current[railIdx] ? A.T(current[railIdx].title) : '';
     if (now.textContent !== title) { now.textContent = title; now.classList.remove('swap'); void now.offsetWidth; now.classList.add('swap'); }
     $('.rails-dots', root).innerHTML = current.map((r, i) => `<i class="${i === railIdx ? 'on' : ''}"></i>`).join('') + `<em>${String(railIdx + 1).padStart(2, '0')} / ${String(current.length).padStart(2, '0')}</em>`;
   }
@@ -260,10 +314,18 @@
       t('recent', 'Jump back in', 'The games and Roblox places you played last.'),
       t('friends', 'Friends', 'Your Roblox friends: who is online, what they play, and JOIN.'),
       t('roblox', 'Roblox games', 'Your saved places. Enter opens the account and server picker.'),
-      t('studio', 'Studio projects', 'Cloud games and recent files from Roblox Studio.'),
+      t('trending', 'Trending on Roblox', 'The top-trending games on Roblox right now.'),
+      t('topPlaying', 'Most played on Roblox', 'Biggest player counts right now.'),
+      t('rising', 'Rising on Roblox', 'Up-and-coming games.'),
+      t('steamTop', 'Top sellers on Steam', ''),
+      t('steamDeals', 'Steam deals', 'Games on sale.'),
+      t('epicFree', 'Free on Epic', 'This week\'s free games.'),
+      t('steamNew', 'New on Steam', 'Fresh releases.'),
+      t('clips', 'Your clips', 'Your newest clips.'),
       t('upcoming', 'Coming soon', "Steam's coming-soon list and Epic's next free games."),
-      t('news', 'Roblox Studio news', 'Announcements from the Roblox DevForum.'),
-      t('commissions', 'Commissions', 'Requests from a Discord channel (set up below).'),
+      t('studio', 'Studio projects (developer mode)', 'Cloud games and recent files from Roblox Studio.'),
+      t('news', 'Roblox Studio news (developer mode)', 'Announcements from the Roblox DevForum.'),
+      t('commissions', 'Commissions (developer mode)', 'Requests from a Discord channel (set up below).'),
       R.button('Refresh everything', '', 'REFRESH', () => { fetchAll(true); toast('Refreshing the rows…'); }),
       heading('GAME LISTS'),
       R.toggle('Roblox opens its game list', 'Picking Roblox shows your saved places as a shelf first. Off goes straight to the account picker.', A.at('lists.roblox')),
@@ -283,5 +345,5 @@
     ];
   }
 
-  SV.rails = { show, close, action, rows, refresh: render, get isOpen() { return open; } };
+  SV.rails = { show, close, action, rows, refresh: render, get isOpen() { return open; }, get commissions() { return commissions; } };
 })();

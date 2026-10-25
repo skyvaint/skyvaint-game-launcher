@@ -1,0 +1,50 @@
+# Builds the launcher on every push and pull request (a compile check), and on a version tag (v1.2.3) publishes a
+# GitHub release with the self-contained zip that the in-app updater (Settings → UPDATES) downloads.
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Publish (self-contained, single file)
+        run: dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path publish\* -DestinationPath SkyvaintGameLauncher-win-x64.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SkyvaintGameLauncher-win-x64
+          path: SkyvaintGameLauncher-win-x64.zip
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $notes = ".github/release-notes/$tag.md"
+          $title = "SKYVAINT Game Launcher $($tag.TrimStart('v'))"
+          if (Test-Path $notes) {
+            gh release create $tag SkyvaintGameLauncher-win-x64.zip --title $title --notes-file $notes
+          } else {
+            gh release create $tag SkyvaintGameLauncher-win-x64.zip --title $title --generate-notes
+          }

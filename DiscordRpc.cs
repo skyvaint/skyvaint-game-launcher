@@ -16,6 +16,10 @@ sealed class DiscordRpc : IDisposable
     public string ClientId { get; private set; } = "";
     public string Status { get; private set; } = "Off";
     public bool Connected => pipe?.IsConnected == true;
+    /// <summary>Called (off the UI thread) whenever Discord's answer changes what the status line should say.</summary>
+    public Action<string>? StatusChanged;
+    string user = "you";
+    void SetStatus(string s) { if (s == Status) return; Status = s; StatusChanged?.Invoke(s); }
 
     public async Task<bool> Connect(string clientId)
     {
@@ -42,7 +46,8 @@ sealed class DiscordRpc : IDisposable
             var (op, data) = await Read();
             if (op == 1 && data?["evt"]?.ToString() == "READY")
             {
-                Status = "Connected as " + (data["data"]?["user"]?["username"]?.ToString() ?? "you");
+                user = data["data"]?["user"]?["username"]?.ToString() ?? "you";
+                Status = "Connected as " + user;
                 _ = ReadLoop(pipe);
                 return true;
             }
@@ -112,7 +117,15 @@ sealed class DiscordRpc : IDisposable
     {
         try
         {
-            while (pipe == mine && mine.IsConnected) await Read();
+            while (pipe == mine && mine.IsConnected)
+            {
+                // Each update gets an answer: the activity as Discord will show it, or an error saying why not.
+                var (_, data) = await Read();
+                if (data?["cmd"]?.ToString() != "SET_ACTIVITY") continue;
+                if (data["evt"]?.ToString() == "ERROR") SetStatus("Discord refused the activity: " + (data["data"]?["message"]?.ToString() ?? "unknown error"));
+                else if (data["data"] is JsonObject shown) SetStatus($"Showing as {user}: " + (shown["details"]?.ToString() ?? shown["name"]?.ToString() ?? "activity"));
+                else SetStatus("Connected as " + user + " (nothing shown right now)");
+            }
         }
         catch { }
         if (pipe == mine)

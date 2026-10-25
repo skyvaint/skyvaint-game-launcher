@@ -17,6 +17,7 @@ SV.host = (() => {
 
   const KEY = 'sv-mock-config';
   const NAMES = ['skyvaint', 'TheKing_13', 'EgoStriker', 'PredatorMode'];
+  let mockVol = null, mockMuted = false;
   let mockMode = new URLSearchParams(location.search).get('mode') || 'home', made = 0, epicActive = null;
   const STEAM_IDS = ['76561199101789792', '76561198000000042'];
   const steam = { installed: true, active: STEAM_IDS[0], signedIn: STEAM_IDS[0], awaiting: false, accounts: [
@@ -117,6 +118,12 @@ SV.host = (() => {
       setTimeout(() => emit({ type: 'gameDetails', token: d.token, details: d.kind === 'roblox'
         ? { universeId: 500, placeId: d.placeId, name: 'Future Soccer', description: 'A mock description of the game.\nSecond line.', creator: 'Mock Studio', playing: 12345, visits: 98765432, maxPlayers: 12, created: '2023-01-02', updated: new Date().toISOString(), genre: 'Sports', upVotes: 900, downVotes: 100, favorites: 45000, shots: [], icon: '' }
         : { name: 'Mock', description: 'A mock Steam description.', developers: 'Mock Dev', publishers: 'Mock Pub', genres: 'Action, Shooter', released: 'Aug 21, 2012', metacritic: 83, recommendations: 4200000, shots: [] } }), 500);
+    } else if (type === 'systemStats') {
+      mockVol = mockVol ?? 42;
+      setTimeout(() => emit({ type: 'systemStats', cpu: 10 + Math.random() * 30, ramTotal: 34359738368, ramUsed: 15e9 + Math.random() * 2e9, volume: mockVol, muted: !!mockMuted,
+        drives: [{ name: 'C:', label: 'Windows', total: 1000204886016, free: 210e9 }, { name: 'D:', label: 'Games', total: 2000398934016, free: 140e9 }] }), 80);
+    } else if (type === 'setVolume') { mockVol = d.level;
+    } else if (type === 'muteVolume') { mockMuted = d.on;
     } else if (type === 'clipsScan') {
       setTimeout(() => emit({ type: 'clips', clips: mockClips(), medal: 'C:\\Medal' }), 300);
     } else if (type === 'clipDelete') {

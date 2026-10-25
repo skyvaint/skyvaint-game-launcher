@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.Web.WebView2.Core;
@@ -10,7 +11,10 @@ namespace Skyvaint;
 public sealed partial class MainForm
 {
     CoreWebView2Environment? mainEnv;
-    DockForm? dock;
+    // One window per NEXUS bar: "main" is the original bar (config.nexus), the others live in config.nexus.bars.
+    readonly Dictionary<string, DockForm> docks = new();
+    readonly Dictionary<string, string> dockSigs = new();
+    DockForm? dock => docks.GetValueOrDefault("main") ?? docks.Values.FirstOrDefault();
     string iconSignature = "", dockSignature = "", presenceSignature = "";
     readonly DiscordRpc discord = new();
     readonly Dictionary<string, DateTime> runningSince = new();
@@ -70,7 +74,7 @@ public sealed partial class MainForm
                 return true;
 
             case "dockDump" when DebugPort > 0:
-                Send(new JsonObject { ["type"] = "notice", ["ok"] = true, ["text"] = dock?.Dump(Path.Combine(Path.GetTempPath(), "sv-dock.png")) ?? "no dock" });
+                Send(new JsonObject { ["type"] = "notice", ["ok"] = true, ["text"] = string.Join(" | ", docks.Select(kv => kv.Key + ":" + kv.Value.Handle + ":" + kv.Value.Visible + ":" + kv.Value.Bounds)) + " || forms=" + string.Join(",", Application.OpenForms.OfType<DockForm>().Select(f => f.Handle + ":" + f.Visible)) });
                 return true;
 
             case "discordReconnect":
@@ -94,7 +98,7 @@ public sealed partial class MainForm
             var old = Icon;
             Icon = AppIcon.ToIcon(AppIcon.Draw(64, config, MediaDir));
             tray.Icon = AppIcon.ToIcon(AppIcon.Draw(32, config, MediaDir));
-            if (dock != null) dock.Icon = Icon;
+            foreach (var d in docks.Values) d.Icon = Icon;
         }
         catch { }
         try
@@ -119,7 +123,7 @@ public sealed partial class MainForm
             }
         }
         catch { }
-        dockSignature = "";
+        dockSigs.Clear();
         PushDock();
     }
 
@@ -261,33 +265,39 @@ public sealed partial class MainForm
 
     // ---------- NEXUS desktop bar ----------
 
-    IEnumerable<JsonObject> NexusItems() => (config?["nexus"]?["items"] as JsonArray)?.OfType<JsonObject>() ?? [];
-
-    bool NexusOn()
+    /// <summary>Every bar: the main one first, then the extra bars, each with its own settings and items.</summary>
+    IEnumerable<(string id, JsonObject bar)> Bars()
     {
-        try { return config?["nexus"]?["enabled"]?.GetValue<bool>() ?? false; } catch { return false; }
+        if (config?["nexus"] is JsonObject main)
+        {
+            yield return ("main", main);
+            foreach (var b in (main["bars"] as JsonArray)?.OfType<JsonObject>() ?? [])
+                if (b["id"]?.ToString() is { Length: > 0 } id) yield return (id, b);
+        }
     }
+    IEnumerable<JsonObject> ItemsOf(JsonObject bar) => (bar["items"] as JsonArray)?.OfType<JsonObject>() ?? [];
+    IEnumerable<JsonObject> NexusItems() => Bars().SelectMany(b => ItemsOf(b.bar));
+    static bool BarOn(JsonObject bar) { try { return bar["enabled"]?.GetValue<bool>() ?? false; } catch { return false; } }
 
+    /// <summary>Opens a window for every bar that is switched on and closes the rest.</summary>
     async void EnsureDock()
     {
         if (mainEnv == null) return;
-        if (!NexusOn())
+        var wanted = Bars().Where(b => BarOn(b.bar)).Select(b => b.id).ToHashSet();
+        foreach (var id in docks.Keys.Where(id => !wanted.Contains(id)).ToList())
         {
-            if (dock != null)
-            {
-                dock.Close();
-                dock.Dispose();
-                dock = null;
-                dockSignature = "";
-            }
-            return;
+            docks[id].Close();
+            docks[id].Dispose();
+            docks.Remove(id);
+            dockSigs.Remove(id);
         }
-        if (dock == null)
-        {
-            dock = new DockForm(this, LocalImageFile, CacheDir) { Icon = Icon };
-            await Task.Yield();
-        }
+        bool made = false;
+        foreach (var id in wanted)
+            if (!docks.ContainsKey(id)) { docks[id] = new DockForm(this, LocalImageFile, CacheDir) { Icon = Icon, BarId = id }; made = true; }
+        if (made) await Task.Yield();
+        WatchForeground();
         PushDock(force: true);
+        UpdateBarVisibility();
     }
 
     internal void OnDockMessage(JsonObject m)
@@ -295,17 +305,18 @@ public sealed partial class MainForm
         var id = m["id"]?.ToString() ?? "";
         switch (m["type"]?.ToString())
         {
-case "open":
-                OpenNexusItem(id);
+            case "open":
+                OpenNexusItem(id, m["bar"]?.ToString() ?? "main");
+                OpenedFromBar();
                 break;
             case "manage":
                 SetMode("home");
-                Send(new JsonObject { ["type"] = "openNexus" });
+                Send(new JsonObject { ["type"] = "openNexus", ["bar"] = m["bar"]?.ToString() ?? "main" });
                 break;
             case "remove":
             case "move":
                 // The page owns the settings; let it make the change and save, which updates the bar.
-                Send(new JsonObject { ["type"] = "nexusEdit", ["op"] = m["type"]?.ToString(), ["id"] = id, ["d"] = m["d"]?.DeepClone() });
+                Send(new JsonObject { ["type"] = "nexusEdit", ["op"] = m["type"]?.ToString(), ["id"] = id, ["d"] = m["d"]?.DeepClone(), ["bar"] = m["bar"]?.ToString() ?? "main" });
                 break;
             case "reveal":
                 var target = NexusItems().FirstOrDefault(i => i["id"]?.ToString() == id)?["target"]?.ToString();
@@ -314,14 +325,40 @@ case "open":
         }
     }
 
-    void OpenNexusItem(string id)
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int cmd);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder name, int max);
+
+    /// <summary>Brings an already running app to the front. False when it isn't running (or has no window).</summary>
+    static bool FocusRunning(string process)
+    {
+        if (string.IsNullOrEmpty(process)) return false;
+        foreach (var p in Process.GetProcessesByName(process))
+        {
+            using (p)
+            {
+                var h = p.MainWindowHandle;
+                if (h == IntPtr.Zero) continue;
+                if (IsIconic(h)) ShowWindow(h, 9); // SW_RESTORE
+                SetForegroundWindow(h);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void OpenNexusItem(string id, string barId = "main")
     {
         var item = NexusItems().FirstOrDefault(i => i["id"]?.ToString() == id);
         if (item == null) return;
         var kind = item["kind"]?.ToString();
         var target = item["target"]?.ToString() ?? "";
+        // How it opens: the item's own choice, else the bar's (normal, maximized, minimized, or bring an open one forward).
+        var bar = Bars().FirstOrDefault(b => b.id == barId).bar;
+        var launch = item["launchMode"]?.ToString() is { Length: > 0 } own && own != "bar" ? own : bar?["launchMode"]?.ToString() ?? "normal";
         try
         {
+            if (launch == "focus" && kind == "app" && FocusRunning(item["process"]?.ToString() ?? "")) return;
             if (kind == "home") SetMode("home");
             else if (kind == "game") TrayLaunch(item["gameId"]?.ToString() ?? "");
             else if (kind == "url")
@@ -331,7 +368,7 @@ case "open":
             }
             else
             {
-                var psi = new ProcessStartInfo(target) { UseShellExecute = true };
+                var psi = new ProcessStartInfo(target) { UseShellExecute = true, WindowStyle = launch switch { "maximized" => ProcessWindowStyle.Maximized, "minimized" => ProcessWindowStyle.Minimized, _ => ProcessWindowStyle.Normal } };
                 var args = item["args"]?.ToString();
                 if (!string.IsNullOrWhiteSpace(args)) psi.Arguments = args;
                 if (File.Exists(target)) psi.WorkingDirectory = Path.GetDirectoryName(target)!;
@@ -344,42 +381,61 @@ case "open":
         }
     }
 
-    /// <summary>Sends the bar its items and which of them are running; only when something changed.</summary>
+    /// <summary>Sends each bar its items and which of them are running; only when something changed.</summary>
     void PushDock(bool force = false)
     {
-        if (dock == null) return;
-        var nexus = config?["nexus"];
+        if (docks.Count == 0) return;
         HashSet<string>? live = null;
-        var items = new JsonArray();
-        foreach (var i in NexusItems())
+        foreach (var (id, bar) in Bars())
         {
-            bool on = false;
-            var kind = i["kind"]?.ToString();
-            if (kind == "game") on = running.Contains(i["gameId"]?.ToString() ?? "");
-            else if (kind == "home") on = Visible && mode == "home";
-            else if (i["process"]?.ToString() is { Length: > 0 } proc)
+            if (!docks.TryGetValue(id, out var d)) continue;
+            var items = new JsonArray();
+            foreach (var i in ItemsOf(bar))
             {
-                live ??= LiveProcessNames();
-                on = live.Contains(proc);
+                bool on = false;
+                var kind = i["kind"]?.ToString();
+                if (kind == "game") on = running.Contains(i["gameId"]?.ToString() ?? "");
+                else if (kind == "home") on = Visible && mode == "home";
+                else if (i["process"]?.ToString() is { Length: > 0 } proc)
+                {
+                    live ??= LiveProcessNames();
+                    on = live.Contains(proc);
+                }
+                var icon = i["icon"]?.ToString() ?? "";
+                if (icon == "" && kind == "home") icon = appIconUrl;
+                else if (icon == "" && kind == "app") icon = AutoIcon(i["target"]?.ToString() ?? "");
+                items.Add(new JsonObject
+                {
+                    ["id"] = i["id"]?.DeepClone(), ["name"] = i["name"]?.DeepClone(),
+                    ["icon"] = icon,
+                    ["kind"] = kind, ["running"] = on,
+                });
             }
-            items.Add(new JsonObject
-            {
-                ["id"] = i["id"]?.DeepClone(), ["name"] = i["name"]?.DeepClone(),
-                ["icon"] = kind == "home" && (i["icon"]?.ToString() ?? "") == "" ? appIconUrl : i["icon"]?.DeepClone(),
-                ["kind"] = kind, ["running"] = on,
-            });
+            var settings = (JsonObject)bar.DeepClone();
+            settings.Remove("items");
+            settings.Remove("bars");
+            var stateJson = new JsonObject { ["items"] = items, ["theme"] = config?["theme"]?.DeepClone(), ["settings"] = settings };
+            var sig = stateJson.ToJsonString();
+            if (!force && dockSigs.GetValueOrDefault(id) == sig) continue;
+            dockSigs[id] = sig;
+            d.SetState(stateJson);
         }
-        var stateJson = new JsonObject
-        {
-            ["items"] = items,
-            ["theme"] = config?["theme"]?.DeepClone(),
-            ["settings"] = nexus?.DeepClone(),
-        };
-        stateJson["settings"]!.AsObject().Remove("items");
-        var sig = stateJson.ToJsonString();
-        if (!force && sig == dockSignature) return;
-        dockSignature = sig;
-        dock.SetState(stateJson);
+    }
+
+    // Apps put on a bar without a picture (by hand in config.json, or when the icon couldn't be read at the time)
+    // get the logo Windows shows for them: the program, the shortcut, or a shell folder such as the Recycle Bin.
+    readonly Dictionary<string, string> autoIcons = new(StringComparer.OrdinalIgnoreCase);
+    string AutoIcon(string target)
+    {
+        if (target == "") return "";
+        if (autoIcons.TryGetValue(target, out var known)) return known;
+        var path = Environment.ExpandEnvironmentVariables(target);
+        // "calc.exe" and friends: the copy in System32.
+        if (!path.Contains('\\') && !path.Contains(':')) path = Path.Combine(Environment.SystemDirectory, path);
+        var key = "nexus_" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(target.ToLowerInvariant())), 0, 8).ToLowerInvariant();
+        var url = ShellImage.SaveIcon(path, MediaDir, MediaHost, key);
+        autoIcons[target] = url;
+        return url;
     }
 
     static HashSet<string> LiveProcessNames()
@@ -397,7 +453,7 @@ case "open":
     bool SomethingFullscreen()
     {
         var front = GetForegroundWindow();
-        if (front == IntPtr.Zero || front == Handle || (dock != null && front == dock.Handle) || !GetWindowRect(front, out var r)) return false;
+        if (front == IntPtr.Zero || front == Handle || docks.Values.Any(d => d.Handle == front) || !GetWindowRect(front, out var r)) return false;
         GetWindowThreadProcessId(front, out uint pid);
         try
         {
@@ -409,13 +465,137 @@ case "open":
         return r.Left <= screen.Left && r.Top <= screen.Top && r.Right >= screen.Right && r.Bottom >= screen.Bottom;
     }
 
+    // The desktop itself is in front: what "desktop only" bars wait for.
+    static readonly HashSet<string> DesktopClasses = new(StringComparer.OrdinalIgnoreCase) { "Progman", "WorkerW" };
+    // The taskbar and its pop-ups. Having one of these in front does NOT mean the desktop is showing: pressing (or
+    // holding) a taskbar button gives the taskbar the focus while the app window is still on screen. So for these we
+    // look at what is actually open instead (this was what made the desktop bar flash up and fade out again).
+    static readonly HashSet<string> ShellClasses = new(StringComparer.OrdinalIgnoreCase)
+        { "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "NotifyIconOverflowWindow", "TopLevelWindowForOverflowXamlIsland", "XamlExplorerHostIslandWindow" };
+    static bool IsShellClass(string name) => DesktopClasses.Contains(name) || ShellClasses.Contains(name);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc proc, IntPtr param);
+    delegate bool EnumProc(IntPtr hWnd, IntPtr param);
+    [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hWnd, uint cmd);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] static extern int GetWindowLong32(IntPtr hWnd, int index);
+    [DllImport("user32.dll", EntryPoint = "GetWindowTextLengthW")] static extern int GetTitleLength(IntPtr hWnd);
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hWnd, int attr, out int value, int size);
+
+    /// <summary>A real app window someone would be looking at: shown, not minimized, not hidden by Windows
+    /// (cloaked), not a tool window or a pop-up owned by another window, and with a title.</summary>
+    bool IsAppWindow(IntPtr h)
+    {
+        if (!IsWindowVisible(h) || IsIconic(h) || GetTitleLength(h) == 0) return false;
+        if (GetWindow(h, 4 /* GW_OWNER */) != IntPtr.Zero) return false;
+        int ex = GetWindowLong32(h, -20 /* GWL_EXSTYLE */);
+        if ((ex & 0x80 /* WS_EX_TOOLWINDOW */) != 0) return false;
+        // Click-through and never-focused windows are overlays (Discord, Medal, GeForce, Steam...), not something
+        // covering the desktop. They used to keep desktop-only bars hidden until you clicked the desktop.
+        if ((ex & 0x20 /* WS_EX_TRANSPARENT */) != 0 || (ex & 0x08000000 /* WS_EX_NOACTIVATE */) != 0) return false;
+        if (DwmGetWindowAttribute(h, 14 /* DWMWA_CLOAKED */, out int cloaked, 4) == 0 && cloaked != 0) return false;
+        if (docks.Values.Any(d => d.Handle == h)) return false;
+        if (h == Handle && mode != "home") return false; // the mini widget doesn't cover the desktop
+        var name = new System.Text.StringBuilder(256);
+        GetClassName(h, name, name.Capacity);
+        if (IsShellClass(name.ToString())) return false;
+        if (!GetWindowRect(h, out var r) || r.Right - r.Left <= 120 || r.Bottom - r.Top <= 80) return false;
+        // Only windows on the screen the bars live on count: an app open on a second monitor shouldn't stop the
+        // desktop dock from showing on this one. Windows parked off-screen don't count either.
+        var screen = (Screen.PrimaryScreen ?? Screen.AllScreens[0]).Bounds;
+        int w = Math.Min(r.Right, screen.Right) - Math.Max(r.Left, screen.Left);
+        int hgt = Math.Min(r.Bottom, screen.Bottom) - Math.Max(r.Top, screen.Top);
+        return w > 120 && hgt > 80;
+    }
+
+    /// <summary>True when the desktop is what you see: it (or the taskbar) has the focus, the window in front was
+    /// just minimized, or no app window is open at all (everything minimized or closed).</summary>
+    bool DesktopInFront()
+    {
+        var front = GetForegroundWindow();
+        if (front == IntPtr.Zero || docks.Values.Any(d => d.Handle == front)) return !AnyAppWindow();
+        var name = new System.Text.StringBuilder(256);
+        GetClassName(front, name, name.Capacity);
+        if (DesktopClasses.Contains(name.ToString())) return true;
+        // The taskbar, a minimized or hidden window, anything else: the desktop shows only if nothing is open over it.
+        return !AnyAppWindow();
+    }
+
+    bool AnyAppWindow()
+    {
+        bool any = false;
+        EnumWindows((h, _) => { if (IsAppWindow(h)) { any = true; return false; } return true; }, IntPtr.Zero);
+        return any;
+    }
+
+    /// <summary>Shows or hides each bar for what is in front right now (desktop-only bars, fullscreen games).</summary>
+    void UpdateBarVisibility()
+    {
+        bool? full = null, desk = null;
+        bool opening = DateTime.Now < openingUntil;
+        foreach (var (id, bar) in Bars())
+        {
+            if (!docks.TryGetValue(id, out var d)) continue;
+            bool hideInGame = true;
+            try { hideInGame = bar["hideFullscreen"]?.GetValue<bool>() ?? true; } catch { }
+            var vis = bar["visibility"]?.ToString() ?? "always";
+            // "desktop": only on the desktop. "apps": everywhere except the desktop (where the desktop bars take over).
+            bool hide = (hideInGame && (full ??= SomethingFullscreen()))
+                || (vis == "desktop" && (opening || !(desk ??= DesktopInFront())))
+                || (vis == "apps" && (desk ??= DesktopInFront()));
+            d.Suppress(hide);
+        }
+    }
+
+    // Windows says the moment another window comes to the front (clicking the launcher, opening an app), so
+    // desktop-only bars hide straight away instead of on the next 3-second check.
+    delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int obj, int child, uint thread, uint time);
+    [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr module, WinEventProc proc, uint pid, uint thread, uint flags);
+    WinEventProc? foregroundProc;
+    IntPtr foregroundHook, minimizeHook;
+    DateTime openingUntil = DateTime.MinValue;
+    readonly System.Windows.Forms.Timer barRecheck = new() { Interval = 350 };
+    void WatchForeground()
+    {
+        if (foregroundHook != IntPtr.Zero) return;
+        // Windows changes its mind a few times while a window minimizes or closes, so look again a moment later too.
+        barRecheck.Tick += (_, _) => { barRecheck.Stop(); if (docks.Count > 0) UpdateBarVisibility(); };
+        foregroundProc = (_, _, _, _, _, _, _) =>
+        {
+            if (docks.Count == 0) return;
+            UpdateBarVisibility();
+            barRecheck.Stop(); barRecheck.Start();
+        };
+        foregroundHook = SetWinEventHook(3 /* EVENT_SYSTEM_FOREGROUND */, 3, IntPtr.Zero, foregroundProc, 0, 0, 0 /* out of context */);
+        minimizeHook = SetWinEventHook(0x16 /* EVENT_SYSTEM_MINIMIZESTART */, 0x17 /* MINIMIZEEND */, IntPtr.Zero, foregroundProc, 0, 0, 0);
+        // Closing the last window often leaves nothing in front, and Windows sends no event for that. Rather than
+        // waiting for the 3-second check (or for you to click the desktop), look twice a second while any bar
+        // depends on the desktop.
+        barWatch.Tick += (_, _) =>
+        {
+            if (docks.Count > 0 && Bars().Any(b => BarOn(b.bar) && (b.bar["visibility"]?.ToString() ?? "always") != "always"))
+                UpdateBarVisibility();
+        };
+        barWatch.Start();
+    }
+    readonly System.Windows.Forms.Timer barWatch = new() { Interval = 500 };
+
+    /// <summary>Something was opened from a bar: desktop-only bars fade away now, before its window appears.
+    /// If nothing comes to the front after a few seconds, they come back.</summary>
+    void OpenedFromBar()
+    {
+        // Long enough for slower apps (Steam, Epic, games) to put up a window, so the bar doesn't come back and
+        // then fade out again when the window finally shows.
+        openingUntil = DateTime.Now.AddSeconds(7);
+        UpdateBarVisibility();
+        var back = new System.Windows.Forms.Timer { Interval = 7100 };
+        back.Tick += (_, _) => { back.Stop(); back.Dispose(); UpdateBarVisibility(); };
+        back.Start();
+    }
+
     void PollExtras()
     {
-        if (dock != null)
+        if (docks.Count > 0)
         {
-            bool hideInGame = true;
-            try { hideInGame = config?["nexus"]?["hideFullscreen"]?.GetValue<bool>() ?? true; } catch { }
-            dock.Suppress(hideInGame && SomethingFullscreen());
+            UpdateBarVisibility();
             PushDock();
         }
         _ = UpdatePresence();
@@ -500,6 +680,7 @@ case "open":
             presenceSignature = "";
             return;
         }
+        discord.StatusChanged ??= s => { try { BeginInvoke(() => Send(new JsonObject { ["type"] = "discordStatus", ["status"] = s })); } catch { } };
         if (!discord.Connected || discord.ClientId != clientId)
         {
             if ((DateTime.Now - lastDiscordTry).TotalSeconds < 15 && !force) return;
@@ -518,7 +699,8 @@ case "open":
         JsonObject? activity = null;
         if (playing != null || idle)
         {
-            string Get(string key, string fallback) => d?[key]?.ToString() is { Length: > 0 } v ? v : fallback;
+            // A line you cleared on purpose stays empty; only a setting that was never saved uses the default.
+            string Get(string key, string fallback) => d is JsonObject o && o.ContainsKey(key) ? o[key]?.ToString() ?? "" : fallback;
             activity = new JsonObject
             {
                 ["details"] = Clip(Fill(playing != null ? Get("details", "Playing {game}") : Get("idleDetails", "In the launcher"), playing), 128),
@@ -544,6 +726,8 @@ case "open":
                     buttons.Add(new JsonObject { ["label"] = label.Length > 32 ? label[..32] : label, ["url"] = link });
             }
             if (buttons.Count > 0) activity["buttons"] = buttons;
+            // Discord rejects the whole activity if a line is sent as null, so empty lines are left out.
+            foreach (var key in activity.Where(kv => kv.Value == null).Select(kv => kv.Key).ToList()) activity.Remove(key);
         }
         var sig = activity?.ToJsonString() ?? "clear";
         if (sig == presenceSignature && !force) return;
@@ -677,6 +861,7 @@ case "open":
                 {
                     ["title"] = g["name"]?.ToString(), ["universeId"] = uni, ["placeId"] = g["rootPlaceId"]?.DeepClone(),
                     ["sub"] = $"{players:N0} PLAYING{liked}", ["url"] = $"https://www.roblox.com/games/{g["rootPlaceId"]}", ["image"] = "",
+                    ["playing"] = players, ["upVotes"] = up, ["downVotes"] = down,
                 };
             }).ToArray());
         }

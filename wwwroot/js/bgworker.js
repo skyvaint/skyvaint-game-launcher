@@ -2,7 +2,7 @@
 // main thread. Slow-moving layers are drawn into a cache at a lower rate and composited every frame; the canvas
 // resolution adapts so a frame stays well inside the display's budget (180 Hz and up).
 let ctx = null, mctx = null, sctx = null, actx = null, mainCv = null, slowCv = null, arcCv = null;
-const LEVELS = { mesh: 1, terrain: 1, plexus: 1, shapes: 1, rings: 0, aurora: 0, comets: 1, stars: 0, rain: 0, waves: 1, dots: 1, bolts: 1, embers: 1, storm: 0, art: 0, arcs: 0 };
+const LEVELS = { mesh: 1, terrain: 1, plexus: 1, shapes: 1, rings: 0, aurora: 0, comets: 1, stars: 0, rain: 0, waves: 1, dots: 1, bolts: 1, embers: 1, storm: 0, art: 0, arcs: 0, nebula: 0, planet: 0, city: 0, ocean: 0, sunset: 0, fog: 0, snow: 0, fireflies: 0, bokeh: 0, matrix: 0 };
 const MAX_RATIO = { low: 0.5, medium: 0.72, high: 1, auto: 1 };
 let opt = {
   levels: { ...LEVELS },
@@ -85,6 +85,7 @@ function setPicture(url) {
     fit(nodes, Math.min(150, 54 * lv('plexus')), () => ({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - 0.5) * 22, vy: (Math.random() - 0.5) * 22 }));
     fit(stars, Math.min(600, 160 * lv('stars')), () => ({ x: Math.random() * W, y: Math.random() * H, r: 0.6 + Math.random() * 1.6, ph: Math.random() * 6.28, sp: 0.6 + Math.random() * 2.4 }));
     fit(drops, Math.min(700, 130 * lv('rain')), () => newDrop(true));
+    populateScenes();
   }
 
   // The mesh is a set of shared points and the cells (3, 4 or 6 corners) drawn between them.
@@ -170,9 +171,12 @@ function setPicture(url) {
     ctx.fillStyle = rgba(opt.bg, 1);
     ctx.fillRect(0, 0, W, H);
     if (picture) {
-      const s = Math.max(W / picture.width, H / picture.height), w = picture.width * s, h = picture.height * s;
+      // Slow pan and zoom over the picture, like a documentary shot (off when photo motion is 0).
+      const m = opt.photoMotion ?? 1, z = 1 + 0.08 * m * (Math.sin(t * 0.025) + 1) / 2;
+      const s = Math.max(W / picture.width, H / picture.height) * z, w = picture.width * s, h = picture.height * s;
+      const ox = Math.sin(t * 0.018) * (w - W) / 2, oy = Math.cos(t * 0.014) * (h - H) / 2;
       ctx.globalAlpha = Math.max(0, 1 - opt.imageDim);
-      ctx.drawImage(picture, (W - w) / 2, (H - h) / 2, w, h);
+      ctx.drawImage(picture, (W - w) / 2 + ox, (H - h) / 2 + oy, w, h);
       ctx.globalAlpha = 1;
     }
     drawGlows();
@@ -627,6 +631,225 @@ function loadArt(url) {
   }
 // ---------------------------------------------------------------- frame loop
 
+
+// ---------------------------------------------------------------- 2.5: scene layers
+// Closer-to-real scenes: deep-space nebula and a planet, a night city with lit windows, a moonlit ocean, a sunset
+// sky, rolling fog, falling snow, fireflies, out-of-focus bokeh lights and falling code. Slow ones redraw with the
+// other slow layers; snow, fireflies, bokeh and code move every frame.
+let snow = [], flies = [], bokehs = [], codeCols = [], cityKey = '', city = null;
+const rnd = (seed) => { let a = seed >>> 0; return () => ((a = (a + 0x6d2b79f5) | 0), (((a ^ (a >>> 15)) * (1 | a)) >>> 0) / 4294967296); };
+const mix = (c1, c2, k) => c1.map((v, i) => Math.round(v * (1 - k) + c2[i] * k));
+
+function populateScenes() {
+  const fit = (list, n, make) => { n = Math.round(n); while (list.length < n) list.push(make(true)); if (list.length > n) list.length = n; };
+  fit(snow, Math.min(600, 170 * lv('snow')), newFlake);
+  fit(flies, Math.min(140, 34 * lv('fireflies')), () => ({ x: Math.random() * W, y: H * (0.35 + Math.random() * 0.65), a: Math.random() * 6.28, sp: 8 + Math.random() * 20, ph: Math.random() * 6.28, r: 1 + Math.random() * 1.8 }));
+  fit(bokehs, Math.min(70, 20 * lv('bokeh')), () => ({ x: Math.random() * W, y: Math.random() * H, r: 18 + Math.random() * 70, vx: (Math.random() - 0.5) * 8, vy: -2 - Math.random() * 6, a: 0.05 + Math.random() * 0.12, c: Math.random() }));
+  const cols = Math.round((W / 18) * Math.min(1, lv('matrix')));
+  while (codeCols.length < cols) codeCols.push({ x: Math.random() * W, y: Math.random() * H, v: 60 + Math.random() * 160, len: 8 + Math.floor(Math.random() * 18) });
+  if (codeCols.length > cols) codeCols.length = cols;
+}
+function newFlake(anywhere) { return { x: Math.random() * W, y: anywhere ? Math.random() * H : -6, r: 0.6 + Math.random() * 2.4, v: 18 + Math.random() * 40, ph: Math.random() * 6.28 }; }
+
+function drawNebula() {
+  const i = opt.intensity * lv('nebula');
+  ctx.globalCompositeOperation = 'lighter';
+  const blobs = [[0.22, 0.35, 0.55, opt.accent], [0.7, 0.25, 0.5, opt.accent2], [0.55, 0.72, 0.6, mix(opt.accent, [80, 60, 255], 0.5)], [0.85, 0.65, 0.35, [255, 255, 255]]];
+  blobs.forEach(([x, y, r, c], k) => {
+    const cx = W * (x + Math.sin(t * 0.02 + k) * 0.03), cy = H * (y + Math.cos(t * 0.017 + k * 2) * 0.03), rr = W * r;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rr);
+    g.addColorStop(0, rgba(c, (k === 3 ? 0.05 : 0.16) * i));
+    g.addColorStop(0.45, rgba(c, (k === 3 ? 0.02 : 0.07) * i));
+    g.addColorStop(1, rgba(c, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  });
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawPlanet() {
+  const i = Math.min(1.5, opt.intensity * lv('planet')), r = Math.min(W, H) * 0.42;
+  const cx = W * 0.78, cy = H * 1.02 + Math.sin(t * 0.05) * H * 0.01;
+  const glow = ctx.createRadialGradient(cx, cy, r * 0.9, cx, cy, r * 1.35);
+  glow.addColorStop(0, rgba(opt.accent2, 0.35 * i));
+  glow.addColorStop(1, rgba(opt.accent2, 0));
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+  const body = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.45, r * 0.1, cx, cy, r);
+  body.addColorStop(0, rgba(mix(opt.accent, [255, 255, 255], 0.35), 0.95));
+  body.addColorStop(0.55, rgba(mix(opt.accent, opt.bg, 0.55), 1));
+  body.addColorStop(1, rgba(opt.bg, 1));
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.clip();
+  ctx.globalAlpha = 0.12 * i;
+  for (let k = 0; k < 7; k++) { ctx.fillStyle = k % 2 ? rgba(opt.accent2, 1) : rgba([0, 0, 0], 1); ctx.fillRect(cx - r, cy - r * 0.9 + k * r * 0.22 + Math.sin(t * 0.04 + k) * 4, r * 2, r * 0.07); }
+  ctx.restore(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = rgba(mix(opt.accent2, [255, 255, 255], 0.5), 0.5 * i);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI * 1.05, Math.PI * 1.75); ctx.stroke();
+}
+
+function buildCity() {
+  const r = rnd(7), out = [];
+  for (const layer of [0, 1, 2]) {
+    let x = -20;
+    const base = [0.42, 0.55, 0.68][layer];
+    while (x < W + 20) {
+      const w = (18 + r() * 46) * (1 + layer * 0.3), h = H * (0.12 + r() * (0.4 - layer * 0.08));
+      const wins = [];
+      if (layer === 2) for (let wy = 6; wy < h - 6; wy += 9) for (let wx = 4; wx < w - 4; wx += 7) if (r() < 0.36) wins.push([wx, wy, r()]);
+      out.push({ layer, x, w, h, top: H * base + (1 - base) * 0 , wins, ant: r() < 0.15 });
+      x += w + r() * 4;
+    }
+  }
+  city = out;
+  cityKey = W + 'x' + H;
+}
+function drawCity() {
+  if (!city || cityKey !== W + 'x' + H) buildCity();
+  const i = opt.intensity * lv('city');
+  const sky = ctx.createLinearGradient(0, H * 0.3, 0, H);
+  sky.addColorStop(0, rgba(opt.accent, 0));
+  sky.addColorStop(1, rgba(opt.accent, 0.22 * i));
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, H * 0.3, W, H * 0.7);
+  for (const b of city) {
+    const y = H - b.h - (2 - b.layer) * H * 0.02;
+    ctx.fillStyle = rgba(mix(opt.bg, [0, 0, 0], 0.4 - b.layer * 0.15), 1);
+    if (b.layer < 2) ctx.fillStyle = rgba(mix(opt.bg, opt.accent, 0.12 - b.layer * 0.05), 1);
+    ctx.fillRect(b.x, y, b.w, b.h + 40);
+    if (b.ant) { ctx.fillStyle = rgba(opt.accent, (Math.sin(t * 3 + b.x) > 0 ? 0.9 : 0.25) * i); ctx.fillRect(b.x + b.w / 2 - 1, y - 14, 2, 3); }
+    for (const [wx, wy, s] of b.wins) {
+      const on = Math.sin(t * 0.07 * (0.3 + s) + s * 40) > -0.6;
+      if (!on) continue;
+      ctx.fillStyle = rgba(s < 0.15 ? opt.accent2 : [255, 214, 150], (0.35 + s * 0.5) * i);
+      ctx.fillRect(b.x + wx, y + wy, 3, 4);
+    }
+  }
+}
+
+function drawOcean() {
+  const i = opt.intensity * lv('ocean'), hz = H * 0.6, mx = W * 0.66, my = H * 0.24, mr = Math.min(W, H) * 0.06;
+  const halo = ctx.createRadialGradient(mx, my, mr, mx, my, mr * 6);
+  halo.addColorStop(0, rgba([255, 255, 255], 0.16 * i)); halo.addColorStop(1, rgba([255, 255, 255], 0));
+  ctx.fillStyle = halo; ctx.fillRect(0, 0, W, hz);
+  ctx.fillStyle = rgba([250, 248, 240], 0.9 * Math.min(1, i));
+  ctx.beginPath(); ctx.arc(mx, my, mr, 0, 6.283); ctx.fill();
+  const sea = ctx.createLinearGradient(0, hz, 0, H);
+  sea.addColorStop(0, rgba(mix(opt.bg, [20, 40, 70], 0.6), 1)); sea.addColorStop(1, rgba(mix(opt.bg, [0, 0, 0], 0.5), 1));
+  ctx.fillStyle = sea; ctx.fillRect(0, hz, W, H - hz);
+  for (let k = 0; k < 70; k++) {
+    const y = hz + Math.pow(k / 70, 1.6) * (H - hz), spread = 8 + (y - hz) * 0.5, w = spread * (0.6 + 0.4 * Math.sin(t * 0.8 + k * 1.7));
+    ctx.fillStyle = rgba([255, 255, 255], (0.08 + 0.3 * (1 - k / 70)) * i * (0.5 + 0.5 * Math.sin(t * 1.3 + k)));
+    ctx.fillRect(mx - w / 2 + Math.sin(t * 0.6 + k) * spread * 0.2, y, w, 1.2 + k * 0.03);
+  }
+  ctx.strokeStyle = rgba(opt.accent2, 0.08 * i);
+  for (let k = 0; k < 9; k++) {
+    const y = hz + (H - hz) * (k / 9) ** 1.5;
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 24) ctx.lineTo(x, y + Math.sin(x * 0.01 + t * 0.7 + k) * (2 + k));
+    ctx.stroke();
+  }
+}
+
+function drawSunset() {
+  const i = Math.min(1.5, opt.intensity * lv('sunset')), hz = H * 0.68;
+  const sky = ctx.createLinearGradient(0, 0, 0, hz);
+  sky.addColorStop(0, rgba(mix(opt.bg, [40, 20, 70], 0.6), 0.9 * i));
+  sky.addColorStop(0.6, rgba(mix(opt.accent, [255, 120, 60], 0.5), 0.45 * i));
+  sky.addColorStop(1, rgba([255, 190, 110], 0.55 * i));
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, hz);
+  const sx = W * 0.5, sr = Math.min(W, H) * 0.11;
+  const sun = ctx.createRadialGradient(sx, hz, 0, sx, hz, sr * 4);
+  sun.addColorStop(0, rgba([255, 230, 170], 0.9 * Math.min(1, i))); sun.addColorStop(0.25, rgba([255, 160, 90], 0.4 * i)); sun.addColorStop(1, rgba([255, 120, 60], 0));
+  ctx.fillStyle = sun; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = rgba([255, 220, 160], 0.9 * Math.min(1, i));
+  ctx.beginPath(); ctx.arc(sx, hz, sr, Math.PI, 0); ctx.fill();
+  for (let k = 0; k < 6; k++) {
+    const y = H * (0.12 + k * 0.08), x = ((t * (4 + k) * 3 + k * 300) % (W + 600)) - 300;
+    ctx.fillStyle = rgba(mix([255, 150, 120], opt.bg, k / 8), 0.25 * i);
+    ctx.beginPath(); ctx.ellipse(x, y, 160 + k * 30, 9 + k * 2, 0, 0, 6.283); ctx.fill();
+  }
+  ctx.fillStyle = rgba(mix(opt.bg, [0, 0, 0], 0.5), 1);
+  ctx.beginPath(); ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 30) ctx.lineTo(x, hz + Math.sin(x * 0.006) * 14 + Math.sin(x * 0.019) * 6);
+  ctx.lineTo(W, H); ctx.fill();
+}
+
+function drawFog() {
+  const i = opt.intensity * lv('fog');
+  for (let k = 0; k < 4; k++) {
+    const y = H * (0.45 + k * 0.15), x = ((t * (6 + k * 4)) % (W * 2)) - W;
+    const g = ctx.createLinearGradient(0, y - H * 0.18, 0, y + H * 0.18);
+    g.addColorStop(0, rgba([210, 210, 225], 0)); g.addColorStop(0.5, rgba(mix([210, 210, 225], opt.accent2, 0.2), 0.07 * i)); g.addColorStop(1, rgba([210, 210, 225], 0));
+    ctx.fillStyle = g;
+    for (const off of [0, W]) {
+      ctx.beginPath();
+      ctx.ellipse(x + off + W / 2, y, W * 0.75, H * 0.16, 0, 0, 6.283);
+      ctx.fill();
+    }
+  }
+}
+
+function drawSnow(dt) {
+  const i = opt.intensity;
+  ctx.fillStyle = rgba([255, 255, 255], 0.75 * i);
+  for (const f of snow) {
+    f.y += f.v * dt; f.x += Math.sin(t * 0.8 + f.ph) * 12 * dt + 6 * dt;
+    if (f.y > H + 6) Object.assign(f, newFlake(false));
+    if (f.x > W + 6) f.x = -6;
+    ctx.globalAlpha = 0.4 + f.r / 4;
+    ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, 6.283); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawFireflies(dt) {
+  const i = opt.intensity;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const f of flies) {
+    f.a += (Math.random() - 0.5) * 2 * dt; f.x += Math.cos(f.a) * f.sp * dt; f.y += Math.sin(f.a) * f.sp * dt * 0.6;
+    if (f.x < -10) f.x = W + 10; if (f.x > W + 10) f.x = -10; if (f.y < H * 0.3) f.a = Math.PI / 2; if (f.y > H + 10) f.a = -Math.PI / 2;
+    const glow = Math.max(0, Math.sin(t * 1.6 + f.ph)) ** 2;
+    const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 9);
+    g.addColorStop(0, rgba([230, 255, 140], 0.85 * glow * i)); g.addColorStop(1, rgba([200, 255, 120], 0));
+    ctx.fillStyle = g; ctx.fillRect(f.x - f.r * 9, f.y - f.r * 9, f.r * 18, f.r * 18);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawBokeh(dt) {
+  const i = opt.intensity;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const b of bokehs) {
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    if (b.y < -b.r) { b.y = H + b.r; b.x = Math.random() * W; }
+    const c = b.c < 0.5 ? opt.accent : b.c < 0.8 ? opt.accent2 : [255, 230, 190];
+    const g = ctx.createRadialGradient(b.x, b.y, b.r * 0.6, b.x, b.y, b.r);
+    g.addColorStop(0, rgba(c, b.a * i)); g.addColorStop(0.9, rgba(c, b.a * 1.4 * i)); g.addColorStop(1, rgba(c, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 6.283); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+const GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄ0123456789ABCDEF';
+function drawCode(dt) {
+  const i = opt.intensity * Math.min(1.5, lv('matrix'));
+  ctx.font = '13px monospace';
+  for (const c of codeCols) {
+    c.y += c.v * dt;
+    if (c.y - c.len * 14 > H) { c.y = -Math.random() * 200; c.x = Math.random() * W; }
+    for (let k = 0; k < c.len; k++) {
+      const y = c.y - k * 14;
+      if (y < -14 || y > H + 14) continue;
+      ctx.fillStyle = k === 0 ? rgba([235, 255, 235], 0.9 * i) : rgba(opt.accent2, (1 - k / c.len) * 0.55 * i);
+      ctx.fillText(GLYPHS[(Math.floor(t * 8 + k * 7 + c.x) >>> 0) % GLYPHS.length], c.x, y);
+    }
+  }
+}
+
 let work = 0, frames = 0, statAt = 0, intervalAvg = 1000 / 60, longRun = 0, shortRun = 0;
 const raf2 = self.requestAnimationFrame ? (f) => self.requestAnimationFrame(f) : (f) => setTimeout(() => f(performance.now()), 1000 / 60);
 const caf2 = self.cancelAnimationFrame ? (id) => self.cancelAnimationFrame(id) : clearTimeout;
@@ -635,6 +858,10 @@ function slowLayers(dt) {
   ctx = sctx;
   sctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   drawBase();
+  if (lv('sunset')) drawSunset();
+  if (lv('nebula')) drawNebula();
+  if (lv('planet')) drawPlanet();
+  if (lv('ocean')) drawOcean();
   if (lv('art')) drawArt(dt);
   if (lv('arcs')) {
     if (arcAt < 0 || t - arcAt > 0.2) {
@@ -657,6 +884,8 @@ function slowLayers(dt) {
   if (lv('rings')) drawRings();
   if (lv('plexus')) drawPlexus(Math.max(dt, t - slowAt));
   if (lv('shapes')) drawShapes();
+  if (lv('city')) drawCity();
+  if (lv('fog')) drawFog();
 }
 
 function frame(now) {
@@ -682,6 +911,10 @@ function frame(now) {
   mctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   if (lv('comets') || comets.length) drawComets(dt);
   if (lv('rain')) drawRain(dt);
+  if (lv('snow')) drawSnow(dt);
+  if (lv('fireflies')) drawFireflies(dt);
+  if (lv('bokeh')) drawBokeh(dt);
+  if (lv('matrix')) drawCode(dt);
   if (lv('embers')) drawEmbers(dt);
   if (pulses.length) drawPulses(dt);
   if (lv('bolts') || bolts.length) drawBolts(dt);

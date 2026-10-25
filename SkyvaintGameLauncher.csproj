@@ -9,7 +9,7 @@
     <RootNamespace>Skyvaint</RootNamespace>
     <AssemblyName>SkyvaintGameLauncher</AssemblyName>
     <Product>skyvaint game launcher</Product>
-    <Version>2.4.0</Version>
+    <Version>2.5.0</Version>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
