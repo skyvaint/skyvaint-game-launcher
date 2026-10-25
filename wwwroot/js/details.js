@@ -33,9 +33,11 @@
 
     function paint() {
       const hero = shot >= 0 && model.shots && model.shots[shot] ? model.shots[shot] : model.hero;
-      $('.dt-img', root).style.backgroundImage = hero ? `url("${hero}")` : '';
-      $('.dt-img', root).classList.toggle('none', !hero);
-      $('.dt-cap', root).innerHTML = `${model.icon ? `<img src="${esc(model.icon)}" alt="">` : ''}
+      const img = $('.dt-img', root), anim = SV.media.animated(hero);
+      img.style.backgroundImage = hero && !anim ? `url("${hero}")` : '';
+      if (anim) { if (img.dataset.src !== hero) { img.innerHTML = SV.media.html(hero, 'dt-media'); img.dataset.src = hero; } } else if (img.dataset.src) { img.innerHTML = ''; img.dataset.src = ''; }
+      img.classList.toggle('none', !hero);
+      $('.dt-cap', root).innerHTML = `${model.icon ? SV.media.html(model.icon, 'dt-icon') : ''}
         <div><div class="tag">${esc(model.tag || '')}</div><h2>${esc(model.title || '')}</h2>${model.by ? `<small>${esc(model.by)}</small>` : ''}</div>`;
       $('.dt-stats', root).innerHTML = (model.stats || []).filter((s) => s && s[1] != null && s[1] !== '')
         .map(([k, v, hot]) => `<div class="stat ${hot ? 'hot' : ''}"><span>${esc(A.T(k))}</span><b>${esc(v)}</b></div>`).join('');

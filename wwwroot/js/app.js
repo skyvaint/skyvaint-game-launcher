@@ -268,10 +268,10 @@
 
   function art(g, kind) {
     const src = kind === 'hero' ? artSrc(g, 'hero') || artSrc(g, 'cover') : artSrc(g, 'cover') || artSrc(g, 'hero');
-    if (src) return `<img class="art-img" src="${esc(src)}" draggable="false" alt="">`;
+    if (src) return SV.media.html(src, 'art-img');
     const icon = artSrc(g, 'icon');
     return meshSVG(g.id + kind, g.c1 || cfg.theme.accent, g.c2 || cfg.theme.accent2, kind === 'hero' ? 9 : 6) +
-      (icon ? `<img class="art-icon" src="${esc(icon)}" draggable="false" alt="">` : '') +
+      (icon ? SV.media.html(icon, 'art-icon') : '') +
       `<span class="art-name">${esc(g.name)}</span>`;
   }
 
@@ -415,6 +415,7 @@
     stats: '<path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/>',
     discover: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
     quests: '<path d="M6 3h12v5a6 6 0 0 1-12 0zM9 20h6M12 14v6M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3"/>',
+    dev: '<path d="M5.2 3.6l15.2 4.1-4.1 15.2L1.1 18.8z"/><path d="M10.2 10.1l3.9 1-1 3.9-3.9-1z"/>',
     nexus: '<rect x="3" y="15" width="18" height="5" rx="1.5"/><rect x="5.5" y="9" width="4" height="4" rx="1"/><rect x="10.5" y="9" width="4" height="4" rx="1"/><rect x="15.5" y="9" width="3" height="4" rx="1"/>',
   };
   const FUNCS = [
@@ -594,7 +595,7 @@
     void title.offsetWidth; // restart the entrance animation
     title.classList.add('swap');
     if (silent) { clearInterval(scrambleTimer); title.textContent = text; } else scramble(title, text);
-    $('#gIcon').innerHTML = g && artSrc(g, 'icon') ? `<img src="${esc(artSrc(g, 'icon'))}" alt="">` : '';
+    $('#gIcon').innerHTML = g && artSrc(g, 'icon') ? SV.media.html(artSrc(g, 'icon'), 'gicon') : '';
     renderStats();
     renderActions();
 
@@ -607,7 +608,8 @@
     $('#heroTag').textContent = g ? (g.heroTag || (isInstalled(g) ? 'MODE: READY' : 'MODE: NOT INSTALLED')) : 'MODE: SETUP';
     $('#heroName').textContent = g ? (g.tagline || g.name) : sub ? 'Paste a game link or place ID' : 'Any .exe, Steam or Epic game';
     if (moved && !silent && cfg.fx.pulse) bg.pulse(0.14, 0.3, 0.6);
-    bg.setArt(g ? artSrc(g, 'hero') || artSrc(g, 'cover') : '');
+    const bgArt = g ? artSrc(g, 'hero') || artSrc(g, 'cover') : '';
+    bg.setArt(SV.media.isVideo(bgArt) ? '' : bgArt); // the backdrop can't play videos; it uses the still picture only
     renderHomeClips();
     focusHome();
   }
@@ -1641,10 +1643,11 @@
       { label: 'CLIPS', sub: 'Your clips of ' + g.name, run: () => SV.clips.open(g.name) },
       { label: 'EDIT', sub: 'Name, artwork, colours, launch target', run: () => openEditor(g) },
       { label: 'DETAILS', sub: 'Playtime, store info, screenshots', run: () => SV.details.game(g) },
-      { label: 'CHANGE ICON', sub: 'Your own picture for this game\'s icon', run: () => pick('image').then((f) => { if (f.url) { g.icon = f.url; changed('games'); toast('Icon changed'); } }) },
+      { label: 'CHANGE ICON', sub: 'A picture, GIF or MP4 for this game\'s icon', run: () => pick('media').then((f) => { if (f.url) { g.icon = f.url; changed('games'); toast('Icon changed'); } }) },
+      { label: 'CHANGE BANNER', sub: 'A picture, GIF or MP4 for the big panel', run: () => pick('media').then((f) => { if (f.url) { g.hero = f.url; changed('games'); toast('Banner changed'); } }) },
       { label: 'ICON FROM A PROGRAM', sub: 'Use the icon of any .exe', run: () => pick('exe').then((f) => { if (f.icon) { g.icon = f.icon; changed('games'); toast('Icon changed'); } }) },
       ...(g.icon ? [{ label: 'DEFAULT ICON', sub: 'Back to the detected icon', run: () => { g.icon = ''; changed('games'); } }] : []),
-      { label: 'CHANGE COVER', sub: 'Your own tile picture', run: () => pick('image').then((f) => { if (f.url) { g.cover = f.url; changed('games'); } }) },
+      { label: 'CHANGE COVER', sub: 'A picture, GIF or MP4 for the tile', run: () => pick('media').then((f) => { if (f.url) { g.cover = f.url; changed('games'); toast('Cover changed'); } }) },
       { label: 'MOVE LEFT', run: () => move(-1) },
       { label: 'MOVE RIGHT', run: () => move(1) },
       { label: 'MOVE TO FRONT', run: () => { cfg.games = [g, ...cfg.games.filter((x) => x !== g)]; sel = 0; changed('games'); } },
@@ -1681,9 +1684,9 @@
           R.text('Launch arguments', 'Optional command-line arguments.', prop(g, 'args'), '-windowed'),
         ]),
         R.text('Process name', 'Used to detect when the game is running. Comma-separate several.', prop(g, 'process'), 'Game-Win64-Shipping'),
-        R.file('Cover art', 'Tile artwork. DEFAULT uses the official art when there is some.  ← clears it.', prop(g, 'cover'), 'image', 'games'),
-        R.file('Banner', 'Wide artwork for the feature panel.  ← clears it.', prop(g, 'hero'), 'image', 'games'),
-        R.file('Icon', 'Small badge beside the name.  ← clears it.', prop(g, 'icon'), 'image', 'games'),
+        R.file('Cover art', 'Tile artwork: a picture, GIF or MP4. DEFAULT uses the official art when there is some.  ← clears it.', prop(g, 'cover'), 'media', 'games'),
+        R.file('Banner', 'Wide artwork for the feature panel: a picture, GIF or MP4.  ← clears it.', prop(g, 'hero'), 'media', 'games'),
+        R.file('Icon', 'Small badge beside the name: a picture, GIF or MP4.  ← clears it.', prop(g, 'icon'), 'media', 'games'),
         R.button('Find artwork online', 'Looks the game up by name and fills in a cover and banner.', 'SEARCH', () => {
           if (!g.name.trim()) return toast('Give the game a name first.', 'bad');
           toast('Searching for artwork…');

@@ -1120,3 +1120,13 @@ body[data-tex=checker] .fx-tex { opacity: calc(var(--texo, .6) * .6); background
 body[data-tex=vhs] .fx-tex { opacity: calc(var(--texo, .6) * .8); background: repeating-linear-gradient(0deg, rgba(255, 0, 60, .04) 0 1px, rgba(0, 200, 255, .04) 1px 2px, transparent 2px 4px); animation: vhs 6s steps(30) infinite; }
 @keyframes vhs { 50% { transform: translateY(2px); } }
 body[data-tex=topo] .fx-tex { opacity: calc(var(--texo, .6) * .55); background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cg fill='none' stroke='white' stroke-opacity='.09'%3E%3Cpath d='M20 100c20-50 70-60 90-30s70 20 70 60-60 60-90 40-90-20-70-70z'/%3E%3Cpath d='M45 100c15-30 50-35 65-15s45 15 45 40-40 40-62 26-60-15-48-51z'/%3E%3Cpath d='M70 100c10-15 30-18 40-8s25 8 25 22-22 22-35 14-35-8-30-28z'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 200px 200px; }
+
+/* ============================================================ 2.5: GIF / video art */
+canvas.art-img, video.art-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+canvas.art-icon, video.art-icon { object-fit: contain; }
+#gIcon > * { display: block; width: 1.8rem; height: 1.8rem; object-fit: contain; }
+.rc-img { position: relative; overflow: hidden; }
+.rc-img > .rc-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dt-img > .dt-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dt-cap .dt-icon { width: 6rem; height: 6rem; object-fit: cover; border-radius: var(--radius-s); box-shadow: 0 .6rem 2rem rgba(0, 0, 0, .6); }
+.hit-art > canvas, .hit-art > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }

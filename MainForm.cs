@@ -2600,7 +2600,7 @@ public sealed partial class MainForm : Form
 		}
 		OpenFileDialog openFileDialog = new OpenFileDialog();
 		OpenFileDialog openFileDialog2 = openFileDialog;
-		string filter = kind == "video" ? "Videos|*.mp4;*.webm;*.m4v;*.mov" : ((kind == "image") ? "Images|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico" : ((!(kind == "audio")) ? "Games and shortcuts|*.exe;*.lnk;*.url;*.bat|All files|*.*" : "Audio|*.mp3;*.wav;*.ogg;*.m4a;*.flac"));
+		string filter = kind == "media" ? "Pictures, GIFs and videos|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico;*.mp4;*.webm;*.m4v;*.mov|Pictures|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico|Videos|*.mp4;*.webm;*.m4v;*.mov" : kind == "video" ? "Videos|*.mp4;*.webm;*.m4v;*.mov" : ((kind == "image") ? "Images|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico" : ((!(kind == "audio")) ? "Games and shortcuts|*.exe;*.lnk;*.url;*.bat|All files|*.*" : "Audio|*.mp3;*.wav;*.ogg;*.m4a;*.flac"));
 		openFileDialog2.Filter = filter;
 		using OpenFileDialog dlg = openFileDialog;
 		if (dlg.ShowDialog(this) == DialogResult.OK)

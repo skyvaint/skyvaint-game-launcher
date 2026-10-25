@@ -210,7 +210,7 @@
         <div class="rail-head"><b>${esc(A.T(r.title))}</b><span class="tag">${esc(r.note || '')}</span></div>
         <div class="rail-row">${r.cards.length ? r.cards.map((c, ci) => `
           <button class="rail-card ${esc(c.cls || '')}" data-c="${ci}">
-            ${c.html ? c.html : `<div class="rc-img" ${c.img ? `style="background-image:url('${esc(c.img)}')"` : ''}>${!c.img && c.glyph ? `<span>${esc(c.glyph)}</span>` : ''}</div>
+            ${c.html ? c.html : SV.media.animated(c.img) ? `<div class="rc-img">${SV.media.html(c.img, 'rc-media')}</div>` : `<div class="rc-img" ${c.img ? `style="background-image:url('${esc(c.img)}')"` : ''}>${!c.img && c.glyph ? `<span>${esc(c.glyph)}</span>` : ''}</div>
             <div class="rc-meta"><b>${esc(c.title)}</b><small>${esc(c.sub || '')}</small></div>`}
           </button>`).join('') : '<div class="rail-empty tag">LOADING…</div>'}</div>
       </div>`).join('');
