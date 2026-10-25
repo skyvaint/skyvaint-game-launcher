@@ -161,7 +161,7 @@
       heading(`BARS · ${bars.length}`),
       ...bars.map((x) => {
         const r = R.buttons(nameOf(x) + (idOf(x) === editing ? '   ◀ EDITING' : ''),
-          `${x.enabled ? 'ON' : 'OFF'} · ${(x.position || 'bottom').toUpperCase()} · ${(x.items || []).length} ITEMS · ${x.visibility === 'desktop' ? 'DESKTOP ONLY' : 'ALWAYS'}`, [
+          `${x.enabled ? 'ON' : 'OFF'} · ${(x.position || 'bottom').toUpperCase()} · ${(x.items || []).length} ITEMS · ${{ desktop: 'DESKTOP ONLY', apps: 'NOT ON THE DESKTOP' }[x.visibility] || 'ALWAYS'}`, [
             ['EDIT', () => { editing = idOf(x); audio.play('confirm'); rerender(0); }],
             ['RENAME', () => A.ask({ tag: 'NEXUS', title: 'RENAME BAR', label: 'Name', value: nameOf(x), done: (v) => { x.name = v; A.changed(); rerender(); } })],
             ...(x === nx() ? [] : [['REMOVE', () => removeBar(x, rerender), 'danger']]),
@@ -175,7 +175,7 @@
 
       heading(`EDITING · ${nameOf(b).toUpperCase()}`),
       R.toggle('Show this bar', '', P('enabled')),
-      R.choice('When it shows', 'Desktop only hides the bar as soon as any window is in front, and brings it back on the desktop.', P('visibility'), [['always', 'Always'], ['desktop', 'Only on the desktop']]),
+      R.choice('When it shows', 'Only on the desktop: hides as soon as any window is in front. Everywhere but the desktop: hides on the desktop, so a desktop bar can take its place.', P('visibility'), [['always', 'Always'], ['desktop', 'Only on the desktop'], ['apps', 'Everywhere but the desktop']]),
       R.toggle('Step aside for fullscreen', 'Hides while a game or video covers the whole screen.', P('hideFullscreen')),
       R.toggle('Auto-hide', 'Tucks away until the pointer reaches that edge.', P('autohide')),
       R.choice('Position', 'Which screen edge it sits on.', P('position'), [['bottom', 'Bottom'], ['top', 'Top'], ['left', 'Left'], ['right', 'Right']]),

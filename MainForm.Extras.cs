@@ -467,7 +467,10 @@ public sealed partial class MainForm
             bool hideInGame = true;
             try { hideInGame = bar["hideFullscreen"]?.GetValue<bool>() ?? true; } catch { }
             var vis = bar["visibility"]?.ToString() ?? "always";
-            bool hide = (hideInGame && (full ??= SomethingFullscreen())) || (vis == "desktop" && !(desk ??= DesktopInFront()));
+            // "desktop": only on the desktop. "apps": everywhere except the desktop (where the desktop bars take over).
+            bool hide = (hideInGame && (full ??= SomethingFullscreen()))
+                || (vis == "desktop" && !(desk ??= DesktopInFront()))
+                || (vis == "apps" && (desk ??= DesktopInFront()));
             d.Suppress(hide);
         }
     }
