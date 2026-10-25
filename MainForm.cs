@@ -1643,41 +1643,47 @@ public sealed partial class MainForm : Form
 		poll.Start();
 	}
 
-	private void ServeMedia(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
+	// Pictures and videos the page shows (art, icons, clips, your own files). Reading them happens off the window's
+	// thread (a big GIF or video used to freeze the whole launcher while it loaded), and files you picked yourself
+	// never change, so the page keeps them cached instead of asking again on every redraw.
+	private async void ServeMedia(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
 	{
+		Uri uri;
+		try { uri = new Uri(e.Request.Uri); } catch { return; }
+		if (!uri.Host.Equals("media.skyvaint.example", StringComparison.OrdinalIgnoreCase)) return;
+		CoreWebView2Environment env = (sender as CoreWebView2)?.Environment ?? web.CoreWebView2.Environment;
+		CoreWebView2Deferral deferral = e.GetDeferral();
 		try
 		{
-			Uri uri = new Uri(e.Request.Uri);
-			if (uri.Host.Equals("media.skyvaint.example", StringComparison.OrdinalIgnoreCase))
+			string name = Path.GetFileName(Uri.UnescapeDataString(uri.AbsolutePath));
+			string file = Path.Combine(MediaDir, name);
+			string video = Path.GetExtension(name).ToLowerInvariant() switch { ".mp4" or ".m4v" => "video/mp4", ".webm" => "video/webm", ".mov" => "video/quicktime", _ => "" };
+			var (stream, mime) = await Task.Run<(Stream?, string)>(() =>
 			{
-				CoreWebView2Environment env = (sender as CoreWebView2)?.Environment ?? web.CoreWebView2.Environment;
-				string name = Path.GetFileName(Uri.UnescapeDataString(uri.AbsolutePath));
-				string file = Path.Combine(MediaDir, name);
-				if (name == "" || !File.Exists(file))
-				{
-					e.Response = env.CreateWebResourceResponse(null, 404, "Not Found", "");
-					return;
-				}
-				// Videos (intro, video backdrop) are streamed from the file instead of being read into memory.
-				string video = Path.GetExtension(name).ToLowerInvariant() switch { ".mp4" or ".m4v" => "video/mp4", ".webm" => "video/webm", ".mov" => "video/quicktime", _ => "" };
-				if (video != "")
-				{
-					CoreWebView2WebResourceResponse vr = env.CreateWebResourceResponse(new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read), 200, "OK", "");
-					vr.Headers.AppendHeader("Content-Type", video);
-					vr.Headers.AppendHeader("Access-Control-Allow-Origin", "*");
-					e.Response = vr;
-					return;
-				}
+				if (name == "" || !File.Exists(file)) return (null, "");
+				if (video != "") return (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.Asynchronous | FileOptions.SequentialScan), video);
 				byte[] bytes = File.ReadAllBytes(file);
-				CoreWebView2WebResourceResponse response = env.CreateWebResourceResponse(new MemoryStream(bytes), 200, "OK", "");
-				response.Headers.AppendHeader("Content-Type", MimeOf(name, bytes));
-				response.Headers.AppendHeader("Access-Control-Allow-Origin", "*");
-				response.Headers.AppendHeader("Cache-Control", "max-age=300");
-				e.Response = response;
+				return (new MemoryStream(bytes), MimeOf(name, bytes));
+			});
+			if (stream == null)
+			{
+				e.Response = env.CreateWebResourceResponse(null, 404, "Not Found", "");
+				return;
 			}
+			CoreWebView2WebResourceResponse response = env.CreateWebResourceResponse(stream, 200, "OK", "");
+			response.Headers.AppendHeader("Content-Type", mime);
+			response.Headers.AppendHeader("Access-Control-Allow-Origin", "*");
+			// Files you picked are saved under a unique name, so they can be cached for good.
+			bool picked = System.Text.RegularExpressions.Regex.IsMatch(name, @"^(image|media|video|audio|icon)_[0-9a-f]{32}\.", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+			response.Headers.AppendHeader("Cache-Control", picked ? "max-age=31536000, immutable" : "max-age=300");
+			e.Response = response;
 		}
 		catch (Exception)
 		{
+		}
+		finally
+		{
+			deferral.Complete();
 		}
 	}
 

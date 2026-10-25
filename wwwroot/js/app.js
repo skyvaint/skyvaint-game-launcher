@@ -441,6 +441,7 @@
   const FILTERS = [['all', 'ALL'], ['steam', 'STEAM'], ['epic', 'EPIC'], ['roblox', 'ROBLOX'], ['pc', 'PC']];
   const TILE = 13, GAP = 1.2, GROW = 1.4;
 
+  let heroToken = 0;
   let sel = 0, zone = 'shelf', topIdx = 0, actIdx = 0, heroFlip = 0, launching = false, filter = 'all', shown = [];
   const current = () => shown[sel]; // undefined on the trailing "add game" tile
   const platformOf = (g) => (PLATFORM[g.platform] ? g.platform : 'pc');
@@ -509,7 +510,14 @@
     }).filter((c) => !(cfg.setupHidden || []).includes(c.setup));
   }
 
+  // Every GIF and video a game uses is loaded ahead of time, so switching to it is instant.
+  function preloadArt() {
+    const urls = [];
+    for (const g of cfg.games) for (const k of ['cover', 'hero', 'icon']) { const u = artSrc(g, k); if (u && SV.media.animated(u)) urls.push(u); }
+    SV.media.preload(urls);
+  }
   function renderHome() {
+    setTimeout(preloadArt, 200);
     const used = sub ? [] : FILTERS.filter(([k]) => k === 'all' || cfg.games.some((g) => platformOf(g) === k));
     if (!sub && !used.some(([k]) => k === filter)) filter = 'all';
     shown = visibleGames();
@@ -598,12 +606,19 @@
     $('#gIcon').innerHTML = g && artSrc(g, 'icon') ? SV.media.html(artSrc(g, 'icon'), 'gicon') : '';
     renderStats();
     renderActions();
+    if (moved) for (const n of [$('#gStats'), $('#gIcon')]) { n.classList.remove('fadein'); void n.offsetWidth; n.classList.add('fadein'); }
 
-    const layers = document.querySelectorAll('#hero .hero-layer');
-    heroFlip ^= 1;
-    layers[heroFlip].innerHTML = g ? art(g, 'hero') : meshSVG('add-hero', cfg.theme.accent, cfg.theme.bg, 9);
-    layers[heroFlip].classList.add('on');
-    layers[heroFlip ^ 1].classList.remove('on');
+    // The banner loads into the hidden layer and only fades in once its picture, GIF or video is ready, so a
+    // quick run through the shelf never shows a half-loaded or frozen banner.
+    const layers = [...document.querySelectorAll('#hero .hero-layer')];
+    const nextLayer = layers.find((l) => !l.classList.contains('on')) || layers[0], prevLayer = layers.find((l) => l !== nextLayer);
+    nextLayer.innerHTML = g ? art(g, 'hero') : meshSVG('add-hero', cfg.theme.accent, cfg.theme.bg, 9);
+    const token = ++heroToken;
+    SV.media.ready(nextLayer).then(() => {
+      if (token !== heroToken) return;
+      nextLayer.classList.add('on');
+      prevLayer.classList.remove('on');
+    });
     $('#heroNum').textContent = num;
     $('#heroTag').textContent = g ? (g.heroTag || (isInstalled(g) ? 'MODE: READY' : 'MODE: NOT INSTALLED')) : 'MODE: SETUP';
     $('#heroName').textContent = g ? (g.tagline || g.name) : sub ? 'Paste a game link or place ID' : 'Any .exe, Steam or Epic game';
