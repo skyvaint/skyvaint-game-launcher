@@ -7,6 +7,8 @@ on:
     branches: ["**"]
     tags: ["v*"]
   pull_request:
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -40,7 +42,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # A release made on the website already exists: just attach the zip. Otherwise create it.
           $tag = "${{ github.ref_name }}"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag SkyvaintGameLauncher-win-x64.zip --clobber
+            exit 0
+          }
           $notes = ".github/release-notes/$tag.md"
           $title = "SKYVAINT Game Launcher $($tag.TrimStart('v'))"
           if (Test-Path $notes) {
