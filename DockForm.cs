@@ -32,9 +32,10 @@ sealed class DockForm : Form
     readonly HashSet<string> loading = new();
     List<Item> items = new();
 
-    string position = "bottom", backing = "none";
-    int size = 52;
-    bool autohide, magnify = true, names = true, suppressed, tuckWanted;
+    string position = "bottom", backing = "none", indicator = "dot", tagStyle = "dark", align = "center";
+    int size = 52, spacing = 12, offset = 0, backingAlpha = 120;
+    float radius = 0.22f, glowAmt = 1f, magnifyAmt = 1.45f, idleAlpha = 1f;
+    bool autohide, magnify = true, names = true, alwaysNames, bounceOn = true, suppressed, tuckWanted;
     float tuck; // 0 shown, 1 tucked away
     Color accent = Color.FromArgb(255, 31, 31), accent2 = Color.FromArgb(255, 77, 61), bg = Color.FromArgb(7, 5, 5);
     PointF? mouse; // in (along, across) space
@@ -85,6 +86,18 @@ sealed class DockForm : Form
         autohide = Bool(s?["autohide"], false);
         magnify = Bool(s?["magnify"], true);
         names = Bool(s?["names"], true);
+        spacing = Clamp(Int(s?["gap"], 12), 0, 48);
+        offset = Clamp(Int(s?["offset"], 0), 0, 120);
+        radius = Clamp(Int(s?["radius"], 22), 0, 50) / 100f;
+        backingAlpha = Clamp(Int(s?["opacity"], 47), 0, 100) * 255 / 100;
+        glowAmt = Clamp(Int(s?["glow"], 100), 0, 250) / 100f;
+        magnifyAmt = Clamp(Int(s?["magnifyAmount"], 145), 110, 220) / 100f;
+        idleAlpha = Clamp(Int(s?["idleOpacity"], 100), 20, 100) / 100f;
+        indicator = s?["indicator"]?.ToString() ?? "dot";
+        tagStyle = s?["tagStyle"]?.ToString() ?? "dark";
+        align = s?["align"]?.ToString() ?? "center";
+        alwaysNames = Bool(s?["alwaysNames"], false);
+        bounceOn = Bool(s?["bounce"], true);
         var t = next["theme"];
         accent = Hex(t?["accent"]?.ToString(), accent);
         accent2 = Hex(t?["accent2"]?.ToString(), accent2);
@@ -135,14 +148,15 @@ sealed class DockForm : Form
     {
         k = DeviceDpi / 96f;
         ic = size * k;
-        gap = 12 * k;
+        gap = spacing * k;
         pad = 12 * k;
-        maxS = magnify ? 1.45f : 1.1f;
-        v0 = 16 * k; // room under the logos for the shadow and the "running" dot
+        maxS = magnify ? magnifyAmt : 1.1f;
+        v0 = 16 * k + offset * DeviceDpi / 96f; // room under the logos for the shadow and the "running" dot, plus the gap from the edge
         int n = Math.Max(1, items.Count);
         float grow = ic * (maxS - 1) * 2.4f;
         L = (int)(n * ic + (n - 1) * gap + 2 * pad + grow);
         float tip = Vertical ? 190 * k : 34 * k;
+        if (alwaysNames && !Vertical) tip += 18 * k;
         T = (int)(v0 + ic * maxS + 10 * k + tip);
         var area = Area();
         L = Math.Min(L, (Vertical ? area.Height : area.Width) - 8);
@@ -153,12 +167,14 @@ sealed class DockForm : Form
     Rectangle Target()
     {
         var a = Area();
+        // Where along the edge: centred, or pushed to the start or end of it.
+        int AlongX(int span) => align == "start" ? 8 : align == "end" ? span - L - 8 : (span - L) / 2;
         return position switch
         {
-            "top" => new Rectangle(a.Left + (a.Width - L) / 2, a.Top, L, T),
-            "left" => new Rectangle(a.Left, a.Top + (a.Height - L) / 2, T, L),
-            "right" => new Rectangle(a.Right - T, a.Top + (a.Height - L) / 2, T, L),
-            _ => new Rectangle(a.Left + (a.Width - L) / 2, a.Bottom - T, L, T),
+            "top" => new Rectangle(a.Left + AlongX(a.Width), a.Top, L, T),
+            "left" => new Rectangle(a.Left, a.Top + AlongX(a.Height), T, L),
+            "right" => new Rectangle(a.Right - T, a.Top + AlongX(a.Height), T, L),
+            _ => new Rectangle(a.Left + AlongX(a.Width), a.Bottom - T, L, T),
         };
     }
 
@@ -236,7 +252,7 @@ sealed class DockForm : Form
         base.OnMouseUp(e);
         if (e.Button == MouseButtons.Left && hover >= 0)
         {
-            items[hover].Bounce = DateTime.Now;
+            if (bounceOn) items[hover].Bounce = DateTime.Now;
             Wake();
             owner.OnDockMessage(new JsonObject { ["type"] = "open", ["id"] = items[hover].Id });
         }
@@ -380,13 +396,28 @@ sealed class DockForm : Form
         var strip = RectUV(start - pad, end + pad, 0, Math.Max(8 * k, v0 + tallest + 6 * k - hide));
         using (var catcher = new SolidBrush(Color.FromArgb(1, 0, 0, 0))) g.FillRectangle(catcher, strip);
 
-        if (backing == "glass" && tuck < 0.98f)
+        if (backing != "none" && tuck < 0.98f)
         {
-            var glass = RectUV(start - pad, end + pad, 6 * k - hide, v0 + ic + 8 * k - hide);
-            using var path = Rounded(glass, 16 * k);
-            using var fill = new SolidBrush(Color.FromArgb((int)(120 * (1 - tuck)), bg));
-            using var pen = new Pen(Color.FromArgb((int)(90 * (1 - tuck)), accent), 1.2f * k);
-            g.FillPath(fill, path);
+            float a0b = v0 - 10 * k - hide, a1b = v0 + ic + 8 * k - hide;
+            var glass = RectUV(start - pad, end + pad, a0b, a1b);
+            float round = backing == "pill" ? Math.Min(glass.Width, glass.Height) / 2 : backing == "square" ? 2 * k : 16 * k;
+            using var path = Rounded(glass, round);
+            int fa = (int)(backingAlpha * (1 - tuck));
+            Color fillC = backing switch { "accent" => accent, "light" => Color.FromArgb(235, 235, 240), _ => bg };
+            if (backing != "outline")
+            {
+                if (backing == "gradient")
+                {
+                    using var lg = new LinearGradientBrush(glass, Color.FromArgb(fa, accent), Color.FromArgb(fa, accent2), Vertical ? 90f : 0f);
+                    g.FillPath(lg, path);
+                }
+                else
+                {
+                    using var fill = new SolidBrush(Color.FromArgb(fa, fillC));
+                    g.FillPath(fill, path);
+                }
+            }
+            using var pen = new Pen(Color.FromArgb((int)((backing == "outline" ? 200 : 90) * (1 - tuck)), accent), (backing == "outline" ? 1.8f : 1.2f) * k);
             g.DrawPath(pen, path);
         }
 
@@ -411,12 +442,21 @@ sealed class DockForm : Form
             var r = RectUV(c[i] - w / 2, c[i] + w / 2, a0, a0 + w);
             var tile = TileFor(it);
 
-            if (i == hover)
+            if (i == hover && glowAmt > 0)
             {
-                var glow = RectangleF.Inflate(r, w * 0.32f, w * 0.32f);
+                var glow = RectangleF.Inflate(r, w * 0.32f * glowAmt, w * 0.32f * glowAmt);
                 using var gp = new GraphicsPath();
                 gp.AddEllipse(glow);
-                using var pb = new PathGradientBrush(gp) { CenterColor = Color.FromArgb(120, accent), SurroundColors = [Color.FromArgb(0, accent)] };
+                using var pb = new PathGradientBrush(gp) { CenterColor = Color.FromArgb((int)Math.Min(255, 120 * glowAmt), accent), SurroundColors = [Color.FromArgb(0, accent)] };
+                g.FillEllipse(pb, glow);
+            }
+            // Running apps glow softly all the time with the "glow" indicator.
+            if (it.Running && indicator == "glow")
+            {
+                var glow = RectangleF.Inflate(r, w * 0.22f, w * 0.22f);
+                using var gp = new GraphicsPath();
+                gp.AddEllipse(glow);
+                using var pb = new PathGradientBrush(gp) { CenterColor = Color.FromArgb(110, accent2), SurroundColors = [Color.FromArgb(0, accent2)] };
                 g.FillEllipse(pb, glow);
             }
             if (it.Shadow != null)
@@ -425,8 +465,19 @@ sealed class DockForm : Form
                 sr.Offset(0, 3 * k);
                 g.DrawImage(it.Shadow, sr);
             }
-            if (tile != null) g.DrawImage(tile, r);
-            if (it.Running)
+            if (tile != null)
+            {
+                // Apps that aren't running can be dimmed so the running ones stand out.
+                float alpha = it.Running || i == hover ? 1f : idleAlpha;
+                if (alpha >= 0.999f) g.DrawImage(tile, r);
+                else
+                {
+                    using var ia = new ImageAttributes();
+                    ia.SetColorMatrix(new ColorMatrix { Matrix33 = alpha });
+                    g.DrawImage(tile, Rectangle.Round(r), 0, 0, tile.Width, tile.Height, GraphicsUnit.Pixel, ia);
+                }
+            }
+            if (it.Running && indicator == "dot")
             {
                 float d = 5 * k, mid = c[i];
                 var dot = RectUV(mid - d / 2, mid + d / 2, 4 * k - hide, 4 * k + d - hide);
@@ -434,6 +485,25 @@ sealed class DockForm : Form
                 g.FillEllipse(halo, RectangleF.Inflate(dot, 2.5f * k, 2.5f * k));
                 using var b = new SolidBrush(accent2);
                 g.FillEllipse(b, dot);
+            }
+            else if (it.Running && indicator == "bar")
+            {
+                float mid = c[i], half = w * 0.3f;
+                var bar = RectUV(mid - half, mid + half, 4 * k - hide, 7 * k - hide);
+                using var path = Rounded(bar, 1.5f * k);
+                using var b = new SolidBrush(accent2);
+                g.FillPath(b, path);
+            }
+            if (alwaysNames && !Vertical && i != hover && it.Name != "" && tuck < 0.05f)
+            {
+                using var font = new Font("Segoe UI Semibold", 8f * k, GraphicsUnit.Pixel);
+                var label = RectUV(c[i] - (ic + gap) / 2, c[i] + (ic + gap) / 2, a0 + w + 2 * k, a0 + w + 16 * k);
+                using var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+                using var shadow = new SolidBrush(Color.FromArgb(160, 0, 0, 0));
+                var sh = label; sh.Offset(0, 1);
+                g.DrawString(it.Name, font, shadow, sh, fmt);
+                using var tb = new SolidBrush(Color.FromArgb(230, 245, 239, 238));
+                g.DrawString(it.Name, font, tb, label, fmt);
             }
         }
 
@@ -448,12 +518,12 @@ sealed class DockForm : Form
             RectangleF pill = Vertical ? RectUV(c[hover] - ph / 2, c[hover] + ph / 2, a0, a0 + pw) : RectUV(c[hover] - pw / 2, c[hover] + pw / 2, a0, a0 + ph);
             if (!Vertical) pill.X = Math.Clamp(pill.X, 2, Width - pill.Width - 2);
             using var path = Rounded(pill, 6 * k);
-            using var fill = new SolidBrush(Color.FromArgb(232, 14, 10, 10));
+            using var fill = new SolidBrush(tagStyle == "accent" ? Color.FromArgb(240, accent) : tagStyle == "light" ? Color.FromArgb(240, 245, 245, 248) : Color.FromArgb(232, 14, 10, 10));
             using var pen = new Pen(Color.FromArgb(150, accent), 1f * k);
             g.FillPath(fill, path);
-            g.DrawPath(pen, path);
+            if (tagStyle == "dark") g.DrawPath(pen, path);
             using var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            using var tb = new SolidBrush(Color.FromArgb(245, 239, 238));
+            using var tb = new SolidBrush(tagStyle == "light" ? Color.FromArgb(20, 16, 16) : Color.FromArgb(245, 239, 238));
             g.DrawString(text, font, tb, pill, fmt);
         }
     }
@@ -478,7 +548,7 @@ sealed class DockForm : Form
     Bitmap? TileFor(Item it)
     {
         int px = Math.Max(32, (int)Math.Ceiling(ic * maxS));
-        var key = it.Icon + "|" + px + "|" + it.Name + "|" + accent.ToArgb();
+        var key = it.Icon + "|" + px + "|" + it.Name + "|" + accent.ToArgb() + "|" + radius;
         if (it.TileKey == key) return it.Tile;
         var src = Source(it.Icon);
         if (src == null && it.Icon != "" && loading.Contains(it.Icon)) return it.Tile; // still downloading
@@ -508,14 +578,14 @@ sealed class DockForm : Form
             }
             else
             {
-                using var clip = Rounded(full, px * 0.22f);
+                using var clip = Rounded(full, px * radius);
                 g.SetClip(clip);
                 float s = Math.Max((float)px / src.Width, (float)px / src.Height);
                 g.DrawImage(src, (px - src.Width * s) / 2, (px - src.Height * s) / 2, src.Width * s, src.Height * s);
             }
             return tile;
         }
-        using (var path = Rounded(full, px * 0.22f))
+        using (var path = Rounded(full, px * radius))
         using (var fill = new LinearGradientBrush(full, accent2, Color.FromArgb(accent.R * 3 / 5, accent.G * 3 / 5, accent.B * 3 / 5), 60f))
             g.FillPath(fill, path);
         var letter = string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpperInvariant();

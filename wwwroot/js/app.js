@@ -6,6 +6,8 @@
   const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  // Interface wording goes through the language pack (i18n.js); anything it doesn't know stays in English.
+  const T = (s) => (SV.i18n ? SV.i18n.t(s) : s);
 
   // ------------------------------------------------------------------ config
 
@@ -54,7 +56,15 @@
   // Games older versions put on every new shelf, whether this PC had them or not.
   const OLD_STARTERS = { rematch: 'steam_2138720', fortnite: 'epic_Fortnite', rocketleague: 'epic_Sugar' };
 
-  const LAYERS = ['mesh', 'terrain', 'plexus', 'shapes', 'rings', 'aurora', 'comets', 'stars', 'rain', 'waves', 'dots', 'bolts', 'embers', 'storm', 'art', 'arcs'];
+  const LAYERS = ['mesh', 'terrain', 'plexus', 'shapes', 'rings', 'aurora', 'comets', 'stars', 'rain', 'waves', 'dots', 'bolts', 'embers', 'storm', 'art', 'arcs',
+    'nebula', 'planet', 'city', 'ocean', 'sunset', 'fog', 'snow', 'fireflies', 'bokeh', 'matrix'];
+  // Real photos (Unsplash, served by picsum.photos) for the background picture. They pan and zoom slowly.
+  const PHOTOS = [
+    ['', 'None'], [1002, 'Earth from space'], [120, 'Milky Way night'], [1067, 'City at sunset'], [1015, 'Fjord'], [1036, 'Snowy peaks'], [1016, 'Canyon at dusk'],
+    [1018, 'Green cliffs'], [1039, 'Forest waterfall'], [1043, 'Valley forest'], [1044, 'Misty river'], [1050, 'Sea cliffs'], [1056, 'Above the clouds'],
+    [110, 'Golden field'], [124, 'Turquoise sea'], [13, 'Quiet beach'], [177, 'Mountain hiker'], [184, 'Desert dunes at night'], [190, 'Forest path'], [218, 'Island lagoon'],
+  ];
+  const photoUrl = (id) => (id ? `https://picsum.photos/id/${id}/1920/1080` : '');
   // Ready-made mixes of backdrop layers. "Website" is the skyvaint.com look: storm lightning, faint art, halftone arcs.
   const BACKDROPS = {
     website:   { name: 'skyvaint.com', levels: { storm: 1, art: 1, arcs: 1, embers: 0.4 } },
@@ -63,6 +73,16 @@
     synthwave: { name: 'Synthwave', levels: { terrain: 1.4, waves: 1, rings: 1, comets: 0.8, dots: 0.6 } },
     classic:   { name: 'Classic mesh', levels: { mesh: 1, terrain: 1, plexus: 1, shapes: 1, comets: 1, waves: 1, dots: 1, bolts: 1, embers: 1 } },
     minimal:   { name: 'Minimal', levels: { art: 1.2 } },
+    deepspace: { name: 'Deep space', levels: { nebula: 1.3, stars: 1.6, planet: 1, comets: 0.8 } },
+    nightcity: { name: 'Night city in the rain', levels: { city: 1.2, rain: 1.1, fog: 0.6, bolts: 0.3 } },
+    ocean:     { name: 'Moonlit ocean', levels: { ocean: 1.2, stars: 1, fog: 0.4 } },
+    sunset:    { name: 'Sunset', levels: { sunset: 1.2, fog: 0.4, embers: 0.3 } },
+    winter:    { name: 'Winter night', levels: { snow: 1.4, fog: 0.8, aurora: 0.7, stars: 0.6 } },
+    forest:    { name: 'Fireflies', levels: { fireflies: 1.5, fog: 1, stars: 0.7 } },
+    bokeh:     { name: 'Bokeh lights', levels: { bokeh: 1.5, fog: 0.3, embers: 0.4 } },
+    matrix:    { name: 'Digital rain', levels: { matrix: 1.3, storm: 0.3 } },
+    storm2:    { name: 'Thunderstorm', levels: { storm: 2, rain: 1.6, fog: 0.9, bolts: 1 } },
+    aurora2:   { name: 'Northern lights', levels: { aurora: 1.8, stars: 1.4, snow: 0.4, fog: 0.4 } },
   };
   // Every piece of on-screen wording that can be changed in Settings → Texts.
   const TEXTS = {
@@ -90,19 +110,23 @@
     appIcon: { style: 'bolt', shape: 'rounded', useTheme: true, letter: 'S', image: '', markColor: '#ffffff', fit: 'cover', zoom: 100, offsetX: 0, offsetY: 0, bare: false, logo: 'auto' },
     texts: Object.fromEntries(Object.entries(TEXTS).map(([k, v]) => [k, v[1]])),
     home: { clips: true },
-    nexus: { enabled: false, seeded: false, position: 'bottom', size: 52, backing: 'none', names: true, autohide: false, magnify: true, hideFullscreen: true, items: [] },
+    nexus: { enabled: false, seeded: false, position: 'bottom', size: 52, backing: 'none', names: true, autohide: false, magnify: true, hideFullscreen: true, items: [],
+      align: 'center', gap: 12, radius: 22, offset: 0, idleOpacity: 100, opacity: 47, magnifyAmount: 145, glow: 100, indicator: 'dot', bounce: true, alwaysNames: false, tagStyle: 'dark' },
     discord: { enabled: false, clientId: '', details: 'Playing {game}', state: 'on {platform}', idle: true, idleDetails: 'In the launcher', idleState: '{count} games ready',
       elapsed: true, largeImage: '', largeText: '', smallImage: '', smallText: '', button1Label: '', button1Url: '', button2Label: '', button2Url: '' },
     quests: { day: '', week: '', base: {}, weekBase: {}, claimed: [], xp: 0, custom: [] },
     // Each backdrop layer has a level: 0 is off, 1 the designed look, more is more.
-    backdrop: { style: 'website', levels: { mesh: 0, terrain: 0, plexus: 0, shapes: 0, rings: 0, aurora: 0, comets: 0, stars: 0, rain: 0, waves: 0, dots: 0, bolts: 0, embers: 0.4, storm: 1, art: 1, arcs: 1 },
+    backdrop: { style: 'website', levels: { mesh: 0, terrain: 0, plexus: 0, shapes: 0, rings: 0, aurora: 0, comets: 0, stars: 0, rain: 0, waves: 0, dots: 0, bolts: 0, embers: 0.4, storm: 1, art: 1, arcs: 1,
+      nebula: 0, planet: 0, city: 0, ocean: 0, sunset: 0, fog: 0, snow: 0, fireflies: 0, bokeh: 0, matrix: 0 }, photoMotion: 1,
       pictures: [], slide: 9, artOpacity: 0.18,
       meshStyle: 'poly', meshDensity: 13, meshMotion: 1, meshLines: 1, meshFill: 1, meshColor: 'duo', image: '', imageDim: 0.55,
-      intensity: 0.8, speed: 1, quality: 'auto', fps: 0, slowFps: 60, motion: true, calmWhilePlaying: true },
+      intensity: 0.8, speed: 1, quality: 'auto', fps: 0, slowFps: 60, motion: true, calmWhilePlaying: true, video: '', videoMix: 0.45, videoSpeed: 1, photo: '' },
     perf: { smooth: true, meter: false, uncapped: false, dgpu: false },
     fx: { trail: true, ripple: true, tilt: true, glitch: true, scramble: true, rgb: true, chroma: false, scan: false, shake: true, confetti: true, warp: true, pulse: true,
-      launchStyle: 'slabs', sparks: 1, space: true, focusFx: true, bootStyle: 'space', fadeWindow: true, wipe: true },
-    sound: { master: 0.6, pack: 'pulse', events: { nav: true, confirm: true, back: true, boot: true, launch: true }, custom: { boot: '', launch: '', nav: '', confirm: '', back: '', toggle: '', open: '', pick: '', star: '', error: '', slam: '' }, ambient: 0, haptics: true, hover: true, hoverGap: 140, library: [],
+      launchStyle: 'slabs', sparks: 1, space: true, focusFx: true, bootStyle: 'space', fadeWindow: true, wipe: true,
+      spotlight: true, rays: false, dust: true, breathe: false, bloom: true, sweep: true, flare: false, light: 1, transition: 'slash',
+      introVideo: '', introMuted: false, introMax: 30, rotateText: '', rotateEvery: 6, cursorGlow: false },
+    sound: { master: 0.6, pack: 'pulse', events: { nav: true, confirm: true, back: true, boot: true, launch: true }, custom: { boot: '', launch: '', nav: '', confirm: '', back: '', toggle: '', open: '', pick: '', star: '', error: '', slam: '' }, ambient: 0, haptics: true, hover: true, hoverGap: 220, hoverVolume: 0.6, hoverDwell: 70, library: [],
       pitch: 0, echo: 0 },
     behavior: { bootAnim: true, afterLaunch: 'hidden', onGameExit: 'home', closeAction: 'hidden', autostartMode: 'hidden', miniOnTop: true, miniSize: 'm', clock24: true,
       promptAccount: true, hideUninstalled: false, waitForGame: true, launchWait: 120, launchSettle: 2 },
@@ -111,8 +135,10 @@
     epic: { accounts: [], last: {} },
     roblox: { accounts: [], selected: [], places: [], placeIdx: 0, multiInstance: true, launchDelay: 5 },
     lists: { roblox: true, studio: true },
-    rails: { enabled: true, show: { recent: true, friends: true, roblox: true, studio: true, upcoming: true, news: true, commissions: true } },
+    rails: { enabled: true, show: { recent: true, friends: true, roblox: true, trending: true, topPlaying: true, rising: true, steamTop: true, steamDeals: true, epicFree: true, steamNew: true, clips: true, studio: true, upcoming: true, news: true, commissions: true } },
     clips: { favorites: [], categories: [], tagged: {}, folders: [], videos: true, medal: '', autoplay: true },
+    dev: { enabled: false, commissions: [], showStudioHome: true },
+    language: 'en',
   });
 
   function merge(base, extra) {
@@ -252,7 +278,10 @@
   // ------------------------------------------------------------------ apply settings
 
   const TEXTURES = [['none', 'None'], ['grain', 'Film grain'], ['carbon', 'Carbon fibre'], ['hex', 'Hex grid'], ['scan', 'Scanlines'], ['halftone', 'Halftone'],
-    ['diagonal', 'Diagonal lines'], ['grid', 'Blueprint grid'], ['circuit', 'Circuit'], ['paper', 'Paper'], ['noise', 'Heavy noise'], ['dots', 'Polka']];
+    ['diagonal', 'Diagonal lines'], ['grid', 'Blueprint grid'], ['circuit', 'Circuit'], ['paper', 'Paper'], ['noise', 'Heavy noise'], ['dots', 'Polka'],
+    ['crosshatch', 'Crosshatch'], ['brick', 'Brick'], ['triangles', 'Triangles'], ['plaid', 'Plaid'], ['zigzag', 'Zigzag'], ['checker', 'Checker'], ['vhs', 'VHS lines'], ['topo', 'Topographic'],
+    ['tt-carbon-fibre-v2', 'Carbon weave (web)'], ['tt-cubes', 'Cubes (web)'], ['tt-diagonal-striped-brick', 'Striped brick (web)'], ['tt-dark-mosaic', 'Dark mosaic (web)'], ['tt-black-linen', 'Black linen (web)'], ['tt-asfalt-dark', 'Asphalt (web)'], ['tt-brushed-alum-dark', 'Brushed metal (web)'], ['tt-dark-matter', 'Dark matter (web)'], ['tt-hexellence', 'Hexellence (web)'], ['tt-wood-pattern', 'Wood (web)'], ['tt-stardust', 'Stardust (web)'], ['tt-skulls', 'Skulls (web)'], ['tt-inspiration-geometry', 'Geometry (web)'], ['tt-45-degree-fabric-dark', 'Dark fabric (web)'], ['tt-dark-wood', 'Dark wood (web)'], ['tt-concrete-wall-3', 'Concrete (web)'], ['tt-escheresque-dark', 'Escher (web)'], ['tt-broken-noise', 'Broken noise (web)'], ['tt-crissxcross', 'Criss-cross (web)'],
+    ['custom', 'My own picture']];
 
   function applyBackdrop(style) {
     const preset = BACKDROPS[style];
@@ -262,6 +291,7 @@
   }
 
   function applyConfig() {
+    if (SV.i18n && SV.i18n.lang !== (cfg.language || 'en')) { SV.i18n.set(cfg.language || 'en'); if (typeof renderHints === 'function') renderHints(); }
     const t = cfg.theme, a = toRgb(t.accent), a2 = toRgb(t.accent2), b = toRgb(t.bg), root = document.documentElement.style;
     root.setProperty('--accent', t.accent);
     root.setProperty('--accent2', t.accent2);
@@ -286,6 +316,7 @@
     document.body.dataset.launch = f.launchStyle;
     document.body.dataset.tex = t.texture;
     root.setProperty('--texo', t.textureOpacity);
+    root.setProperty('--texurl', t.textureImage ? `url("${t.textureImage}")` : 'none');
     SV.space.setColors(a, a2);
     const tx = cfg.texts;
     $('.brand-name').textContent = tx.brand;
@@ -298,13 +329,14 @@
     meter(cfg.perf.meter);
 
     bg.configure({
-      levels: d.levels, image: d.image, imageDim: d.imageDim, pictures: d.pictures, slide: d.slide, artOpacity: d.artOpacity,
+      levels: d.levels, image: d.image, imageDim: d.imageDim, photoMotion: d.photoMotion ?? 1, pictures: d.pictures, slide: d.slide, artOpacity: d.artOpacity,
       mesh: { style: d.meshStyle, density: d.meshDensity, motion: d.meshMotion, lines: d.meshLines, fill: d.meshFill, color: d.meshColor },
       intensity: d.intensity, speed: d.motion ? d.speed : 0.15, quality: d.quality, fps: +d.fps || 0, slowFps: +d.slowFps || 60, accent: a, accent2: a2, bg: b,
     });
     fx.configure({ trail: f.trail, ripple: f.ripple, warp: f.warp, confetti: f.confetti, sparks: f.sparks, accent: a, accent2: a2 });
     audio.configure(cfg.sound);
     input.setHaptics(cfg.sound.haptics);
+    SV.effects && SV.effects.apply();
     applyCalm();
     fit();
 
@@ -386,21 +418,24 @@
     nexus: '<rect x="3" y="15" width="18" height="5" rx="1.5"/><rect x="5.5" y="9" width="4" height="4" rx="1"/><rect x="10.5" y="9" width="4" height="4" rx="1"/><rect x="15.5" y="9" width="3" height="4" rx="1"/>',
   };
   const FUNCS = [
-    { id: 'search', label: 'Search', run: () => openSearch() },
-    { id: 'random', label: 'Random', run: () => roll() },
-    { id: 'stats', label: 'Playtime', run: () => openPlaytime() },
-    { id: 'discover', label: 'Discover', run: () => SV.discover.open() },
-    { id: 'quests', label: 'Quests', run: () => SV.quests.open() },
-    { id: 'clips', label: 'Clips', run: () => SV.clips.open() },
-    { id: 'nexus', label: 'Nexus', run: () => SV.nexus.open() },
-    { id: 'accounts', label: 'Accounts', run: () => openSettings('accounts') },
-    { id: 'tasks', label: 'Stop', run: () => openTasks() },
-    { id: 'mini', label: 'Minimize', run: () => leaveTo('mini') },
-    { id: 'theme', label: 'Theme', run: () => openSettings('theme') },
-    { id: 'sound', label: 'Sound', run: () => openSettings('sound') },
-    { id: 'settings', label: 'Settings', run: () => openSettings('games') },
-    { id: 'power', label: 'Power', run: () => openPower() },
+    { id: 'search', label: 'Search', desc: 'Find a game by typing its name', run: () => openSearch() },
+    { id: 'random', label: 'Random', desc: 'Can\'t decide? Spin for a game', run: () => roll() },
+    { id: 'stats', label: 'Playtime', desc: 'How long you played each game', run: () => openPlaytime() },
+    { id: 'discover', label: 'Discover', desc: 'Free games, deals and trending Roblox', run: () => SV.discover.open() },
+    { id: 'quests', label: 'Quests', desc: 'Daily goals that earn XP', run: () => SV.quests.open() },
+    { id: 'clips', label: 'Clips', desc: 'Your recorded clips', run: () => SV.clips.open() },
+    { id: 'dev', label: 'Developer', desc: 'Roblox Studio, commissions and dev tools', dev: true, run: () => SV.dev.open() },
+    { id: 'nexus', label: 'Nexus', desc: 'Your desktop app bar', run: () => SV.nexus.open() },
+    { id: 'accounts', label: 'Accounts', desc: 'Steam, Epic and Roblox accounts', run: () => openSettings('accounts') },
+    { id: 'tasks', label: 'Stop', desc: 'Close running games and apps', run: () => openTasks() },
+    { id: 'mini', label: 'Minimize', desc: 'Shrink to the small widget', run: () => leaveTo('mini') },
+    { id: 'theme', label: 'Theme', desc: 'Colours, backdrops and effects', run: () => openSettings('theme') },
+    { id: 'sound', label: 'Sound', desc: 'Sound packs and volume', run: () => openSettings('sound') },
+    { id: 'settings', label: 'Settings', desc: 'Games, behaviour, language and more', run: () => openSettings('games') },
+    { id: 'power', label: 'Power', desc: 'Quit, sleep or switch to mini', run: () => openPower() },
   ];
+  // The Developer button only shows in developer mode.
+  const funcs = () => FUNCS.filter((f) => !f.dev || cfg.dev.enabled);
   const PLATFORM = { epic: 'EPIC GAMES', steam: 'STEAM', roblox: 'ROBLOX', pc: 'PC' };
   const FILTERS = [['all', 'ALL'], ['steam', 'STEAM'], ['epic', 'EPIC'], ['roblox', 'ROBLOX'], ['pc', 'PC']];
   const TILE = 13, GAP = 1.2, GROW = 1.4;
@@ -481,8 +516,8 @@
     document.body.classList.toggle('in-list', !!sub);
     sel = clamp(sel, 0, Math.max(0, shown.length - (addTile ? 0 : 1)));
 
-    $('#funcs').innerHTML = FUNCS.map((f, i) =>
-      `<button class="func" data-i="${i}" data-id="${f.id}"><svg viewBox="0 0 24 24">${ICON[f.id]}</svg><span>${f.label}</span></button>`).join('');
+    $('#funcs').innerHTML = funcs().map((f, i) =>
+      `<button class="func" data-i="${i}" data-id="${f.id}" aria-label="${esc(T(f.label))}"><svg viewBox="0 0 24 24">${ICON[f.id]}</svg><span class="func-tip"><b>${esc(T(f.label))}</b><small>${esc(T(f.desc))}</small></span></button>`).join('');
     $('#filters').innerHTML = sub ? `<button class="chip on crumb" data-k="__back">‹ ALL GAMES</button><span class="crumb-now">${esc(sub.p.title)} <i>${shown.length}</i></span>`
       : used.length > 2 ? used.map(([k, label]) =>
       `<button class="chip ${k === filter ? 'on' : ''}" data-k="${k}">${label}<i>${k === 'all' ? cfg.games.length : cfg.games.filter((g) => platformOf(g) === k).length}</i></button>`).join('') : '';
@@ -615,7 +650,7 @@
       const who = g.platform === 'epic' ? SV.epic.statFor(g) : g.platform === 'steam' ? SV.steam.statFor(g) : g.target === 'sv:roblox' ? SV.roblox.stat() : null;
       if (who) items.push(who);
     }
-    $('#gStats').innerHTML = items.map(([k, v]) => `<div class="stat ${v === 'RUNNING' ? 'hot' : ''}"><span>${k}</span><b>${esc(v)}</b></div>`).join('');
+    $('#gStats').innerHTML = items.map(([k, v]) => `<div class="stat ${v === 'RUNNING' ? 'hot' : ''}"><span>${esc(T(k))}</span><b>${esc(T(v))}</b></div>`).join('');
   }
 
   function actions() {
@@ -635,7 +670,7 @@
     return list;
   }
   function renderActions() {
-    $('#actions').innerHTML = actions().map((a, i) => `<button class="btn ${a.primary ? 'primary' : ''}" data-i="${i}">${a.label}</button>`).join('');
+    $('#actions').innerHTML = actions().map((a, i) => `<button class="btn ${a.primary ? 'primary' : ''}" data-i="${i}">${esc(T(a.label))}</button>`).join('');
   }
 
   function focusHome() {
@@ -671,9 +706,9 @@
       else if (a === 'down') setZone('detail');
       else if (a === 'confirm') actions()[0].run();
     } else if (zone === 'top') {
-      if (a === 'left' || a === 'right') { topIdx = clamp(topIdx + (a === 'left' ? -1 : 1), 0, FUNCS.length - 1); audio.play('nav'); focusHome(); }
+      if (a === 'left' || a === 'right') { topIdx = clamp(topIdx + (a === 'left' ? -1 : 1), 0, funcs().length - 1); audio.play('nav'); focusHome(); }
       else if (a === 'down') setZone('shelf');
-      else if (a === 'confirm') { audio.play('confirm'); FUNCS[topIdx].run(); }
+      else if (a === 'confirm') { audio.play('confirm'); funcs()[topIdx].run(); }
     } else if (zone === 'hclips') {
       const n = document.querySelectorAll('#homeClips .hc').length;
       if (a === 'left' || a === 'right') { clipIdx = clamp(clipIdx + (a === 'left' ? -1 : 1), 0, n - 1); audio.play('nav'); focusHome(); }
@@ -749,7 +784,7 @@
   }, { passive: true });
   $('#funcs').addEventListener('click', (e) => {
     const b = e.target.closest('.func');
-    if (b) { topIdx = +b.dataset.i; zone = 'top'; focusHome(); audio.play('confirm'); FUNCS[topIdx].run(); }
+    if (b) { topIdx = +b.dataset.i; zone = 'top'; focusHome(); audio.play('confirm'); funcs()[topIdx].run(); }
   });
   $('#filters').addEventListener('click', (e) => { const c = e.target.closest('.chip'); if (!c) return; if (c.dataset.k === '__back') exitList(); else setFilter(c.dataset.k); });
   $('#actions').addEventListener('click', (e) => {
@@ -776,10 +811,21 @@
     pad: { confirm: '✕', back: '○', options: 'OPTIONS', settings: '△', mini: 'PS', tasks: 'X', tabs: 'L1 / R1', adjust: '← →', clips: '□', alt: '□', move: 'D-PAD',
       search: 'R3', random: 'SELECT', stats: 'L3' },
   };
+  // Every hint is also a button: clicking it does what the key does, so the controls are always one click away.
+  const HINT_ACT = { confirm: 'confirm', back: 'back', options: 'options', settings: 'settings', mini: 'mini', tasks: 'tasks', tabs: 'tabNext', clips: 'clips',
+    alt: 'alt', search: 'search', random: 'random', stats: 'stats' };
   const hints = (list) => list.map(([key, label]) =>
-    `<span class="hint"><kbd class="kb">${GLYPH.kb[key]}</kbd><kbd class="pad">${GLYPH.pad[key]}</kbd>${label}</span>`).join('');
-  $('#hints').innerHTML = hints([['confirm', 'Start'], ['search', 'Search'], ['random', 'Random'], ['clips', 'Clips'], ['tasks', 'Stop'], ['tabs', 'Filter'], ['options', 'Game options'], ['settings', 'Customize'], ['back', 'Power']]) +
-    '<span class="hint right"><kbd>CTRL + ALT + HOME</kbd>Summon from anywhere</span>';
+    `<span class="hint" ${HINT_ACT[key] ? `data-act="${HINT_ACT[key]}" role="button"` : ''}><kbd class="kb">${GLYPH.kb[key]}</kbd><kbd class="pad">${GLYPH.pad[key]}</kbd>${esc(T(label))}</span>`).join('');
+  document.addEventListener('click', (e) => {
+    const h = e.target.closest('.hint[data-act]');
+    if (h && input.onAction) input.onAction(h.dataset.act);
+  });
+  // The footer hints: rebuilt when the language changes.
+  const renderHints = () => {
+    $('#hints').innerHTML = hints([['confirm', 'Start'], ['search', 'Search'], ['random', 'Random'], ['clips', 'Clips'], ['tasks', 'Stop'], ['tabs', 'Filter'], ['options', 'Game options'], ['settings', 'Customize'], ['back', 'Power']]) +
+      `<span class="hint right"><kbd>CTRL + ALT + HOME</kbd>${esc(T('Summon from anywhere'))}</span>`;
+  };
+  renderHints();
 
   function updateRunning() {
     document.querySelectorAll('#tiles .tile').forEach((t) => t.classList.toggle('running', running.has(shown[+t.dataset.i]?.id)));
@@ -992,13 +1038,13 @@
   }
 
   function row(label, desc, control, { adjust, activate } = {}) {
-    const r = el(`<div class="row" data-row><div class="row-l"><b>${esc(label)}</b><small>${esc(desc || '')}</small></div><div class="row-c"></div></div>`);
+    const r = el(`<div class="row" data-row><div class="row-l"><b>${esc(T(label))}</b><small>${esc(T(desc || ''))}</small></div><div class="row-c"></div></div>`);
     r.querySelector('.row-c').append(control);
     r._adjust = adjust;
     r._activate = activate;
     return r;
   }
-  const heading = (text) => el(`<div class="row-head tag">[ ${esc(text)} ]</div>`);
+  const heading = (text) => el(`<div class="row-head tag">[ ${esc(T(text))} ]</div>`);
 
   // `changed` runs after every edit: re-apply, persist, and optionally refresh game lists.
   function changed(what) {
@@ -1142,7 +1188,7 @@
 
   // ------------------------------------------------------------------ settings
 
-  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['discord', 'DISCORD'], ['system', 'SYSTEM']];
+  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['discord', 'DISCORD'], ['developer', 'DEVELOPER'], ['system', 'SYSTEM']];
   const pct = (v) => Math.round(v * 100) + '%';
 
   function settingsRows(tab, rerender) {
@@ -1177,6 +1223,7 @@
         R.choice('Headline font', 'Typeface for titles.', at('theme.font'), Object.entries(FONTS).map(([k, f]) => [k, f[0]])),
         R.choice('Texture', 'A surface laid over the whole screen.', at('theme.texture'), TEXTURES),
         R.slider('Texture strength', '', at('theme.textureOpacity'), 0, 2, 0.1, pct),
+        R.file('Texture picture', 'For the My own picture texture: any image, tiled over the screen. Seamless patterns work best.  ← clears it.', { get: () => cfg.theme.textureImage || '', set: (v) => { cfg.theme.textureImage = v; if (v) cfg.theme.texture = 'custom'; } }, 'image'),
         heading('APP ICON'),
         R.choice('Icon', 'The launcher\'s icon in the taskbar, tray and bar.', at('appIcon.style'), [['bolt', 'Bolt'], ['letter', 'Letter'], ['ring', 'Ring'], ['diamond', 'Diamond'], ['image', 'My picture']]),
         R.choice('Icon shape', '', at('appIcon.shape'), [['rounded', 'Rounded square'], ['circle', 'Circle'], ['square', 'Square']]),
@@ -1244,9 +1291,26 @@
         heading('SHAPES'),
         R.level('Wave ribbons', 'Flowing ribbons across the lower screen. Higher makes them taller.', 'waves'),
         R.level('Halftone dots', 'Pulsing dot field.', 'dots'),
-        heading('PICTURE'),
-        R.file('Background picture', 'Your own image behind the effects.  ← clears it.', at('backdrop.image'), 'image'),
+        heading('SCENES'),
+        R.level('Nebula', 'Glowing clouds of deep space.', 'nebula'),
+        R.level('Planet', 'A huge planet rising from the bottom corner.', 'planet'),
+        R.level('Night city', 'A skyline with windows lighting up.', 'city'),
+        R.level('Moonlit ocean', 'A moon over the sea, its light glittering on the waves.', 'ocean'),
+        R.level('Sunset sky', 'A setting sun with drifting clouds.', 'sunset'),
+        R.level('Fog', 'Slow banks of fog rolling past.', 'fog'),
+        R.level('Snow', 'Falling snow.', 'snow'),
+        R.level('Fireflies', 'Glowing fireflies wandering about.', 'fireflies'),
+        R.level('Bokeh', 'Out-of-focus lights floating up, like a camera shot.', 'bokeh'),
+        R.level('Digital rain', 'Falling columns of code.', 'matrix'),
+        heading('PHOTO'),
+        R.choice('Photo backdrop', `${PHOTOS.length - 1} real photos. Combine with any style above.`, { get: () => (PHOTOS.find(([id]) => id && photoUrl(id) === cfg.backdrop.image) || [''])[0], set: (v) => { cfg.backdrop.image = photoUrl(v); } }, PHOTOS),
+        R.file('Your own picture', 'Any image behind the effects.  ← clears it.', at('backdrop.image'), 'image'),
         R.slider('Picture dimming', 'How much the picture is darkened.', at('backdrop.imageDim'), 0, 0.95, 0.05, pct),
+        R.slider('Photo motion', 'Slow pan and zoom over the picture. 0 keeps it still.', at('backdrop.photoMotion'), 0, 3, 0.1, pct),
+        heading('VIDEO'),
+        R.file('Video backdrop', 'An MP4 or WebM that loops behind everything.  ← clears it.', at('backdrop.video'), 'video'),
+        R.slider('Effects over the video', 'How much of the animated backdrop is drawn on top of the video.', at('backdrop.videoMix'), 0, 1, 0.05, pct),
+        R.slider('Video speed', '', at('backdrop.videoSpeed'), 0.25, 2, 0.05, (v) => v.toFixed(2) + '×'),
         heading('TUNING'),
         R.slider('Intensity', 'How bright the backdrop effects are.', at('backdrop.intensity'), 0.1, 1.5, 0.1, pct),
         R.slider('Speed', 'How fast everything moves.', at('backdrop.speed'), 0.2, 2.5, 0.1, (v) => v.toFixed(1) + '×'),
@@ -1263,6 +1327,27 @@
     }
 
     if (tab === 'effects') return [
+      heading('LIGHTING'),
+      R.slider('Light strength', 'How bright all the lighting effects below are.', at('fx.light'), 0.2, 2, 0.1, pct),
+      R.toggle('Spotlight', 'A soft light follows your pointer across the screen.', at('fx.spotlight')),
+      R.toggle('Light rays', 'Slow god rays falling from the top corner.', at('fx.rays')),
+      R.toggle('Dust in the light', 'Tiny specks drifting through the air.', at('fx.dust')),
+      R.toggle('Breathing edges', 'The screen edges glow and fade in your accent colour.', at('fx.breathe')),
+      R.toggle('Bloom', 'Headlines and the selection glow like neon.', at('fx.bloom')),
+      R.toggle('Light sweeps', 'A streak of light passes over the selected tile and banner.', at('fx.sweep')),
+      R.toggle('Lens flare', 'A flare that drifts with the pointer.', at('fx.flare')),
+      heading('TRANSITIONS'),
+      R.choice('Transition style', 'How the screen changes: opening a list, going to mini, hiding and coming back.', at('fx.transition'),
+        [['slash', 'Slash'], ['shutter', 'Shutter'], ['fade', 'Fade to black'], ['iris', 'Iris'], ['zoom', 'Zoom blur'], ['glitch', 'Glitch'], ['bars', 'Light bars'], ['none', 'None']]),
+      R.button('Preview transition', '', 'PLAY', () => SV.title.slash(null, 160)),
+      heading('INTRO VIDEO'),
+      R.file('Intro video', 'Your own MP4 or WebM, played full screen when the launcher opens. Any key skips it.  ← clears it.', at('fx.introVideo'), 'video'),
+      R.toggle('Intro without sound', '', at('fx.introMuted')),
+      R.slider('Longest intro', 'Skips ahead after this long, even if the video is longer.', at('fx.introMax'), 3, 120, 1, (v) => v + ' s'),
+      R.button('Preview intro', cfg.fx.introVideo ? '' : 'Pick a video first.', 'PLAY', () => { if (!cfg.fx.introVideo) return toast('Pick an intro video first.', 'bad'); while (stack.length) pop(); SV.effects.intro(cfg.fx.introVideo); }),
+      heading('CHANGING TEXT'),
+      R.text('Top bar lines', 'Lines that take turns under the logo, separated by | (e.g. NO MERCY | GG ONLY | SKYVAINT). Empty keeps the tag line.', at('fx.rotateText'), 'NO MERCY | GG ONLY'),
+      R.slider('Change every', '', at('fx.rotateEvery'), 2, 30, 1, (v) => v + ' s'),
       heading('POINTER'),
       R.toggle('Cursor sparks', 'A trail of sparks follows the mouse.', at('fx.trail')),
       R.toggle('Click shockwave', 'Rings and sparks burst from every click.', at('fx.ripple')),
@@ -1317,7 +1402,9 @@
         R.slider('Ambient hum', 'Low drone under the HOME screen.', at('sound.ambient'), 0, 1, 0.05, pct),
         R.toggle('Controller rumble', 'Vibrate on launch.', at('sound.haptics')),
         R.toggle('Hover sounds', 'The cursor tick also plays when the mouse moves onto a button or tile.', at('sound.hover')),
-        R.slider('Hover sound gap', 'Shortest time between two hover ticks, so sweeping the mouse across a row stays clean.', at('sound.hoverGap'), 40, 400, 20, (v) => Math.round(v) + 'ms'),
+        R.slider('Hover sound gap', 'Shortest time between two hover ticks, so sweeping the mouse across a row stays clean.', at('sound.hoverGap'), 60, 600, 20, (v) => Math.round(v) + 'ms'),
+        R.slider('Hover sound volume', 'How loud the hover tick is next to the other sounds.', at('sound.hoverVolume'), 0.1, 1, 0.05, pct),
+        R.slider('Hover settle time', 'How long the pointer has to rest on something before it ticks. Higher = quieter when sweeping.', at('sound.hoverDwell'), 0, 250, 10, (v) => Math.round(v) + 'ms'),
         R.button('Preview slam', 'The impact used by the opening and the wipe.', 'PLAY', () => audio.play('slam')),
         heading('BT3 SOUNDS'),
         R.button('Use the BT3 sounds', 'The real Budokai Tenkaichi 3 menu sounds, pulled from your own ISO into BT3 Modding\Exports\Launcher Sounds.', 'LOAD', () => {
@@ -1363,6 +1450,7 @@
 
     if (tab === 'accounts') return [...SV.steam.rows(rerender), ...SV.epic.rows(rerender), ...SV.roblox.rows(rerender)];
     if (tab === 'nexus') return SV.nexus.rows(rerender);
+    if (tab === 'developer') return SV.dev.rows(rerender);
     if (tab === 'texts') return [
       heading('WORDING'),
       ...Object.entries(TEXTS).map(([k, [label, fallback]]) => R.text(label, 'Default: ' + fallback, at('texts.' + k), fallback, 'games')),
@@ -1398,6 +1486,7 @@
 
     const startChoice = { get: () => (autostart ? cfg.behavior.autostartMode : 'off'), set: (v) => { autostart = v !== 'off'; if (autostart) cfg.behavior.autostartMode = v; host.send('setAutostart', { on: autostart }); } };
     return [
+      R.choice('Language', 'The language of the interface. Your game names and own wording stay as they are.', at('language'), SV.i18n.LANGS, () => { changed('games'); rerender(0); }),
       R.text('Profile name', 'Shown in the top bar.', at('profile.name'), 'your name', 'games'),
       R.toggle('Clips on HOME', 'Shows your newest clips of the selected game under its buttons.', at('home.clips'), () => renderHomeClips()),
       R.file('Profile picture', 'Square images work best.  ← clears it.', at('profile.avatar'), 'image'),
@@ -1436,7 +1525,7 @@
     function show(next, focusIdx = 0) {
       if (next !== tab) audio.play('nav');
       tab = next;
-      tabs.innerHTML = TABS.map(([k, label]) => `<button class="tab ${k === tab ? 'on' : ''}" data-k="${k}">${label}</button>`).join('');
+      tabs.innerHTML = TABS.map(([k, label]) => `<button class="tab ${k === tab ? 'on' : ''}" data-k="${k}">${esc(T(label))}</button>`).join('');
       body.replaceChildren(...settingsRows(tab, (i) => { if (root.isConnected) show(tab, i ?? p.idx); }));
       p.focus(focusIdx);
     }
@@ -1449,10 +1538,10 @@
   // ------------------------------------------------------------------ menus, editor, scan
 
   function openMenu(title, items, note) {
-    const root = el(`<div class="overlay center"><div class="menu"><div class="tag">[ ${esc(title)} ]</div>${note ? `<p>${esc(note)}</p>` : ''}<div class="menu-list"></div></div></div>`);
+    const root = el(`<div class="overlay center"><div class="menu"><div class="tag">[ ${esc(T(title))} ]</div>${note ? `<p>${esc(T(note))}</p>` : ''}<div class="menu-list"></div></div></div>`);
     const list = $('.menu-list', root);
     items.forEach((it) => {
-      const b = el(`<button class="item ${it.danger ? 'danger' : ''}" data-row><b>${esc(it.label)}</b><small>${esc(it.sub || '')}</small></button>`);
+      const b = el(`<button class="item ${it.danger ? 'danger' : ''}" data-row><b>${esc(T(it.label))}</b><small>${esc(T(it.sub || ''))}</small></button>`);
       const run = () => { pop(); audio.play('confirm'); it.run && it.run(); };
       b._activate = run;
       b.addEventListener('click', run);
@@ -1551,6 +1640,11 @@
       ...(g.platform === 'steam' && SV.steam.accounts.length > 1 ? [{ label: 'STEAM ACCOUNT', sub: 'Which Steam account this game starts on', run: () => SV.steam.choose(g) }] : []),
       { label: 'CLIPS', sub: 'Your clips of ' + g.name, run: () => SV.clips.open(g.name) },
       { label: 'EDIT', sub: 'Name, artwork, colours, launch target', run: () => openEditor(g) },
+      { label: 'DETAILS', sub: 'Playtime, store info, screenshots', run: () => SV.details.game(g) },
+      { label: 'CHANGE ICON', sub: 'Your own picture for this game\'s icon', run: () => pick('image').then((f) => { if (f.url) { g.icon = f.url; changed('games'); toast('Icon changed'); } }) },
+      { label: 'ICON FROM A PROGRAM', sub: 'Use the icon of any .exe', run: () => pick('exe').then((f) => { if (f.icon) { g.icon = f.icon; changed('games'); toast('Icon changed'); } }) },
+      ...(g.icon ? [{ label: 'DEFAULT ICON', sub: 'Back to the detected icon', run: () => { g.icon = ''; changed('games'); } }] : []),
+      { label: 'CHANGE COVER', sub: 'Your own tile picture', run: () => pick('image').then((f) => { if (f.url) { g.cover = f.url; changed('games'); } }) },
       { label: 'MOVE LEFT', run: () => move(-1) },
       { label: 'MOVE RIGHT', run: () => move(1) },
       { label: 'MOVE TO FRONT', run: () => { cfg.games = [g, ...cfg.games.filter((x) => x !== g)]; sel = 0; changed('games'); } },
@@ -1874,9 +1968,12 @@
 
   // ------------------------------------------------------------------ boot + mode
 
+  let introPlayed = false;
   function boot() {
     const body = document.body;
     body.classList.remove('preinit');
+    // Your own intro video plays first, then the normal opening (or straight to HOME if that is off).
+    if (mode === 'home' && cfg.fx.introVideo && !introPlayed && SV.effects) { introPlayed = true; return SV.effects.intro(cfg.fx.introVideo, boot); }
     if (mode !== 'home' || !cfg.behavior.bootAnim) { body.classList.add('entered'); return; }
     $('#bootName').innerHTML = [...cfg.texts.brand].map((c, i) => `<span style="--i:${i}">${c === ' ' ? '&nbsp;' : esc(c)}</span>`).join('');
     $('#bootWelcome').textContent = cfg.texts.welcome ? `${cfg.texts.welcome}, ${cfg.profile.name}`.toUpperCase() : '';
@@ -2031,22 +2128,30 @@
     toast(`${keys.length} sound${keys.length > 1 ? 's' : ''} loaded: ${keys.join(', ')}`);
   });
   // Hover sounds: the cursor tick when the mouse lands on something you can pick.
-  // Only real mouse movement counts (not tiles sliding under a still cursor), and there is a short gap between
-  // ticks, so sweeping across a row plays a few clean ticks instead of a burst.
-  let hoverEl = null, hoverAt = 0, movedAt = 0, mx = -1, my = -1;
+  // Mouse hover ticks. Controllers and keys move one step at a time, but a mouse crosses ten buttons in a second,
+  // so a hover only ticks once the pointer settles on something (it isn't just passing over), and ticks are quiet,
+  // spaced out and capped per second. Tiles sliding under a still pointer never tick.
+  let hoverEl = null, hoverAt = 0, movedAt = 0, mx = -1, my = -1, dwell = 0, recent = [];
   document.addEventListener('mousemove', (e) => {
     if (Math.abs(e.clientX - mx) + Math.abs(e.clientY - my) < 3) return;
     mx = e.clientX; my = e.clientY; movedAt = performance.now();
   }, { passive: true });
   document.addEventListener('mouseover', (e) => {
     if (!cfg.sound.hover || mode !== 'home') return;
-    const t = e.target.closest('.btn, .func, .tile, [data-row], [data-card], .pcard, .ts-item, .lv-btn, .rail-card, .chip, .hc, .qc, .q-card, .mt');
+    const t = e.target.closest('.btn, .func, .tile, [data-row], [data-card], .pcard, .ts-item, .lv-btn, .rail-card, .chip, .hc, .qc, .q-card, .mt, .hint[data-act]');
     if (!t || t === hoverEl) return;
     hoverEl = t;
-    const now = performance.now();
-    if (now - movedAt > 80 || now - hoverAt < (cfg.sound.hoverGap ?? 140)) return;
-    hoverAt = now;
-    audio.play('nav');
+    clearTimeout(dwell);
+    if (performance.now() - movedAt > 80) return;
+    dwell = setTimeout(() => {
+      const now = performance.now();
+      if (hoverEl !== t || !t.matches(':hover')) return;
+      recent = recent.filter((x) => now - x < 1000);
+      if (now - hoverAt < (cfg.sound.hoverGap ?? 220) || recent.length >= 4) return;
+      hoverAt = now;
+      recent.push(now);
+      audio.play('hover', cfg.sound.hoverVolume ?? 0.6);
+    }, cfg.sound.hoverDwell ?? 70);
   }, { passive: true });
   host.on('notice', (m) => { audio.play(m.ok ? 'pick' : 'error'); toast(m.text, m.ok ? '' : 'bad'); });
   let discordStatus = 'Off';
@@ -2071,7 +2176,7 @@
     get cfg() { return cfg; },
     get mode() { return mode; },
     get launching() { return launching; },
-    $, el, esc, clamp, hash, shiftHue, meshSVG, toast, hints, at, prop, lastPlayed,
+    $, el, esc, clamp, hash, shiftHue, meshSVG, toast, hints, at, prop, lastPlayed, T,
     stack, push, pop, isTop, panel, row, heading, R, pick, ask, openMenu, confirmMenu, changed, save, openSettings, leaveTo, openTasks, refreshList, launchDirect, exitList,
     get inList() { return !!sub; },
     launchFx, endLaunch, armLaunchTimeout, renderStats, renderActions, artSrc, scanOf, isInstalled, launch, jumpTo, playtime,

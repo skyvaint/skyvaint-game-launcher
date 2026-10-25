@@ -677,6 +677,7 @@ case "open":
                 {
                     ["title"] = g["name"]?.ToString(), ["universeId"] = uni, ["placeId"] = g["rootPlaceId"]?.DeepClone(),
                     ["sub"] = $"{players:N0} PLAYING{liked}", ["url"] = $"https://www.roblox.com/games/{g["rootPlaceId"]}", ["image"] = "",
+                    ["playing"] = players, ["upVotes"] = up, ["downVotes"] = down,
                 };
             }).ToArray());
         }

@@ -24,7 +24,7 @@
     const root = el(`
       <div class="overlay full details"><div class="dt">
         <div class="dt-hero"><div class="dt-img"></div><div class="dt-shade"></div><div class="dt-cap"></div></div>
-        <div class="dt-main"><div class="dt-stats"></div><div class="dt-desc"></div><div class="dt-shots"></div></div>
+        <div class="dt-main"><div class="dt-stats"></div><div class="dt-ccu"></div><div class="dt-desc"></div><div class="dt-shots"></div></div>
         <div class="dt-btns"></div>
         <div class="hints">${hints([['confirm', 'Choose'], ['adjust', 'Move'], ['tabs', 'Screenshots'], ['move', 'Scroll'], ['back', 'Close']])}</div>
       </div></div>`);
@@ -38,7 +38,10 @@
       $('.dt-cap', root).innerHTML = `${model.icon ? `<img src="${esc(model.icon)}" alt="">` : ''}
         <div><div class="tag">${esc(model.tag || '')}</div><h2>${esc(model.title || '')}</h2>${model.by ? `<small>${esc(model.by)}</small>` : ''}</div>`;
       $('.dt-stats', root).innerHTML = (model.stats || []).filter((s) => s && s[1] != null && s[1] !== '')
-        .map(([k, v]) => `<div class="stat"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
+        .map(([k, v, hot]) => `<div class="stat ${hot ? 'hot' : ''}"><span>${esc(A.T(k))}</span><b>${esc(v)}</b></div>`).join('');
+      $('.dt-ccu', root).innerHTML = model.chart ? `<div class="tag">[ ${esc(A.T('PLAYERS OVER TIME'))} · ${esc(model.chartNote || '')} ]</div>${model.chart}` : '';
+      if (model.estimates && model.estimates.length) $('.dt-ccu', root).insertAdjacentHTML('beforeend', `<div class="tag dt-est-tag">[ ${esc(A.T('ESTIMATES'))} ]</div><div class="dt-stats dt-est">${model.estimates
+        .filter((e) => e[1]).map(([k, v, n]) => `<div class="stat"><span>${esc(A.T(k))}</span><b>${esc(v)}</b>${n ? `<small>${esc(A.T(n))}</small>` : ''}</div>`).join('')}</div>`);
       const desc = $('.dt-desc', root);
       desc.classList.toggle('loading', loading);
       desc.innerHTML = loading && !model.desc ? '<div class="tag">LOADING DETAILS…</div>'
@@ -78,16 +81,33 @@
   const friendsIn = (universeId) => (SV.friends ? SV.friends.list.filter((f) => f.state === SV.friends.IN_GAME && universeId && +f.universeId === +universeId) : []);
   const friendActions = (universeId) => friendsIn(universeId).slice(0, 3).map((f) => ({ label: 'JOIN ' + (f.displayName || f.name).toUpperCase(), run: () => SV.friends.join(f) }));
 
+  const ago = (ms) => { if (!ms) return ''; const h = (Date.now() - ms) / 3.6e6; return h < 1 ? Math.max(1, Math.round(h * 60)) + 'm ago' : h < 48 ? Math.round(h) + 'h ago' : Math.round(h / 24) + 'd ago'; };
   function robloxExtra(d) {
     const votes = (+d.upVotes || 0) + (+d.downVotes || 0), here = friendsIn(d.universeId);
+    const c = SV.ccu ? SV.ccu.stats(d.universeId) : null;
+    const ageDays = d.created ? Math.max(1, (Date.now() - new Date(d.created).getTime()) / 864e5) : 0;
+    const lifetimePerDay = ageDays && d.visits ? Math.round(+d.visits / ageDays) : 0;
+    const perDay = c && c.visitsPerDay ? c.visitsPerDay : 0;
+    const servers = d.maxPlayers && d.playing ? Math.ceil(+d.playing / +d.maxPlayers) : 0;
     return {
       title: d.name, desc: d.description, by: d.creator ? 'By ' + d.creator : '', shots: d.shots || [], icon: d.icon,
       stats: [
-        ['PLAYING NOW', num(d.playing)], ['VISITS', num(d.visits)], ['FAVOURITES', d.favorites != null ? num(d.favorites) : ''],
-        ['LIKED', votes ? Math.round((+d.upVotes / votes) * 100) + '%' : ''], ['SERVER SIZE', d.maxPlayers ? String(d.maxPlayers) : ''],
+        ['CCU (PLAYING NOW)', num(d.playing), true], ['PEAK CCU (SEEN)', c ? num(Math.max(c.peak, +d.playing || 0)) : ''], ['24H PEAK', c && c.peak24 ? num(c.peak24) : ''],
+        ['24H AVERAGE', c && c.avg24 ? num(c.avg24) : ''], ['24H LOW', c && c.samples > 2 ? num(c.low24) : ''],
+        ['VISITS', num(d.visits)], ['FAVOURITES', d.favorites != null ? num(d.favorites) : ''],
+        ['LIKED', votes ? Math.round((+d.upVotes / votes) * 100) + '%' : ''], ['VOTES', votes ? num(votes) : ''], ['SERVER SIZE', d.maxPlayers ? String(d.maxPlayers) : ''],
         ['GENRE', d.genre && d.genre !== 'All' ? d.genre.toUpperCase() : ''], ['UPDATED', date(d.updated)], ['CREATED', date(d.created)],
         ['FRIENDS HERE', here.length ? here.map((f) => f.displayName || f.name).join(', ') : ''],
       ],
+      estimates: [
+        ['ACTIVE SERVERS', servers ? '~' + num(servers) : '', 'Players ÷ server size'],
+        ['VISITS PER DAY', perDay ? '~' + num(perDay) : lifetimePerDay ? '~' + num(lifetimePerDay) : '', perDay ? 'From the visits seen here' : 'Lifetime average'],
+        ['VISITS PER MONTH', perDay ? '~' + num(perDay * 30) : lifetimePerDay ? '~' + num(lifetimePerDay * 30) : '', ''],
+        ['FAVOURITES PER 1K VISITS', d.favorites && d.visits ? (+d.favorites / +d.visits * 1000).toFixed(1) : '', 'How many visitors keep it'],
+        ['PEAK SEEN', c && c.peakAt ? ago(c.peakAt) : '', ''],
+      ],
+      chart: c && c.series.length > 1 ? SV.ccu.chart(d.universeId) : '',
+      chartNote: c ? `${c.samples} ${A.T('SAMPLES SINCE')} ${new Date(c.since).toLocaleDateString()}` : '',
     };
   }
 
@@ -123,6 +143,29 @@
       show(model);
     },
 
+    // A Steam store item that isn't in your library (rows under HOME, DISCOVER).
+    steam(appId, name, image, item = {}) {
+      const owned = A.cfg.games.find((g) => g.scanId === 'steam_' + appId);
+      if (owned) return SV.details.game(owned);
+      const model = {
+        tag: '[ STEAM STORE ]', title: name, hero: image, stats: [['PRICE', item.sub || '']],
+        actions: [
+          { label: 'STORE PAGE', primary: true, run: () => host.send('openUrl', { url: SV.steam.installed ? `steam://store/${appId}` : `https://store.steampowered.com/app/${appId}` }) },
+          { label: 'OPEN IN BROWSER', run: () => host.send('openUrl', { url: `https://store.steampowered.com/app/${appId}` }) },
+        ],
+      };
+      model.load = () => lookup({ kind: 'steam', appId }).then((m) => {
+        if (m.error || !m.details) return { note: m.error || '' };
+        const d = m.details;
+        return {
+          desc: d.description, shots: d.shots || [], by: d.developers ? 'By ' + d.developers : '', hero: (d.shots || [])[0] || image,
+          stats: [...model.stats, ['RELEASED', d.released || ''], ['GENRES', (d.genres || '').toUpperCase()], ['METACRITIC', d.metacritic != null ? String(d.metacritic) : ''],
+            ['REVIEWS', d.recommendations ? num(d.recommendations) : ''], ['PUBLISHER', d.publishers || '']],
+        };
+      });
+      show(model);
+    },
+
     // One of your saved Roblox places.
     place(p) {
       const i = SV.roblox.places().indexOf(p);
@@ -146,7 +189,7 @@
         if (m.error || !m.details) return { note: m.error || "Couldn't reach Roblox." };
         const extra = robloxExtra(m.details);
         extra.stats = [...model.stats, ...extra.stats];
-        extra.hero = model.hero || (extra.shots || [])[0];
+        extra.hero = x.thumb || (extra.shots || [])[0] || model.hero;
         if (!x.universeId) extra.actions = [model.actions[0], ...friendActions(m.details.universeId), ...model.actions.slice(1)];
         return extra;
       });

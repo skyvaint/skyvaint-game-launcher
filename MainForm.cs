@@ -1658,6 +1658,16 @@ public sealed partial class MainForm : Form
 					e.Response = env.CreateWebResourceResponse(null, 404, "Not Found", "");
 					return;
 				}
+				// Videos (intro, video backdrop) are streamed from the file instead of being read into memory.
+				string video = Path.GetExtension(name).ToLowerInvariant() switch { ".mp4" or ".m4v" => "video/mp4", ".webm" => "video/webm", ".mov" => "video/quicktime", _ => "" };
+				if (video != "")
+				{
+					CoreWebView2WebResourceResponse vr = env.CreateWebResourceResponse(new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read), 200, "OK", "");
+					vr.Headers.AppendHeader("Content-Type", video);
+					vr.Headers.AppendHeader("Access-Control-Allow-Origin", "*");
+					e.Response = vr;
+					return;
+				}
 				byte[] bytes = File.ReadAllBytes(file);
 				CoreWebView2WebResourceResponse response = env.CreateWebResourceResponse(new MemoryStream(bytes), 200, "OK", "");
 				response.Headers.AppendHeader("Content-Type", MimeOf(name, bytes));
@@ -2590,7 +2600,7 @@ public sealed partial class MainForm : Form
 		}
 		OpenFileDialog openFileDialog = new OpenFileDialog();
 		OpenFileDialog openFileDialog2 = openFileDialog;
-		string filter = ((kind == "image") ? "Images|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp" : ((!(kind == "audio")) ? "Games and shortcuts|*.exe;*.lnk;*.url;*.bat|All files|*.*" : "Audio|*.mp3;*.wav;*.ogg;*.m4a;*.flac"));
+		string filter = kind == "video" ? "Videos|*.mp4;*.webm;*.m4v;*.mov" : ((kind == "image") ? "Images|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico" : ((!(kind == "audio")) ? "Games and shortcuts|*.exe;*.lnk;*.url;*.bat|All files|*.*" : "Audio|*.mp3;*.wav;*.ogg;*.m4a;*.flac"));
 		openFileDialog2.Filter = filter;
 		using OpenFileDialog dlg = openFileDialog;
 		if (dlg.ShowDialog(this) == DialogResult.OK)

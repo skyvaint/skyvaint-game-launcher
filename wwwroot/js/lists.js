@@ -46,11 +46,11 @@
       heroTag: p.playing ? `MODE: ${num(p.playing)} PLAYING` : 'MODE: READY',
       tagline: p.creator ? `By ${p.creator}${p.visits ? ' · ' + num(p.visits) + ' visits' : ''}` : 'Pick accounts, then join',
       stats: [
-        ['SERVER', p.server ? 'PRIVATE' : 'PUBLIC'],
+        ['CCU', p.playing ? num(p.playing) : '—'],
+        ['PEAK SEEN', peakOf(p.universeId, p.playing)],
         ['LAST PLAYED', A.lastPlayed(p.lastPlayed)],
-        ['PLAYING NOW', p.playing ? num(p.playing) : '—'],
-        ['PLACE ID', String(p.placeId)],
-        SV.roblox.stat(),
+        ['SERVER', p.server ? 'PRIVATE' : 'PUBLIC'],
+        friendsLine(p.universeId) || SV.roblox.stat(),
       ],
       actions: [
         { label: 'PLAY', primary: true, run: () => SV.roblox.openAt(parent, i) },
@@ -60,6 +60,30 @@
         { label: 'OPTIONS', run: () => placeOptions(p) },
       ],
       _place: p,
+    };
+  }
+
+  const peakOf = (uni, now) => { const c = SV.ccu && SV.ccu.stats(uni); return c ? num(Math.max(c.peak, +now || 0)) : '—'; };
+  const friendsLine = (uni) => {
+    const n = SV.friends && uni ? SV.friends.list.filter((f) => f.state === SV.friends.IN_GAME && +f.universeId === +uni).length : 0;
+    return n ? ['FRIENDS HERE', String(n)] : null;
+  };
+
+  // Trending games follow your saved ones on the Roblox shelf, so there is always something new to try.
+  let trending = [];
+  host.on('discover', (m) => { trending = ((m.roblox && m.roblox.trending) || []).slice(0, 16); if (SV.app.inList) refresh(); });
+  function trendItem(parent, x) {
+    const pl = { placeId: x.placeId, name: x.title, icon: x.image };
+    return {
+      id: 'trend_' + x.universeId, scanId: '-', platform: 'roblox', name: x.title, cover: x.image, hero: x.image, icon: x.image,
+      foot: 'TRENDING', tag: '[ ROBLOX · TRENDING ]', heroTag: `MODE: ${num(x.playing)} PLAYING`, tagline: x.sub,
+      stats: [['CCU', num(x.playing)], ['PEAK SEEN', peakOf(x.universeId, x.playing)], ['LIKED', x.upVotes + x.downVotes ? Math.round(x.upVotes / (x.upVotes + x.downVotes) * 100) + '%' : '—'], friendsLine(x.universeId) || ['PLACE ID', String(x.placeId)]],
+      actions: [
+        { label: 'PLAY', primary: true, run: () => SV.roblox.playPlace(pl) },
+        { label: 'DETAILS', run: () => SV.details.roblox({ ...pl, universeId: x.universeId }) },
+        { label: 'SAVE', run: () => { if (!SV.roblox.places().some((p) => +p.placeId === +x.placeId)) { SV.roblox.places().push({ placeId: +x.placeId, name: x.title, icon: x.image || '' }); A.changed(); refresh(); } toast(x.title + ' saved to your games'); } },
+      ],
+      _trend: x,
     };
   }
 
@@ -79,9 +103,14 @@
 
   const roblox = {
     title: 'ROBLOX', label: 'YOUR GAMES',
-    items(parent) { ensureArt(); return SV.roblox.places().map((p, i) => placeItem(parent, p, i)); },
+    items(parent) {
+      ensureArt();
+      if (!trending.length) host.send('discover', { fresh: false });
+      const saved = SV.roblox.places(), mine = new Set(saved.map((p) => +p.placeId));
+      return [...saved.map((p, i) => placeItem(parent, p, i)), ...trending.filter((x) => !mine.has(+x.placeId)).map((x) => trendItem(parent, x))];
+    },
     add: { label: 'ADD PLACE', run: () => SV.roblox.addPlace(refresh) },
-    options: (item) => placeOptions(item._place),
+    options: (item) => (item._place ? placeOptions(item._place) : item._trend ? A.openMenu(item.name, item.actions.map((a) => ({ label: a.label, run: a.run }))) : null),
     extra: (parent) => [{ label: 'ACCOUNTS', run: () => SV.roblox.open(parent) }],
   };
 
