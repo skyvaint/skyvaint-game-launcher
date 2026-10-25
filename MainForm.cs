@@ -1597,15 +1597,48 @@ public sealed partial class MainForm : Form
 	/// it, no frame-rate limit or v-sync (read from the saved config, so it applies from the next start).</summary>
 	private static string BrowserArgs()
 	{
-		var args = "--autoplay-policy=no-user-gesture-required --enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist --disable-background-timer-throttling";
+		// Safe graphics (see StartupGuard) leaves out the GPU tricks, which some drivers draw as a black window.
+		bool uncapped = false, dgpu = false;
 		try
 		{
 			var saved = ReadJson(ConfigPath);
-			if (saved?["perf"]?["uncapped"]?.GetValue<bool>() == true) args += " --disable-frame-rate-limit --disable-gpu-vsync";
-			if (saved?["perf"]?["dgpu"]?.GetValue<bool>() == true) args += " --force_high_performance_gpu";
+			uncapped = saved?["perf"]?["uncapped"]?.GetValue<bool>() == true;
+			dgpu = saved?["perf"]?["dgpu"]?.GetValue<bool>() == true;
 		}
 		catch { }
-		return args;
+		return StartupGuard.BrowserArgs(uncapped, dgpu);
+	}
+
+	/// <summary>Runs one part of the start and logs it if it fails, handing back <paramref name="fallback"/>.</summary>
+	private static T Guarded<T>(string what, Func<T> get, T fallback)
+	{
+		try { return get(); }
+		catch (Exception ex) { StartupGuard.Log("Start: " + what + " failed", ex); return fallback; }
+	}
+
+	/// <summary>If the page hasn't come up after a while, say so instead of leaving a black window, and offer a
+	/// restart in safe graphics.</summary>
+	private void WatchStart()
+	{
+		var watch = new System.Windows.Forms.Timer { Interval = 25000 };
+		watch.Tick += (_, _) =>
+		{
+			watch.Stop();
+			watch.Dispose();
+			if (pageReady || quitting) return;
+			StartupGuard.Log("The page didn't load within 25 seconds.");
+			base.Opacity = 1.0;
+			if (!StartupGuard.SafeGraphics)
+			{
+				var answer = MessageBox.Show(this, "The launcher's screen didn't load. This usually comes from the graphics driver.\n\nRestart in safe graphics mode?", Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+				if (answer == DialogResult.Yes) Restart(); // the start is still marked unfinished, so the next one uses safe graphics
+			}
+			else
+			{
+				MessageBox.Show(this, "The launcher's screen didn't load, even in safe graphics mode.\n\nPlease send this file to the developer:\n" + StartupGuard.LogFile, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		};
+		watch.Start();
 	}
 
 	private static CoreWebView2EnvironmentOptions WebOptions()
@@ -1623,6 +1656,7 @@ public sealed partial class MainForm : Form
 			Close();
 			return;
 		}
+		StartupGuard.BeginStart();
 		try
 		{
 			CoreWebView2EnvironmentOptions options = ((DebugPort > 0) ? new CoreWebView2EnvironmentOptions(BrowserArgs() + $" --remote-debugging-port={DebugPort}") : WebOptions());
@@ -1632,7 +1666,8 @@ public sealed partial class MainForm : Form
 		}
 		catch (Exception ex)
 		{
-			MessageBox.Show("Could not start the WebView2 runtime:\n\n" + ex.Message, Text);
+			StartupGuard.Log("WebView2 failed to start", ex);
+			MessageBox.Show("Could not start the WebView2 runtime:\n\n" + ex.Message + "\n\nDetails: " + StartupGuard.LogFile, Text);
 			quitting = true;
 			Close();
 			return;
@@ -1654,9 +1689,15 @@ public sealed partial class MainForm : Form
 			{
 				OnMessage(JsonNode.Parse(e.WebMessageAsJson).AsObject());
 			}
-			catch (Exception)
+			catch (Exception ex)
 			{
+				// Used to vanish silently; a failure while answering "ready" left the screen black for good.
+				StartupGuard.Log("Message from the page failed: " + (e.WebMessageAsJson.Length > 200 ? e.WebMessageAsJson[..200] : e.WebMessageAsJson), ex);
 			}
+		};
+		coreWebView.ProcessFailed += delegate(object? _, CoreWebView2ProcessFailedEventArgs e)
+		{
+			StartupGuard.Log($"WebView2 process failed: {e.ProcessFailedKind} ({e.Reason}, exit {e.ExitCode})");
 		};
 		coreWebView.NewWindowRequested += delegate(object? _, CoreWebView2NewWindowRequestedEventArgs e)
 		{
@@ -1664,6 +1705,7 @@ public sealed partial class MainForm : Form
 		};
 		PrepareClips();
 		coreWebView.Navigate("https://skyvaint.example/index.html");
+		WatchStart();
 		EnsureDock();
 		RegisterHotKey(base.Handle, 1, 3u, 36u);
 		poll.Start();
@@ -1915,23 +1957,30 @@ public sealed partial class MainForm : Form
 		{
 		case "ready":
 			pageReady = true;
-			steamSeen = SteamAccounts.SignedIn();
+			StartupGuard.Reached();
+			// Each part is fetched on its own: one failing (a scan, a store that isn't installed the way we expect on
+			// someone else's PC) must not stop the page from starting, or the screen stays black.
+			steamSeen = Guarded("Steam sign-in", () => SteamAccounts.SignedIn(), null);
 			Send(new JsonObject
 			{
 				["type"] = "init",
 				["config"] = config?.DeepClone(),
-				["stats"] = Stats().DeepClone(),
-				["scan"] = ScanGames(),
+				["stats"] = Guarded("stats", () => Stats().DeepClone(), new JsonObject()),
+				["scan"] = Guarded<JsonNode?>("game scan", () => ScanGames(), new JsonArray()),
 				["mode"] = mode,
-				["autostart"] = IsAutostart(),
-				["epic"] = EpicState(),
-				["steam"] = SteamState(),
-				["robloxImport"] = RobloxImport()
+				["autostart"] = Guarded("autostart", () => IsAutostart(), false),
+				["epic"] = Guarded<JsonNode?>("Epic", () => EpicState(), null),
+				["steam"] = Guarded<JsonNode?>("Steam", () => SteamState(), null),
+				["robloxImport"] = Guarded<JsonNode?>("Roblox import", () => RobloxImport(), null),
+				["safeGraphics"] = StartupGuard.SafeGraphics
 			});
-			SetMode(mode, notify: false);
+			Guarded("show HOME", () => { SetMode(mode, notify: false); return true; }, false);
 			base.Opacity = 1.0;
-			PollGames();
-			OnPageReadyUpdates();
+			Guarded("first game poll", () => { PollGames(); return true; }, false);
+			Guarded("update checks", () => { OnPageReadyUpdates(); return true; }, false);
+			break;
+		case "clientError":
+			StartupGuard.Log("Page error: " + Str("text"));
 			break;
 		case "saveConfig":
 		{

@@ -21,8 +21,9 @@
     const s = setup();
     // First start: show it if anything at all is missing. Later: only for recommended apps not skipped.
     const ask = !s.seen ? missing().length > 0 : missing().some((i) => i.recommended && !s.skipped.includes(i.id));
-    if (!s.seen) { s.seen = true; A.save(); }
-    if (ask && A.mode === 'home' && !A.stack.length) open();
+    const first = !s.seen;
+    if (ask && A.mode === 'home' && !A.stack.length) open(first);
+    if (first) { s.seen = true; A.save(); }
   });
 
   // Back from a download page / installer: look again so freshly installed apps tick off.
@@ -50,12 +51,12 @@
     return out;
   }
 
-  function open() {
+  function open(first) {
     if (view) return;
     if (!items.length) { wantOpen = true; host.send('setupCheck', {}); return; }
     const root = el(`
       <div class="overlay"><div class="sheet">
-        <div class="sheet-head"><div><div class="tag">[ ${setup().seen ? 'APPS ON THIS PC' : 'FIRST START'} ]</div><h2>SET UP YOUR PC</h2></div></div>
+        <div class="sheet-head"><div><div class="tag">[ ${first === true ? 'FIRST START' : 'APPS ON THIS PC'} ]</div><h2>SET UP YOUR PC</h2></div></div>
         <div class="sheet-body"></div>
         <div class="hints">${hints([['confirm', 'Choose'], ['back', 'Close']])}</div>
       </div></div>`);

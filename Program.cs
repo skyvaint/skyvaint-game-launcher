@@ -49,6 +49,11 @@ internal static class Program
 				return;
 			}
 			ApplicationConfiguration.Initialize();
+				// Crashes go to %LOCALAPPDATA%\SkyvaintGameLauncher\logs\launcher.log instead of vanishing.
+				StartupGuard.ForceSafe = args.Contains("--safe-graphics");
+				Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+				Application.ThreadException += (_, e) => StartupGuard.Log("Unhandled error", e.Exception);
+				AppDomain.CurrentDomain.UnhandledException += (_, e) => StartupGuard.Log("Fatal error", e.ExceptionObject as Exception);
 			int port = Array.IndexOf(args, "--debug-port");
 			MainForm.DebugPort = ((port >= 0 && port + 1 < args.Length && int.TryParse(args[port + 1], out var n)) ? n : 0);
 			Application.Run(new MainForm(wake, args.Contains("--background"), args.Contains("--dev")));
