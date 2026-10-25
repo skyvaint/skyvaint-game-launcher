@@ -307,6 +307,7 @@ public sealed partial class MainForm
         {
             case "open":
                 OpenNexusItem(id, m["bar"]?.ToString() ?? "main");
+                OpenedFromBar();
                 break;
             case "manage":
                 SetMode("home");
@@ -448,19 +449,54 @@ public sealed partial class MainForm
     // The desktop (or the taskbar and its pop-ups) is in front: what "desktop only" bars wait for.
     static readonly HashSet<string> DesktopClasses = new(StringComparer.OrdinalIgnoreCase)
         { "Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "NotifyIconOverflowWindow", "TopLevelWindowForOverflowXamlIsland", "XamlExplorerHostIslandWindow" };
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc proc, IntPtr param);
+    delegate bool EnumProc(IntPtr hWnd, IntPtr param);
+    [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hWnd, uint cmd);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] static extern int GetWindowLong32(IntPtr hWnd, int index);
+    [DllImport("user32.dll", EntryPoint = "GetWindowTextLengthW")] static extern int GetTitleLength(IntPtr hWnd);
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hWnd, int attr, out int value, int size);
+
+    /// <summary>A real app window someone would be looking at: shown, not minimized, not hidden by Windows
+    /// (cloaked), not a tool window or a pop-up owned by another window, and with a title.</summary>
+    bool IsAppWindow(IntPtr h)
+    {
+        if (!IsWindowVisible(h) || IsIconic(h) || GetTitleLength(h) == 0) return false;
+        if (GetWindow(h, 4 /* GW_OWNER */) != IntPtr.Zero) return false;
+        if ((GetWindowLong32(h, -20 /* GWL_EXSTYLE */) & 0x80 /* WS_EX_TOOLWINDOW */) != 0) return false;
+        if (DwmGetWindowAttribute(h, 14 /* DWMWA_CLOAKED */, out int cloaked, 4) == 0 && cloaked != 0) return false;
+        if (docks.Values.Any(d => d.Handle == h)) return false;
+        if (h == Handle && mode != "home") return false; // the mini widget doesn't cover the desktop
+        var name = new System.Text.StringBuilder(256);
+        GetClassName(h, name, name.Capacity);
+        if (DesktopClasses.Contains(name.ToString())) return false;
+        return GetWindowRect(h, out var r) && r.Right - r.Left > 120 && r.Bottom - r.Top > 80;
+    }
+
+    /// <summary>True when the desktop is what you see: it (or the taskbar) has the focus, the window in front was
+    /// just minimized, or no app window is open at all (everything minimized or closed).</summary>
     bool DesktopInFront()
     {
         var front = GetForegroundWindow();
-        if (front == IntPtr.Zero || docks.Values.Any(d => d.Handle == front)) return true;
+        if (front == IntPtr.Zero || docks.Values.Any(d => d.Handle == front)) return !AnyAppWindow();
         var name = new System.Text.StringBuilder(256);
         GetClassName(front, name, name.Capacity);
-        return DesktopClasses.Contains(name.ToString());
+        if (DesktopClasses.Contains(name.ToString())) return true;
+        if (IsIconic(front) || !IsWindowVisible(front)) return !AnyAppWindow();
+        return !AnyAppWindow();
+    }
+
+    bool AnyAppWindow()
+    {
+        bool any = false;
+        EnumWindows((h, _) => { if (IsAppWindow(h)) { any = true; return false; } return true; }, IntPtr.Zero);
+        return any;
     }
 
     /// <summary>Shows or hides each bar for what is in front right now (desktop-only bars, fullscreen games).</summary>
     void UpdateBarVisibility()
     {
         bool? full = null, desk = null;
+        bool opening = DateTime.Now < openingUntil;
         foreach (var (id, bar) in Bars())
         {
             if (!docks.TryGetValue(id, out var d)) continue;
@@ -469,7 +505,7 @@ public sealed partial class MainForm
             var vis = bar["visibility"]?.ToString() ?? "always";
             // "desktop": only on the desktop. "apps": everywhere except the desktop (where the desktop bars take over).
             bool hide = (hideInGame && (full ??= SomethingFullscreen()))
-                || (vis == "desktop" && !(desk ??= DesktopInFront()))
+                || (vis == "desktop" && (opening || !(desk ??= DesktopInFront())))
                 || (vis == "apps" && (desk ??= DesktopInFront()));
             d.Suppress(hide);
         }
@@ -480,12 +516,33 @@ public sealed partial class MainForm
     delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int obj, int child, uint thread, uint time);
     [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr module, WinEventProc proc, uint pid, uint thread, uint flags);
     WinEventProc? foregroundProc;
-    IntPtr foregroundHook;
+    IntPtr foregroundHook, minimizeHook;
+    DateTime openingUntil = DateTime.MinValue;
+    readonly System.Windows.Forms.Timer barRecheck = new() { Interval = 350 };
     void WatchForeground()
     {
         if (foregroundHook != IntPtr.Zero) return;
-        foregroundProc = (_, _, _, _, _, _, _) => { if (docks.Count > 0) UpdateBarVisibility(); };
+        // Windows changes its mind a few times while a window minimizes or closes, so look again a moment later too.
+        barRecheck.Tick += (_, _) => { barRecheck.Stop(); if (docks.Count > 0) UpdateBarVisibility(); };
+        foregroundProc = (_, _, _, _, _, _, _) =>
+        {
+            if (docks.Count == 0) return;
+            UpdateBarVisibility();
+            barRecheck.Stop(); barRecheck.Start();
+        };
         foregroundHook = SetWinEventHook(3 /* EVENT_SYSTEM_FOREGROUND */, 3, IntPtr.Zero, foregroundProc, 0, 0, 0 /* out of context */);
+        minimizeHook = SetWinEventHook(0x16 /* EVENT_SYSTEM_MINIMIZESTART */, 0x17 /* MINIMIZEEND */, IntPtr.Zero, foregroundProc, 0, 0, 0);
+    }
+
+    /// <summary>Something was opened from a bar: desktop-only bars fade away now, before its window appears.
+    /// If nothing comes to the front after a few seconds, they come back.</summary>
+    void OpenedFromBar()
+    {
+        openingUntil = DateTime.Now.AddSeconds(4);
+        UpdateBarVisibility();
+        var back = new System.Windows.Forms.Timer { Interval = 4100 };
+        back.Tick += (_, _) => { back.Stop(); back.Dispose(); UpdateBarVisibility(); };
+        back.Start();
     }
 
     void PollExtras()
