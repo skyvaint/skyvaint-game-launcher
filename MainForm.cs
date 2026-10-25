@@ -2137,7 +2137,7 @@ public sealed partial class MainForm : Form
 		UnregisterHotKey(base.Handle, 1);
 		tray.Visible = false;
 		try { discord.SetActivity(null); discord.Close(); } catch { }
-		dock?.Close();
+		foreach (var d in docks.Values) d.Close();
 		SaveState();
 		base.OnFormClosing(e);
 	}

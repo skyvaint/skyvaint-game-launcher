@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.Web.WebView2.Core;
@@ -10,7 +11,10 @@ namespace Skyvaint;
 public sealed partial class MainForm
 {
     CoreWebView2Environment? mainEnv;
-    DockForm? dock;
+    // One window per NEXUS bar: "main" is the original bar (config.nexus), the others live in config.nexus.bars.
+    readonly Dictionary<string, DockForm> docks = new();
+    readonly Dictionary<string, string> dockSigs = new();
+    DockForm? dock => docks.GetValueOrDefault("main") ?? docks.Values.FirstOrDefault();
     string iconSignature = "", dockSignature = "", presenceSignature = "";
     readonly DiscordRpc discord = new();
     readonly Dictionary<string, DateTime> runningSince = new();
@@ -70,7 +74,7 @@ public sealed partial class MainForm
                 return true;
 
             case "dockDump" when DebugPort > 0:
-                Send(new JsonObject { ["type"] = "notice", ["ok"] = true, ["text"] = dock?.Dump(Path.Combine(Path.GetTempPath(), "sv-dock.png")) ?? "no dock" });
+                Send(new JsonObject { ["type"] = "notice", ["ok"] = true, ["text"] = string.Join(" | ", docks.Select(kv => kv.Key + ":" + kv.Value.Handle + ":" + kv.Value.Visible + ":" + kv.Value.Bounds)) + " || forms=" + string.Join(",", Application.OpenForms.OfType<DockForm>().Select(f => f.Handle + ":" + f.Visible)) });
                 return true;
 
             case "discordReconnect":
@@ -94,7 +98,7 @@ public sealed partial class MainForm
             var old = Icon;
             Icon = AppIcon.ToIcon(AppIcon.Draw(64, config, MediaDir));
             tray.Icon = AppIcon.ToIcon(AppIcon.Draw(32, config, MediaDir));
-            if (dock != null) dock.Icon = Icon;
+            foreach (var d in docks.Values) d.Icon = Icon;
         }
         catch { }
         try
@@ -119,7 +123,7 @@ public sealed partial class MainForm
             }
         }
         catch { }
-        dockSignature = "";
+        dockSigs.Clear();
         PushDock();
     }
 
@@ -261,32 +265,36 @@ public sealed partial class MainForm
 
     // ---------- NEXUS desktop bar ----------
 
-    IEnumerable<JsonObject> NexusItems() => (config?["nexus"]?["items"] as JsonArray)?.OfType<JsonObject>() ?? [];
-
-    bool NexusOn()
+    /// <summary>Every bar: the main one first, then the extra bars, each with its own settings and items.</summary>
+    IEnumerable<(string id, JsonObject bar)> Bars()
     {
-        try { return config?["nexus"]?["enabled"]?.GetValue<bool>() ?? false; } catch { return false; }
+        if (config?["nexus"] is JsonObject main)
+        {
+            yield return ("main", main);
+            foreach (var b in (main["bars"] as JsonArray)?.OfType<JsonObject>() ?? [])
+                if (b["id"]?.ToString() is { Length: > 0 } id) yield return (id, b);
+        }
     }
+    IEnumerable<JsonObject> ItemsOf(JsonObject bar) => (bar["items"] as JsonArray)?.OfType<JsonObject>() ?? [];
+    IEnumerable<JsonObject> NexusItems() => Bars().SelectMany(b => ItemsOf(b.bar));
+    static bool BarOn(JsonObject bar) { try { return bar["enabled"]?.GetValue<bool>() ?? false; } catch { return false; } }
 
+    /// <summary>Opens a window for every bar that is switched on and closes the rest.</summary>
     async void EnsureDock()
     {
         if (mainEnv == null) return;
-        if (!NexusOn())
+        var wanted = Bars().Where(b => BarOn(b.bar)).Select(b => b.id).ToHashSet();
+        foreach (var id in docks.Keys.Where(id => !wanted.Contains(id)).ToList())
         {
-            if (dock != null)
-            {
-                dock.Close();
-                dock.Dispose();
-                dock = null;
-                dockSignature = "";
-            }
-            return;
+            docks[id].Close();
+            docks[id].Dispose();
+            docks.Remove(id);
+            dockSigs.Remove(id);
         }
-        if (dock == null)
-        {
-            dock = new DockForm(this, LocalImageFile, CacheDir) { Icon = Icon };
-            await Task.Yield();
-        }
+        bool made = false;
+        foreach (var id in wanted)
+            if (!docks.ContainsKey(id)) { docks[id] = new DockForm(this, LocalImageFile, CacheDir) { Icon = Icon, BarId = id }; made = true; }
+        if (made) await Task.Yield();
         PushDock(force: true);
     }
 
@@ -295,17 +303,17 @@ public sealed partial class MainForm
         var id = m["id"]?.ToString() ?? "";
         switch (m["type"]?.ToString())
         {
-case "open":
-                OpenNexusItem(id);
+            case "open":
+                OpenNexusItem(id, m["bar"]?.ToString() ?? "main");
                 break;
             case "manage":
                 SetMode("home");
-                Send(new JsonObject { ["type"] = "openNexus" });
+                Send(new JsonObject { ["type"] = "openNexus", ["bar"] = m["bar"]?.ToString() ?? "main" });
                 break;
             case "remove":
             case "move":
                 // The page owns the settings; let it make the change and save, which updates the bar.
-                Send(new JsonObject { ["type"] = "nexusEdit", ["op"] = m["type"]?.ToString(), ["id"] = id, ["d"] = m["d"]?.DeepClone() });
+                Send(new JsonObject { ["type"] = "nexusEdit", ["op"] = m["type"]?.ToString(), ["id"] = id, ["d"] = m["d"]?.DeepClone(), ["bar"] = m["bar"]?.ToString() ?? "main" });
                 break;
             case "reveal":
                 var target = NexusItems().FirstOrDefault(i => i["id"]?.ToString() == id)?["target"]?.ToString();
@@ -314,14 +322,40 @@ case "open":
         }
     }
 
-    void OpenNexusItem(string id)
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int cmd);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder name, int max);
+
+    /// <summary>Brings an already running app to the front. False when it isn't running (or has no window).</summary>
+    static bool FocusRunning(string process)
+    {
+        if (string.IsNullOrEmpty(process)) return false;
+        foreach (var p in Process.GetProcessesByName(process))
+        {
+            using (p)
+            {
+                var h = p.MainWindowHandle;
+                if (h == IntPtr.Zero) continue;
+                if (IsIconic(h)) ShowWindow(h, 9); // SW_RESTORE
+                SetForegroundWindow(h);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void OpenNexusItem(string id, string barId = "main")
     {
         var item = NexusItems().FirstOrDefault(i => i["id"]?.ToString() == id);
         if (item == null) return;
         var kind = item["kind"]?.ToString();
         var target = item["target"]?.ToString() ?? "";
+        // How it opens: the item's own choice, else the bar's (normal, maximized, minimized, or bring an open one forward).
+        var bar = Bars().FirstOrDefault(b => b.id == barId).bar;
+        var launch = item["launchMode"]?.ToString() is { Length: > 0 } own && own != "bar" ? own : bar?["launchMode"]?.ToString() ?? "normal";
         try
         {
+            if (launch == "focus" && kind == "app" && FocusRunning(item["process"]?.ToString() ?? "")) return;
             if (kind == "home") SetMode("home");
             else if (kind == "game") TrayLaunch(item["gameId"]?.ToString() ?? "");
             else if (kind == "url")
@@ -331,7 +365,7 @@ case "open":
             }
             else
             {
-                var psi = new ProcessStartInfo(target) { UseShellExecute = true };
+                var psi = new ProcessStartInfo(target) { UseShellExecute = true, WindowStyle = launch switch { "maximized" => ProcessWindowStyle.Maximized, "minimized" => ProcessWindowStyle.Minimized, _ => ProcessWindowStyle.Normal } };
                 var args = item["args"]?.ToString();
                 if (!string.IsNullOrWhiteSpace(args)) psi.Arguments = args;
                 if (File.Exists(target)) psi.WorkingDirectory = Path.GetDirectoryName(target)!;
@@ -344,42 +378,42 @@ case "open":
         }
     }
 
-    /// <summary>Sends the bar its items and which of them are running; only when something changed.</summary>
+    /// <summary>Sends each bar its items and which of them are running; only when something changed.</summary>
     void PushDock(bool force = false)
     {
-        if (dock == null) return;
-        var nexus = config?["nexus"];
+        if (docks.Count == 0) return;
         HashSet<string>? live = null;
-        var items = new JsonArray();
-        foreach (var i in NexusItems())
+        foreach (var (id, bar) in Bars())
         {
-            bool on = false;
-            var kind = i["kind"]?.ToString();
-            if (kind == "game") on = running.Contains(i["gameId"]?.ToString() ?? "");
-            else if (kind == "home") on = Visible && mode == "home";
-            else if (i["process"]?.ToString() is { Length: > 0 } proc)
+            if (!docks.TryGetValue(id, out var d)) continue;
+            var items = new JsonArray();
+            foreach (var i in ItemsOf(bar))
             {
-                live ??= LiveProcessNames();
-                on = live.Contains(proc);
+                bool on = false;
+                var kind = i["kind"]?.ToString();
+                if (kind == "game") on = running.Contains(i["gameId"]?.ToString() ?? "");
+                else if (kind == "home") on = Visible && mode == "home";
+                else if (i["process"]?.ToString() is { Length: > 0 } proc)
+                {
+                    live ??= LiveProcessNames();
+                    on = live.Contains(proc);
+                }
+                items.Add(new JsonObject
+                {
+                    ["id"] = i["id"]?.DeepClone(), ["name"] = i["name"]?.DeepClone(),
+                    ["icon"] = kind == "home" && (i["icon"]?.ToString() ?? "") == "" ? appIconUrl : i["icon"]?.DeepClone(),
+                    ["kind"] = kind, ["running"] = on,
+                });
             }
-            items.Add(new JsonObject
-            {
-                ["id"] = i["id"]?.DeepClone(), ["name"] = i["name"]?.DeepClone(),
-                ["icon"] = kind == "home" && (i["icon"]?.ToString() ?? "") == "" ? appIconUrl : i["icon"]?.DeepClone(),
-                ["kind"] = kind, ["running"] = on,
-            });
+            var settings = (JsonObject)bar.DeepClone();
+            settings.Remove("items");
+            settings.Remove("bars");
+            var stateJson = new JsonObject { ["items"] = items, ["theme"] = config?["theme"]?.DeepClone(), ["settings"] = settings };
+            var sig = stateJson.ToJsonString();
+            if (!force && dockSigs.GetValueOrDefault(id) == sig) continue;
+            dockSigs[id] = sig;
+            d.SetState(stateJson);
         }
-        var stateJson = new JsonObject
-        {
-            ["items"] = items,
-            ["theme"] = config?["theme"]?.DeepClone(),
-            ["settings"] = nexus?.DeepClone(),
-        };
-        stateJson["settings"]!.AsObject().Remove("items");
-        var sig = stateJson.ToJsonString();
-        if (!force && sig == dockSignature) return;
-        dockSignature = sig;
-        dock.SetState(stateJson);
     }
 
     static HashSet<string> LiveProcessNames()
@@ -397,7 +431,7 @@ case "open":
     bool SomethingFullscreen()
     {
         var front = GetForegroundWindow();
-        if (front == IntPtr.Zero || front == Handle || (dock != null && front == dock.Handle) || !GetWindowRect(front, out var r)) return false;
+        if (front == IntPtr.Zero || front == Handle || docks.Values.Any(d => d.Handle == front) || !GetWindowRect(front, out var r)) return false;
         GetWindowThreadProcessId(front, out uint pid);
         try
         {
@@ -409,13 +443,32 @@ case "open":
         return r.Left <= screen.Left && r.Top <= screen.Top && r.Right >= screen.Right && r.Bottom >= screen.Bottom;
     }
 
+    // The desktop (or the taskbar and its pop-ups) is in front: what "desktop only" bars wait for.
+    static readonly HashSet<string> DesktopClasses = new(StringComparer.OrdinalIgnoreCase)
+        { "Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "NotifyIconOverflowWindow", "TopLevelWindowForOverflowXamlIsland", "XamlExplorerHostIslandWindow" };
+    bool DesktopInFront()
+    {
+        var front = GetForegroundWindow();
+        if (front == IntPtr.Zero || docks.Values.Any(d => d.Handle == front)) return true;
+        var name = new System.Text.StringBuilder(256);
+        GetClassName(front, name, name.Capacity);
+        return DesktopClasses.Contains(name.ToString());
+    }
+
     void PollExtras()
     {
-        if (dock != null)
+        if (docks.Count > 0)
         {
-            bool hideInGame = true;
-            try { hideInGame = config?["nexus"]?["hideFullscreen"]?.GetValue<bool>() ?? true; } catch { }
-            dock.Suppress(hideInGame && SomethingFullscreen());
+            bool? full = null, desk = null;
+            foreach (var (id, bar) in Bars())
+            {
+                if (!docks.TryGetValue(id, out var d)) continue;
+                bool hideInGame = true;
+                try { hideInGame = bar["hideFullscreen"]?.GetValue<bool>() ?? true; } catch { }
+                var vis = bar["visibility"]?.ToString() ?? "always";
+                bool hide = (hideInGame && (full ??= SomethingFullscreen())) || (vis == "desktop" && !(desk ??= DesktopInFront()));
+                d.Suppress(hide);
+            }
             PushDock();
         }
         _ = UpdatePresence();

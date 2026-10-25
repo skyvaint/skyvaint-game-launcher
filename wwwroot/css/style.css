@@ -1166,3 +1166,4 @@ body[data-mode=mini] #syspanel { display: none; }
 .sp-volnum { width: 3.4rem; text-align: right; font: 700 .66rem/1 var(--mono); letter-spacing: .08em; }
 .sp-btns { display: flex; gap: .5rem; }
 .sp-btns .btn { flex: 1; }
+.row.editing { border-left: .22rem solid var(--accent); background: rgba(var(--a), .08); }

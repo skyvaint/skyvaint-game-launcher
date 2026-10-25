@@ -16,7 +16,7 @@ sealed class DockForm : Form
     {
         public string Id = "", Name = "", Icon = "", Kind = "";
         public bool Running;
-        public float Scale = 1, Target = 1;
+        public float Scale = 1, Target = 1, Lift;
         public DateTime Bounce = DateTime.MinValue;
         public Bitmap? Tile, Shadow;
         public string TileKey = "";
@@ -36,6 +36,15 @@ sealed class DockForm : Form
     int size = 52, spacing = 12, offset = 0, backingAlpha = 120;
     float radius = 0.22f, glowAmt = 1f, magnifyAmt = 1.45f, idleAlpha = 1f;
     bool autohide, magnify = true, names = true, alwaysNames, bounceOn = true, suppressed, tuckWanted;
+    // Fading in and out (appearing at start, desktop-only mode, fullscreen games): 0 hidden, 1 shown.
+    float fade = 0, fadeTarget = 1;
+    int fadeMs = 220, lengthPct = 0;
+    string fadeStyle = "fade", hoverStyle = "magnify", clickMode = "single";
+    DateTime lastClick = DateTime.MinValue;
+    int lastClickItem = -1;
+    /// <summary>Which bar this is (the main bar is "main"); sent back with every click.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public string BarId { get; set; } = "main";
     float tuck; // 0 shown, 1 tucked away
     Color accent = Color.FromArgb(255, 31, 31), accent2 = Color.FromArgb(255, 77, 61), bg = Color.FromArgb(7, 5, 5);
     PointF? mouse; // in (along, across) space
@@ -98,6 +107,12 @@ sealed class DockForm : Form
         align = s?["align"]?.ToString() ?? "center";
         alwaysNames = Bool(s?["alwaysNames"], false);
         bounceOn = Bool(s?["bounce"], true);
+        fadeMs = Clamp(Int(s?["fadeMs"], 220), 0, 2000);
+        fadeStyle = s?["fadeStyle"]?.ToString() ?? "fade";
+        lengthPct = Clamp(Int(s?["length"], 0), 0, 100);
+        hoverStyle = s?["hoverStyle"]?.ToString() ?? (magnify ? "magnify" : "scale");
+        magnify = hoverStyle == "magnify";
+        clickMode = s?["clickMode"]?.ToString() ?? "single";
         var t = next["theme"];
         accent = Hex(t?["accent"]?.ToString(), accent);
         accent2 = Hex(t?["accent2"]?.ToString(), accent2);
@@ -127,6 +142,7 @@ sealed class DockForm : Form
             tuck = 0;
         }
         Place();
+        if (fade != fadeTarget) Wake(); // the first time: fade in
     }
 
     /// <summary>Steps aside while a fullscreen program (usually a game) has the screen.</summary>
@@ -134,12 +150,14 @@ sealed class DockForm : Form
     {
         if (on == suppressed) return;
         suppressed = on;
-        if (on) Hide();
-        else
+        fadeTarget = on ? 0 : 1;
+        if (!on)
         {
             Place();
-            Show();
+            if (!Visible) Show();
         }
+        if (fadeMs == 0 || fadeStyle == "none") { fade = fadeTarget; if (on) Hide(); else Render(); return; }
+        Wake();
     }
 
     bool Vertical => position is "left" or "right";
@@ -155,6 +173,8 @@ sealed class DockForm : Form
         int n = Math.Max(1, items.Count);
         float grow = ic * (maxS - 1) * 2.4f;
         L = (int)(n * ic + (n - 1) * gap + 2 * pad + grow);
+        // A longer bar: at least this share of the screen edge (0 fits the icons).
+        if (lengthPct > 0) { var edgeLen = Vertical ? Area().Height : Area().Width; L = Math.Max(L, (int)(edgeLen * lengthPct / 100f)); }
         float tip = Vertical ? 190 * k : 34 * k;
         if (alwaysNames && !Vertical) tip += 18 * k;
         T = (int)(v0 + ic * maxS + 10 * k + tip);
@@ -250,11 +270,19 @@ sealed class DockForm : Form
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
+        if (e.Button == MouseButtons.Left && hover >= 0 && clickMode == "double")
+        {
+            // Double-click mode: the first click only marks the icon; a second one within 450 ms opens it.
+            bool second = lastClickItem == hover && (DateTime.Now - lastClick).TotalMilliseconds < 450;
+            lastClick = DateTime.Now; lastClickItem = hover;
+            if (!second) { Wake(); return; }
+            lastClickItem = -1;
+        }
         if (e.Button == MouseButtons.Left && hover >= 0)
         {
             if (bounceOn) items[hover].Bounce = DateTime.Now;
             Wake();
-            owner.OnDockMessage(new JsonObject { ["type"] = "open", ["id"] = items[hover].Id });
+            owner.OnDockMessage(new JsonObject { ["type"] = "open", ["id"] = items[hover].Id, ["bar"] = BarId });
         }
         else if (e.Button == MouseButtons.Right) ShowMenu(hover >= 0 ? items[hover] : null);
     }
@@ -266,7 +294,7 @@ sealed class DockForm : Form
         void Add(string text, string type, JsonNode? d = null, bool danger = false)
         {
             var b = new ToolStripMenuItem(text) { ForeColor = danger ? Color.FromArgb(255, 122, 112) : Color.FromArgb(245, 239, 238) };
-            b.Click += (_, _) => owner.OnDockMessage(new JsonObject { ["type"] = type, ["id"] = it?.Id ?? "", ["d"] = d?.DeepClone() });
+            b.Click += (_, _) => owner.OnDockMessage(new JsonObject { ["type"] = type, ["id"] = it?.Id ?? "", ["d"] = d?.DeepClone(), ["bar"] = BarId });
             menu.Items.Add(b);
         }
         if (it != null)
@@ -341,19 +369,30 @@ sealed class DockForm : Form
             float target = 1;
             if (mouse is { } m && tuck < 0.5f)
             {
-                if (magnify)
+                if (hoverStyle == "magnify")
                 {
                     float d = Math.Abs(m.X - baseC[i]) / (ic + gap);
                     if (d < 2.2f) target = 1 + (maxS - 1) * (MathF.Cos(d / 2.2f * MathF.PI) + 1) / 2;
                 }
-                else if (i == hover) target = maxS;
+                else if (i == hover && hoverStyle == "scale") target = maxS;
+                else if (i == hover && hoverStyle == "lift") target = 1.08f;
             }
+            float liftTarget = i == hover && hoverStyle == "lift" ? 1 : 0;
+            it.Lift += (liftTarget - it.Lift) * 0.3f;
+            if (Math.Abs(it.Lift - liftTarget) > 0.01f) moving = true; else it.Lift = liftTarget;
             it.Target = target;
             float next = it.Scale + (target - it.Scale) * 0.28f;
             if (Math.Abs(next - target) < 0.002f) next = target;
             if (next != it.Scale) moving = true;
             it.Scale = next;
             if ((DateTime.Now - it.Bounce).TotalMilliseconds < 700) moving = true;
+        }
+        if (fade != fadeTarget)
+        {
+            float stepF = fadeMs <= 0 ? 1 : 15f / fadeMs;
+            fade = fadeTarget > fade ? Math.Min(fadeTarget, fade + stepF) : Math.Max(fadeTarget, fade - stepF);
+            moving = true;
+            if (fade <= 0 && suppressed) { Hide(); }
         }
         float tt = tuckWanted ? 1 : 0, nt = tuck + (tt - tuck) * 0.22f;
         if (Math.Abs(nt - tt) < 0.003f) nt = tt;
@@ -390,6 +429,7 @@ sealed class DockForm : Form
     {
         var (start, end, c) = Arrange(i => i.Scale);
         float hide = tuck * (v0 + ic * maxS + 14 * k);
+        if (fadeStyle == "slide" || fadeStyle == "both") hide += (1 - Ease(fade)) * (v0 + ic * maxS + 14 * k);
         float tallest = items.Count == 0 ? ic : items.Max(i => i.Scale) * ic;
 
         // An almost invisible strip so the pointer is caught between the logos too (fully clear pixels click through).
@@ -399,7 +439,7 @@ sealed class DockForm : Form
         if (backing != "none" && tuck < 0.98f)
         {
             float a0b = v0 - 10 * k - hide, a1b = v0 + ic + 8 * k - hide;
-            var glass = RectUV(start - pad, end + pad, a0b, a1b);
+            var glass = lengthPct > 0 ? RectUV(4 * k, L - 4 * k, a0b, a1b) : RectUV(start - pad, end + pad, a0b, a1b);
             float round = backing == "pill" ? Math.Min(glass.Width, glass.Height) / 2 : backing == "square" ? 2 * k : 16 * k;
             using var path = Rounded(glass, round);
             int fa = (int)(backingAlpha * (1 - tuck));
@@ -438,11 +478,11 @@ sealed class DockForm : Form
             float bounce = 0;
             double ms = (DateTime.Now - it.Bounce).TotalMilliseconds;
             if (ms < 700) bounce = (float)(18 * k * Math.Abs(Math.Sin(ms / 700 * Math.PI * 2)) * (1 - ms / 700));
-            float a0 = v0 + bounce - hide;
+            float a0 = v0 + bounce - hide + it.Lift * 12 * k;
             var r = RectUV(c[i] - w / 2, c[i] + w / 2, a0, a0 + w);
             var tile = TileFor(it);
 
-            if (i == hover && glowAmt > 0)
+            if (i == hover && glowAmt > 0 && hoverStyle != "none")
             {
                 var glow = RectangleF.Inflate(r, w * 0.32f * glowAmt, w * 0.32f * glowAmt);
                 using var gp = new GraphicsPath();
@@ -707,7 +747,8 @@ sealed class DockForm : Form
             var size = new SIZE { cx = bmp.Width, cy = bmp.Height };
             var src = new POINT();
             var dst = new POINT { x = Left, y = Top };
-            var blend = new BLENDFUNCTION { BlendOp = 0, BlendFlags = 0, SourceConstantAlpha = 255, AlphaFormat = 1 };
+            byte alpha = fadeStyle == "slide" ? (byte)255 : (byte)Math.Clamp((int)(255 * Ease(fade)), 0, 255);
+            var blend = new BLENDFUNCTION { BlendOp = 0, BlendFlags = 0, SourceConstantAlpha = alpha, AlphaFormat = 1 };
             lastBlit = UpdateLayeredWindow(Handle, screen, ref dst, ref size, mem, ref src, 0, ref blend, 2);
         }
         finally
@@ -748,6 +789,7 @@ sealed class DockForm : Form
     // ---------- helpers ----------
 
     static int Clamp(int v, int lo, int hi) => Math.Max(lo, Math.Min(hi, v));
+    static float Ease(float x) => x <= 0 ? 0 : x >= 1 ? 1 : 1 - MathF.Pow(1 - x, 3);
     static int Int(JsonNode? n, int fallback) { try { return n == null ? fallback : (int)n.GetValue<double>(); } catch { try { return n!.GetValue<int>(); } catch { return fallback; } } }
     static bool Bool(JsonNode? n, bool fallback) { try { return n?.GetValue<bool>() ?? fallback; } catch { return fallback; } }
     static Color Hex(string? hex, Color fallback)
