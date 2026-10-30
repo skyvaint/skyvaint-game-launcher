@@ -45,7 +45,7 @@ public sealed partial class MainForm
 
             case "openUrl":
                 var url = Str("url");
-                if (Regex.IsMatch(url, @"^(https?|steam|com\.epicgames\.launcher|roblox|discord)://", RegexOptions.IgnoreCase))
+                if (Regex.IsMatch(url, @"^(https?|steam|com\.epicgames\.launcher|roblox|discord|parsec)://", RegexOptions.IgnoreCase))
                     try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose(); } catch { }
                 return true;
 
@@ -571,17 +571,20 @@ public sealed partial class MainForm
             var shown = edge.Where(d => !d.Hidden).ToList();
             foreach (var d in edge.Where(d => d.Hidden)) { d.AlongStart = null; d.SizeFactor = 1; }
             if (shown.Count < 2) { foreach (var d in shown) if (d.AlongStart != null || d.SizeFactor != 1) { d.AlongStart = null; d.SizeFactor = 1; d.Relayout(); } continue; }
-            int gap = 24, span = shown[0].EdgeLength;
-            var lengths = shown.Select(d => d.LengthAt(1)).ToList();
-            float total = lengths.Sum() + gap * (shown.Count - 1), factor = Math.Min(1f, (span - 40) / Math.Max(1f, total));
-            if (factor < 1) { lengths = shown.Select(d => d.LengthAt(factor)).ToList(); total = lengths.Sum() + gap * (shown.Count - 1); }
+            // Packed by what you see of each bar (not its window, which keeps clear room on both ends for logos
+            // that grow on hover), so the bars sit right next to each other in the middle as one row.
+            int gap = 14, span = shown[0].EdgeLength;
+            var lengths = shown.Select(d => d.LengthsAt(1)).ToList();
+            float total = lengths.Sum(x => x.visible) + gap * (shown.Count - 1), factor = Math.Min(1f, (span - 40) / Math.Max(1f, total));
+            if (factor < 1) { lengths = shown.Select(d => d.LengthsAt(factor)).ToList(); total = lengths.Sum(x => x.visible) + gap * (shown.Count - 1); }
             int at = (int)((span - total) / 2);
             for (int i = 0; i < shown.Count; i++)
             {
                 var d = shown[i];
-                sig.Append(d.BarId).Append(':').Append(at).Append(':').Append(factor.ToString("0.000")).Append('|');
-                if (d.AlongStart != at || Math.Abs(d.SizeFactor - factor) > 0.001f) { d.AlongStart = at; d.SizeFactor = factor; d.Relayout(); }
-                at += lengths[i] + gap;
+                int start = at - (lengths[i].window - lengths[i].visible) / 2;
+                sig.Append(d.BarId).Append(':').Append(start).Append(':').Append(factor.ToString("0.000")).Append('|');
+                if (d.AlongStart != start || Math.Abs(d.SizeFactor - factor) > 0.001f) { d.AlongStart = start; d.SizeFactor = factor; d.Relayout(); }
+                at += lengths[i].visible + gap;
             }
         }
         groupSig = sig.ToString();

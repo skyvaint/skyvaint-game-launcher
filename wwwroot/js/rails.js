@@ -5,6 +5,7 @@
   const A = SV.app, { host, audio } = SV;
   const { $, el, esc, clamp, toast, R, heading } = A;
   const rs = () => A.cfg.rails;
+  const feat = (k) => !SV.features || SV.features.on(k);
 
   let open = false, railIdx = 0, feeds = { upcoming: null, news: null }, commissions = { items: null, error: '', channelName: '' }, fetchedAt = 0, hasBot = false;
   const cardIdx = {};
@@ -113,7 +114,7 @@
       const cards = recentCards();
       if (cards.length) out.push({ id: 'recent', title: 'JUMP BACK IN', note: 'LAST PLAYED · ENTER STARTS IT', cards });
     }
-    if (show.friends !== false && SV.friends) {
+    if (show.friends !== false && SV.friends && feat('roblox.friends')) {
       const F = SV.friends, list = F.list, a = F.account();
       const inGame = list.filter((f) => f.state === F.IN_GAME).length, online = list.filter((f) => f.state && f.state !== F.IN_GAME).length;
       out.push({
@@ -123,14 +124,14 @@
       });
     }
     const robloxRow = (id, title, list, note) => {
-      if (show[id] === false) return;
+      if (show[id] === false || !feat('roblox.explore')) return;
       out.push({ id, title, note: list ? note : 'LOADING…', cards: (list || []).map((x) => robloxCard(x)) });
     };
     const storeRow = (id, title, list, note) => {
       if (show[id] === false) return;
       out.push({ id, title, note: list ? note : 'LOADING…', cards: (list || []).map((x) => storeCard(x)) });
     };
-    if (show.roblox) {
+    if (show.roblox && feat('roblox.games')) {
       const places = SV.roblox.places();
       SV.lists && SV.lists.ensureArt();
       out.push({
@@ -150,7 +151,7 @@
     storeRow('steamDeals', 'STEAM DEALS', S2 && S2.specials, 'ON SALE NOW');
     storeRow('epicFree', 'FREE ON EPIC', disc && disc.epic, 'CLAIM THEM WHILE THEY LAST');
     storeRow('steamNew', 'NEW ON STEAM', S2 && S2.new, 'FRESH RELEASES');
-    if (show.studio && SV.lists && A.cfg.dev.enabled) {
+    if (show.studio && SV.lists && A.cfg.dev.enabled && feat('studio.projects')) {
       const s = SV.lists.studioData();
       out.push({
         id: 'studio', title: 'STUDIO PROJECTS', note: s.loaded ? `${s.cloud.length} CLOUD · ${s.local.length} FILES` : 'READING STUDIO…',
@@ -174,11 +175,11 @@
       id: 'upcoming', title: 'COMING SOON', note: feeds.upcoming ? 'STEAM + EPIC' : 'LOADING…',
       cards: (feeds.upcoming || []).map((g) => ({ img: g.image, title: g.title, sub: g.sub, cls: 'wide', run: () => openUrl(g.steam && SV.app.cfg.games.some((x) => x.platform === 'steam') ? g.steam : g.url) })),
     });
-    if (show.news && A.cfg.dev.enabled) out.push({
+    if (show.news && A.cfg.dev.enabled && feat('studio.news')) out.push({
       id: 'news', title: 'ROBLOX STUDIO NEWS', note: feeds.news ? 'DEVFORUM ANNOUNCEMENTS' : 'LOADING…',
       cards: (feeds.news || []).map((n) => ({ img: n.image, title: n.title, sub: n.sub, cls: 'wide news' + (n.image ? '' : ' noimg'), glyph: 'DEVFORUM', run: () => openUrl(n.url) })),
     });
-    if (show.commissions && A.cfg.dev.enabled) {
+    if (show.commissions && A.cfg.dev.enabled && feat('studio.commissions')) {
       const c = commissions;
       let cards;
       if (c.error === 'nobot' || c.error === 'nochannel' || (!hasBot && !c.items))

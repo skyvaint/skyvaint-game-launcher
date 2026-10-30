@@ -15,7 +15,20 @@
 
   host.on('sideState', (m) => { open = !!m.open; document.body.classList.toggle('side-open', open); });
   host.on('sideWidth', (m) => { S().width = m.width; A.save(); });
-  host.on('socialAdd', () => { while (A.stack.length) A.pop(); addSite(); });
+  // ＋ in the browser saves the page you are on straight away, no need to close anything.
+  host.on('socialAdd', (m) => {
+    if (m.url) {
+      let name = String(m.title || '').split(/[|\-–·:]/)[0].trim();
+      try { if (!name) name = new URL(m.url).hostname.replace(/^www\./, '').split('.')[0]; } catch {}
+      sites().push({ name: (name || 'Site').slice(0, 24), url: m.url });
+      A.changed();
+      host.send('side', { action: 'refresh' });
+      toast((name || 'Site') + ' saved to your sites');
+      return;
+    }
+    addSite();
+  });
+  host.on('sideView', (m) => { S().view = m.mode; A.save(); });
 
   function addSite(after) {
     A.ask({
@@ -27,6 +40,7 @@
         try { host2 = new URL(url).hostname.replace(/^www\./, ''); } catch { return toast("That isn't a web address.", 'bad'); }
         sites().push({ name: host2.split('.')[0].replace(/^./, (c) => c.toUpperCase()), url });
         A.changed();
+        host.send('side', { action: 'refresh' });
         host.send('side', { action: 'go', url });
         toast(host2 + ' added');
         after && after();
@@ -41,6 +55,8 @@
       heading('SOCIAL + BROWSER'),
       el('<div class="row-note">A browser panel beside HOME for TikTok, Instagram and anything else. Its rail holds your sites; ⤢ makes it a full browser. Sign-ins are kept.</div>'),
       R.button('Open the panel', '', open ? 'CLOSE' : 'OPEN', () => { toggle(); setTimeout(rerender, 300); }),
+      R.choice('View', 'Beside HOME, wide, filling the launcher, or in its own window you can move and maximize.', { get: () => S().view || 'side', set: (v) => { S().view = v; } },
+        [['side', 'Side panel'], ['wide', 'Wide'], ['full', 'Full screen'], ['window', 'Its own window']], () => host.send('side', { action: 'view', mode: S().view })),
       R.choice('Side', '', A.at('social.side'), [['right', 'Right'], ['left', 'Left']], () => host.send('side', { action: open ? 'open' : 'close' })),
       R.slider('Width', 'You can also drag its edge.', A.at('social.width'), 300, 1400, 20, (v) => v + ' px'),
       R.toggle('Phone layout', 'Asks sites for their phone version, which fits a narrow panel (TikTok, Instagram).', A.at('social.mobile')),

@@ -141,6 +141,23 @@
     toast(`${b.name} added — pick what goes on it below`);
     after && after(0);
   }
+  // A copy of a bar with its own apps and the same look, straight after it.
+  function duplicateBar(x, after) {
+    const b = JSON.parse(JSON.stringify(x));
+    delete b.bars;
+    for (const [k, v] of Object.entries(BAR_DEFAULTS)) if (b[k] === undefined) b[k] = v;
+    b.id = newId();
+    b.name = nameOf(x) + ' copy';
+    b.enabled = true;
+    b.items = (b.items || []).map((it) => ({ ...it, id: newId() }));
+    const list = extras(), i = list.indexOf(x);
+    list.splice(i < 0 ? 0 : i + 1, 0, b);
+    editing = b.id;
+    A.changed();
+    audio.play('pick');
+    toast(`${b.name} added`);
+    after && after(0);
+  }
   function removeBar(b, after) {
     A.confirmMenu(`Remove ${nameOf(b)}?`, 'REMOVE', () => {
       nx().bars = extras().filter((x) => x !== b);
@@ -148,6 +165,19 @@
       A.changed();
       after && after(0);
     });
+  }
+
+  // A colour setting: a few presets, or any colour of your own (which then gets its own picker row).
+  const SWATCHES = [['#ffffff', 'White'], ['#3ddc84', 'Green'], ['#00e5ff', 'Cyan'], ['#a970ff', 'Purple'], ['#ff2bd6', 'Pink'], ['#ffd400', 'Gold'], ['#ff3b3b', 'Red']];
+  function colourRows(b, key, label, desc, theme, rerender) {
+    const opts = [['', theme], ...SWATCHES, ['custom', 'My colour']];
+    const known = (v) => opts.some((o) => o[0] === v && v !== 'custom');
+    const choice = R.choice(label, desc, {
+      get: () => (known(b[key] || '') ? b[key] || '' : 'custom'),
+      set: (v) => { b[key] = v === 'custom' ? b[key + 'Own'] || '#7a5cff' : v; },
+    }, opts, () => { A.changed(); rerender(); });
+    if (known(b[key] || '')) return [choice];
+    return [choice, R.color('My ' + label.toLowerCase(), '', { get: () => b[key] || '#7a5cff', set: (v) => { b[key] = b[key + 'Own'] = v; } }, () => A.changed())];
   }
 
   function rows(rerender) {
@@ -164,6 +194,7 @@
           `${x.enabled ? 'ON' : 'OFF'} · ${(x.position || 'bottom').toUpperCase()} · ${(x.items || []).length} ITEMS · ${{ desktop: 'DESKTOP ONLY', apps: 'NOT ON THE DESKTOP' }[x.visibility] || 'ALWAYS'}`, [
             ['EDIT', () => { editing = idOf(x); audio.play('confirm'); rerender(0); }],
             ['RENAME', () => A.ask({ tag: 'NEXUS', title: 'RENAME BAR', label: 'Name', value: nameOf(x), done: (v) => { x.name = v; A.changed(); rerender(); } })],
+            ['DUPLICATE', () => duplicateBar(x, rerender)],
             ...(x === nx() ? [] : [['REMOVE', () => removeBar(x, rerender), 'danger']]),
           ]);
         if (idOf(x) === editing) r.classList.add('editing');
@@ -206,6 +237,8 @@
       R.choice('Launch mode', 'How apps open from this bar. "Bring forward" switches to the app if it is already open instead of starting another.', P('launchMode'),
         [['normal', 'Normal window'], ['maximized', 'Maximized'], ['minimized', 'Minimized'], ['focus', 'Bring forward if open']]),
       R.choice('Running indicator', 'How a running app is marked.', P('indicator'), [['dot', 'Dot'], ['bar', 'Bar'], ['glow', 'Glow'], ['none', 'None']]),
+      ...colourRows(b, 'dotColor', 'Dot colour', 'Colour of the running dot, bar or glow.', 'Second accent', rerender),
+      ...colourRows(b, 'hoverColor', 'Hover glow colour', 'The glow behind a logo under the pointer.', 'Accent', rerender),
       R.toggle('Bounce on click', '', P('bounce')),
 
       heading(`ON ${nameOf(b).toUpperCase()} · ${items.length}`),

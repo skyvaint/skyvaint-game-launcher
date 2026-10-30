@@ -452,6 +452,90 @@
 
   // ---- playing
 
+  // ---- avatars: one of your saved Roblox outfits goes on just before you play; nothing picked keeps your avatar
+
+  const outfitCache = {}, outfitWait = {}, wearWait = {};
+  host.on('robloxOutfits', (m) => {
+    if (m.ok) outfitCache[m.id] = { outfits: m.outfits || [], current: m.current || '', at: Date.now() };
+    const w = outfitWait[m.id];
+    delete outfitWait[m.id];
+    (w || []).forEach((f) => f(m));
+  });
+  host.on('robloxWorn', (m) => { const w = wearWait[m.token]; delete wearWait[m.token]; w && w(m); });
+  const loadOutfits = (a, fresh) => new Promise((ok) => {
+    const c = outfitCache[a.id];
+    if (c && !fresh && Date.now() - c.at < 5 * 60e3) return ok({ ok: true, ...c });
+    (outfitWait[a.id] = outfitWait[a.id] || []).push(ok);
+    if (outfitWait[a.id].length === 1) host.send('robloxOutfits', { id: a.id });
+  });
+  const wear = (a) => new Promise((ok) => {
+    const token = newId();
+    const t = setTimeout(() => { delete wearWait[token]; ok({ ok: false, error: 'Roblox took too long' }); }, 40000);
+    wearWait[token] = (m) => { clearTimeout(t); ok(m); };
+    host.send('robloxWear', { id: a.id, outfitId: a.outfit.id, token });
+  });
+  const outfitArt = (src) => `<div class="place-art outfit-art" style="background-image:url('${esc(src)}')"></div>`;
+
+  function avatarPicker(a, after) {
+    const root = el(`
+      <div class="overlay center"><div class="picker wide">
+        <div class="picker-head"><div class="avatar-head">${face(a)}</div>
+          <div><div class="tag">[ ${esc(label(a).toUpperCase())} ]</div><h2>SELECT AVATAR</h2></div><div class="picker-note"></div></div>
+        <div class="pcards outfits" data-z="outfits"></div>
+        <div class="row-note avatar-note"></div>
+        <div class="hints">${hints([['confirm', 'Wear'], ['move', 'Move'], ['options', 'Reload'], ['back', 'Back']])}</div>
+      </div></div>`);
+    const note = $('.avatar-note', root), head = $('.picker-note', root);
+    let data = null;
+    const isOn = (o) => !!(a.outfit && a.outfit.id === o.id);
+    const cards = () => (data ? [
+      { html: data.current ? outfitArt(data.current) : face(a, 'body'), name: 'DEFAULT', sub: 'KEEP WHAT YOU WEAR', picked: !a.outfit, run: () => choose(null) },
+      ...data.outfits.map((o) => ({ html: o.thumb ? outfitArt(o.thumb) : '<em>?</em>', name: o.name, sub: isOn(o) ? 'SELECTED' : 'OUTFIT', picked: isOn(o), run: () => choose(o) })),
+    ] : [{ glyph: '…', name: 'LOADING', sub: 'READING YOUR OUTFITS', run: () => {} }]);
+    const row = cardRow($('[data-z=outfits]', root), cards);
+    row.focus(true);
+    function choose(o) {
+      if (o) a.outfit = { id: o.id, name: o.name, thumb: o.thumb || '' };
+      else delete a.outfit;
+      audio.play('confirm');
+      A.save();
+      A.pop();
+      after && after();
+      toast(o ? `${label(a)} will wear ${o.name}` : `${label(a)} keeps their avatar`);
+    }
+    function load(fresh) {
+      data = null;
+      row.build(0);
+      note.textContent = '';
+      loadOutfits(a, fresh).then((m) => {
+        if (!root.isConnected) return;
+        if (!m.ok) {
+          data = { outfits: [], current: '' };
+          note.textContent = m.error === 'signed-out' ? 'This account needs signing in again (Options, then Sign in again).' : 'Could not read your outfits: ' + (m.error || 'failed');
+        } else {
+          data = m;
+          note.textContent = m.outfits.length ? 'The outfit goes on your Roblox avatar just before the game starts, and stays on after.'
+            : 'No saved outfits yet. Make some on roblox.com: Avatar, then Create Outfit. DEFAULT plays with what you wear now.';
+        }
+        head.textContent = data.outfits.length ? data.outfits.length + ' OUTFITS' : '';
+        const sel = a.outfit ? data.outfits.findIndex(isOn) + 1 : 0;
+        row.build(Math.max(0, sel));
+      });
+    }
+    root.addEventListener('mousedown', (e) => { if (e.target === root) A.pop(); });
+    A.push({
+      el: root,
+      action(x) {
+        if (x === 'left') row.move(-1);
+        else if (x === 'right') row.move(1);
+        else if (x === 'confirm') row.run();
+        else if (x === 'options') load(true);
+        else if (x === 'back') A.pop();
+      },
+    });
+    load(false);
+  }
+
   const STATUS = { launching: 'STARTING…', launched: 'LAUNCHED', failed: 'FAILED' };
 
   function play(list) {
@@ -467,8 +551,19 @@
     list.forEach((a) => { a.lastPlayed = now; });
     p.lastPlayed = now;
     A.save();
-    setTimeout(() => host.send('robloxPlay', { ids: list.map((a) => a.id), placeId: p.placeId, server: p.server || null, game: robloxGame ? robloxGame.id : '' }), 900);
-    A.armLaunchTimeout(240 + list.length * 45); // safety net only; the shell reports when it is done
+    const dressing = list.filter((a) => a.outfit && a.outfit.id && (!SV.features || SV.features.on('roblox.avatar')));
+    const setLine = (a, text) => { const line = $(`#lfList .lf-acct[data-id="${CSS.escape(a.id)}"]`); if (line) line.lastElementChild.textContent = text; };
+    setTimeout(async () => {
+      // Each picked outfit goes on first, one account at a time; a failed one just keeps that account's avatar.
+      for (const a of dressing) {
+        setLine(a, 'PUTTING ON ' + a.outfit.name.toUpperCase());
+        const r = await wear(a);
+        if (!r.ok) toast(`${label(a)}: avatar not changed (${r.error === 'signed-out' ? 'needs signing in again' : r.error || 'failed'})`, 'bad');
+        setLine(a, 'QUEUED');
+      }
+      host.send('robloxPlay', { ids: list.map((a) => a.id), placeId: p.placeId, server: p.server || null, game: robloxGame ? robloxGame.id : '' });
+    }, 900);
+    A.armLaunchTimeout(240 + list.length * 45 + dressing.length * 40); // safety net only; the shell reports when it is done
   }
 
   host.on('robloxPlayStatus', (m) => {
@@ -556,7 +651,7 @@
       return clients ? ['CLIENTS OPEN', String(clients)] : ['ACCOUNTS', n ? String(n) : 'NONE YET'];
     },
 
-    powerItems: () => (clients ? [{ label: 'CLOSE ALL ROBLOX', sub: `Ends ${clients} open client${clients > 1 ? 's' : ''}`, danger: true,
+    powerItems: () => (clients && (!SV.features || SV.features.on('roblox.closeAll')) ? [{ label: 'CLOSE ALL ROBLOX', sub: `Ends ${clients} open client${clients > 1 ? 's' : ''}`, danger: true,
       run: () => A.confirmMenu('Close every Roblox client?', 'CLOSE ALL', () => host.send('robloxCloseClients')) }] : []),
 
     // The Roblox "who's playing?" screen, top to bottom: 1 account(s), 2 place, 3 server, then play.
@@ -573,12 +668,16 @@
           <div class="pcards small" data-z="places"></div>
           <div class="picker-step tag">[ 3 — SERVER ]</div>
           <div class="server-row"></div>
+          <div class="picker-step tag">[ 4 — AVATAR ]</div>
+          <div class="server-row avatar-row"></div>
           <div class="picker-btns"></div>
           <div class="hints">${hints([['confirm', 'Choose'], ['move', 'Move'], ['options', 'Options'], ['back', 'Cancel']])}</div>
         </div></div>`);
-      const serverBox = $('.server-row', root), btnBox = $('.picker-btns', root);
-      const ZONES = ['accounts', 'places', 'server', 'btns'];
-      let zone = 'accounts', srvIdx = 0, btnIdx = 0;
+      const serverBox = $('.server-row', root), avatarBox = $('.avatar-row', root), btnBox = $('.picker-btns', root);
+      const avatarOn = !SV.features || SV.features.on('roblox.avatar');
+      if (!avatarOn) { avatarBox.style.display = 'none'; avatarBox.previousElementSibling.style.display = 'none'; }
+      const ZONES = ['accounts', 'places', 'server', ...(avatarOn ? ['avatar'] : []), 'btns'];
+      let zone = 'accounts', srvIdx = 0, avIdx = 0, btnIdx = 0;
 
       const toggle = (a) => {
         const r = rb();
@@ -609,6 +708,18 @@
           { label: p.server ? 'PRIVATE SERVER  ·  CHANGE LINK' : 'PRIVATE SERVER  ·  PASTE LINK', on: !!p.server, run: () => setServer(p) },
         ];
       };
+      const avatars = () => {
+        const list = chosen();
+        if (!list.length) return [{ label: 'PICK AN ACCOUNT FIRST', run: () => setZone('accounts') }];
+        const many = list.length > 1;
+        return [
+          ...list.map((a) => ({
+            label: (many ? label(a).toUpperCase() + ' · ' : 'SELECT AVATAR · ') + (a.outfit ? a.outfit.name.toUpperCase() : 'DEFAULT'),
+            thumb: a.outfit && a.outfit.thumb, on: !!a.outfit, run: () => avatarPicker(a, build),
+          })),
+          ...(list.some((a) => a.outfit) ? [{ label: many ? 'ALL DEFAULT' : 'USE DEFAULT', run: () => { list.forEach((a) => delete a.outfit); A.save(); audio.play('toggle'); build(); } }] : []),
+        ];
+      };
       const openOnly = () => {
         while (A.stack.length) A.pop();
         A.launchFx('Roblox', '', '', g);
@@ -627,6 +738,7 @@
         accRow.focus(zone === 'accounts');
         placeRow.focus(zone === 'places');
         serverBox.querySelectorAll('.btn').forEach((b, i) => b.classList.toggle('focus', zone === 'server' && i === srvIdx));
+        avatarBox.querySelectorAll('.btn').forEach((b, i) => b.classList.toggle('focus', zone === 'avatar' && i === avIdx));
         btnBox.querySelectorAll('.btn').forEach((b, i) => b.classList.toggle('focus', zone === 'btns' && i === btnIdx));
       }
       function setZone(z) { if (z !== zone) { zone = z; paint(); } }
@@ -637,6 +749,10 @@
         srvIdx = clamp(srvIdx, 0, list.length - 1);
         serverBox.innerHTML = list.map((s, i) => `<button class="btn small ${s.on ? 'primary' : ''}" data-i="${i}">${esc(s.label)}</button>`).join('') +
           (p ? `<span class="server-note">${esc(p.server ? (p.server.code ? 'LINK CODE ' + p.server.code.slice(0, 12) + '…' : 'SHARE LINK SAVED') + ' · FOR ' + p.name : 'JOINS A NORMAL SERVER OF ' + p.name)}</span>` : '');
+        const avs = avatars();
+        avIdx = clamp(avIdx, 0, avs.length - 1);
+        avatarBox.innerHTML = avs.map((s, i) => `<button class="btn small ${s.on ? 'primary' : ''}" data-i="${i}">${s.thumb ? `<img class="avatar-chip" src="${esc(s.thumb)}" alt="">` : ''}${esc(s.label)}</button>`).join('') +
+          `<span class="server-note">${chosen().some((a) => a.outfit) ? 'PUT ON JUST BEFORE THE GAME STARTS' : 'DEFAULT KEEPS WHAT YOU WEAR NOW'}</span>`;
         btnBox.innerHTML = buttons().map((b, i) => `<button class="btn ${b.primary ? 'primary' : ''}" data-i="${i}">${esc(b.label)}</button>`).join('');
         $('.picker-note', root).textContent = clients ? `${clients} CLIENT${clients > 1 ? 'S' : ''} OPEN` : picked().length ? `${picked().length} TICKED` : '';
         paint();
@@ -644,6 +760,7 @@
 
       serverBox.addEventListener('click', (e) => { const b = e.target.closest('.btn'); if (b) { srvIdx = +b.dataset.i; setZone('server'); servers()[srvIdx].run(); } });
       btnBox.addEventListener('click', (e) => { const b = e.target.closest('.btn'); if (b) { btnIdx = +b.dataset.i; setZone('btns'); buttons()[btnIdx].run(); } });
+      avatarBox.addEventListener('click', (e) => { const b = e.target.closest('.btn'); if (b) { avIdx = +b.dataset.i; setZone('avatar'); avatars()[avIdx].run(); } });
       root.addEventListener('mousedown', (e) => { if (e.target === root) A.pop(); });
 
       accRow.build(0);
@@ -668,6 +785,11 @@
             const list = servers();
             if (dir) { srvIdx = clamp(srvIdx + dir, 0, list.length - 1); audio.play('nav'); paint(); }
             else if (a === 'confirm') list[srvIdx].run();
+          }
+          else if (zone === 'avatar') {
+            const list = avatars();
+            if (dir) { avIdx = clamp(avIdx + dir, 0, list.length - 1); audio.play('nav'); paint(); }
+            else if (a === 'confirm') list[avIdx].run();
           }
           else if (dir) { btnIdx = clamp(btnIdx + dir, 0, buttons().length - 1); audio.play('nav'); paint(); }
           else if (a === 'confirm') buttons()[btnIdx].run();

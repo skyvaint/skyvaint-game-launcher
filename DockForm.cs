@@ -53,6 +53,15 @@ sealed class DockForm : Form
     public bool Hidden => suppressed;
     /// <summary>How long the bar is along its edge at a given size factor.</summary>
     public int LengthAt(float factor) { var keep = SizeFactor; SizeFactor = factor; Measure(); int len = L; SizeFactor = keep; Measure(); return len; }
+    /// <summary>The part of the bar you see at a size: its window minus the clear room on both ends that magnified
+    /// logos grow into. Bars sharing an edge are packed by this, so they really sit next to each other.</summary>
+    public (int window, int visible) LengthsAt(float factor)
+    {
+        var keep = SizeFactor; SizeFactor = factor; Measure();
+        int window = L, visible = lengthPct > 0 ? L : Math.Min(L, (int)Math.Ceiling(L - growPx));
+        SizeFactor = keep; Measure();
+        return (window, visible);
+    }
     /// <summary>Puts the bar where the shell's group layout says.</summary>
     public void Relayout() { foreach (var it in items) it.TileKey = ""; Place(); }
     public int EdgeLength => Vertical ? Area().Height : Area().Width;
@@ -61,6 +70,8 @@ sealed class DockForm : Form
     public string BarId { get; set; } = "main";
     float tuck; // 0 shown, 1 tucked away
     Color accent = Color.FromArgb(255, 31, 31), accent2 = Color.FromArgb(255, 77, 61), bg = Color.FromArgb(7, 5, 5);
+    Color? dotColor, hoverColor; // your own colours for the running dot / bar / glow and the hover glow
+    float growPx;
     PointF? mouse; // in (along, across) space
     int hover = -1;
     DateTime outsideSince = DateTime.Now;
@@ -132,6 +143,8 @@ sealed class DockForm : Form
         var t = next["theme"];
         accent = Hex(t?["accent"]?.ToString(), accent);
         accent2 = Hex(t?["accent2"]?.ToString(), accent2);
+        dotColor = s?["dotColor"]?.ToString() is { Length: 7 } dc ? Hex(dc, accent2) : null;
+        hoverColor = s?["hoverColor"]?.ToString() is { Length: 7 } hc ? Hex(hc, accent) : null;
         bg = Hex(t?["bg"]?.ToString(), bg);
 
         var old = items.ToDictionary(i => i.Id);
@@ -201,6 +214,7 @@ sealed class DockForm : Form
         v0 = 16 * k + offset * DeviceDpi / 96f; // room under the logos for the shadow and the "running" dot, plus the gap from the edge
         int n = Math.Max(1, items.Count);
         float grow = ic * (maxS - 1) * 2.4f;
+        growPx = grow;
         L = (int)(n * ic + (n - 1) * gap + 2 * pad + grow);
         // A longer bar: at least this share of the screen edge (0 fits the icons).
         if (lengthPct > 0) { var edgeLen = Vertical ? Area().Height : Area().Width; L = Math.Max(L, (int)(edgeLen * lengthPct / 100f)); }
@@ -516,7 +530,7 @@ sealed class DockForm : Form
                 var glow = RectangleF.Inflate(r, w * 0.32f * glowAmt, w * 0.32f * glowAmt);
                 using var gp = new GraphicsPath();
                 gp.AddEllipse(glow);
-                using var pb = new PathGradientBrush(gp) { CenterColor = Color.FromArgb((int)Math.Min(255, 120 * glowAmt), accent), SurroundColors = [Color.FromArgb(0, accent)] };
+                using var pb = new PathGradientBrush(gp) { CenterColor = Color.FromArgb((int)Math.Min(255, 120 * glowAmt), hoverColor ?? accent), SurroundColors = [Color.FromArgb(0, hoverColor ?? accent)] };
                 g.FillEllipse(pb, glow);
             }
             // Running apps glow softly all the time with the "glow" indicator.
@@ -525,7 +539,7 @@ sealed class DockForm : Form
                 var glow = RectangleF.Inflate(r, w * 0.22f, w * 0.22f);
                 using var gp = new GraphicsPath();
                 gp.AddEllipse(glow);
-                using var pb = new PathGradientBrush(gp) { CenterColor = Color.FromArgb(110, accent2), SurroundColors = [Color.FromArgb(0, accent2)] };
+                using var pb = new PathGradientBrush(gp) { CenterColor = Color.FromArgb(110, dotColor ?? accent2), SurroundColors = [Color.FromArgb(0, dotColor ?? accent2)] };
                 g.FillEllipse(pb, glow);
             }
             if (it.Shadow != null)
@@ -550,9 +564,9 @@ sealed class DockForm : Form
             {
                 float d = 5 * k, mid = c[i];
                 var dot = RectUV(mid - d / 2, mid + d / 2, 4 * k - hide, 4 * k + d - hide);
-                using var halo = new SolidBrush(Color.FromArgb(90, accent2));
+                using var halo = new SolidBrush(Color.FromArgb(90, dotColor ?? accent2));
                 g.FillEllipse(halo, RectangleF.Inflate(dot, 2.5f * k, 2.5f * k));
-                using var b = new SolidBrush(accent2);
+                using var b = new SolidBrush(dotColor ?? accent2);
                 g.FillEllipse(b, dot);
             }
             else if (it.Running && indicator == "bar")
@@ -560,7 +574,7 @@ sealed class DockForm : Form
                 float mid = c[i], half = w * 0.3f;
                 var bar = RectUV(mid - half, mid + half, 4 * k - hide, 7 * k - hide);
                 using var path = Rounded(bar, 1.5f * k);
-                using var b = new SolidBrush(accent2);
+                using var b = new SolidBrush(dotColor ?? accent2);
                 g.FillPath(b, path);
             }
             if (alwaysNames && !Vertical && i != hover && it.Name != "" && tuck < 0.05f)

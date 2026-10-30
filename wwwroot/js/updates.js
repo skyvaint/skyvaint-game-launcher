@@ -61,6 +61,8 @@
         ]));
       if (L.notes) out.push(note(`<b>WHAT'S NEW</b><br>${esc(L.notes.slice(0, 1500)).replace(/\r?\n/g, '<br>')}`));
     }
+    out.push(R.button('Update from the code', 'Gets the newest code, rebuilds the launcher from scratch and starts it again with your data. Needs the .NET SDK (and git to get new code). A small window shows the build.',
+      'UPDATE', () => A.confirmMenu('Get the newest code, rebuild and restart? Your data is saved and backed up first.', 'UPDATE', () => host.send('updateFromCode'))));
     out.push(
       R.toggle('Check by itself', 'Looks for a new release every few hours.', A.prop(u, 'auto')),
       R.toggle('Tell me about new releases', 'A notification and a message here when a new version comes out.', A.prop(u, 'notify')),
@@ -76,7 +78,7 @@
 
     out.push(heading(`BACKUPS · ${(st.backups || []).length}`));
     out.push(R.buttons('Your settings are backed up',
-      'Games, accounts, bars, playtime and your own pictures are copied outside the settings folder every 30 minutes and at every start. If they ever go missing, the launcher puts them back by itself.',
+      'Games, accounts, bars, playtime and your own pictures are copied outside the settings folder each time the launcher turns off (never while it runs). If they ever go missing, the launcher puts them back by itself.',
       [['BACK UP NOW', () => { audio.play('confirm'); host.send('backupNow'); }], ['OPEN FOLDER', () => host.send('openBackups'), 'ghost']]));
     for (const b of (st.backups || []).slice(0, 12)) {
       out.push(R.buttons(when(b.at), `${b.games} games · ${b.accounts} Roblox accounts · ${b.bars} bars`, [

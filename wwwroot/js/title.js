@@ -19,9 +19,11 @@
   document.body.append(wipe);
   let wipeTimer = 0;
   // Covers the screen with three slashing slabs; `covered` runs once it is fully covered, then it slides away.
-  function slash(covered, hold = 120) {
+  // `moment` says which change this is (list, back, mini, hide, off, leave); a moment with its own video plays that.
+  function slash(covered, hold = 120, moment = '') {
+    if (SV.effects && moment && SV.effects.videoFor(moment) && (A.cfg.fx.videos || {})[moment]) { SV.effects.transition(covered, moment); return; }
     if (!A.cfg.fx.wipe || A.cfg.fx.transition === 'none') { covered && covered(); return; }
-    if (A.cfg.fx.transition === 'video' && A.cfg.fx.transitionVideo && SV.effects) { SV.effects.transition(covered); return; }
+    if (A.cfg.fx.transition === 'video' && A.cfg.fx.transitionVideo && SV.effects) { SV.effects.transition(covered, moment || 'list'); return; }
     clearTimeout(wipeTimer);
     wipe.className = '';
     void wipe.offsetWidth;
@@ -35,8 +37,9 @@
   }
   // Coming back: start covered, then open up.
   function reveal() {
+    if (SV.effects && (A.cfg.fx.videos || {}).return) { SV.effects.transition(null, 'return'); return; }
     if (!A.cfg.fx.wipe || A.cfg.fx.transition === 'none') return;
-    if (A.cfg.fx.transition === 'video' && A.cfg.fx.transitionVideo && SV.effects) { SV.effects.transition(null); return; }
+    if (A.cfg.fx.transition === 'video' && A.cfg.fx.transitionVideo && SV.effects) { SV.effects.transition(null, 'return'); return; }
     clearTimeout(wipeTimer);
     wipe.className = 'held';
     void wipe.offsetWidth;
@@ -47,7 +50,7 @@
 
   function leave() {
     const choices = [
-      { id: 'off', icon: 'off', label: 'OFF', sub: 'Quit the launcher', danger: true, run: () => A.confirmMenu('Turn the launcher off?', 'TURN OFF', () => slash(() => host.send('quit'), 400)) },
+      { id: 'off', icon: 'off', label: 'OFF', sub: 'Quit the launcher', danger: true, run: () => A.confirmMenu('Turn the launcher off?', 'TURN OFF', () => slash(() => host.send('quit'), 400, 'off')) },
       { id: 'sleep', icon: 'moon', label: 'SLEEP', sub: 'Hide to the tray', run: () => { closeAll(); SV.app.leaveTo('hidden'); } },
       { id: 'mini', icon: 'home', label: 'MINI', sub: 'The small widget', run: () => { closeAll(); SV.app.leaveTo('mini'); } },
       { id: 'return', icon: 'back', label: 'RETURN', sub: 'Back to HOME', run: () => A.pop() },

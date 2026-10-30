@@ -87,6 +87,7 @@ SV.media = (() => {
     if (!v) {
       v = document.createElement('video');
       Object.assign(v, { muted: true, loop: true, playsInline: true, preload: 'auto', disablePictureInPicture: true });
+      v.dataset.keep = '1'; // kept playing by videoguard.js while it is on screen
       v.src = url;
       v.addEventListener('loadeddata', () => settle(url));
       list.push(v);

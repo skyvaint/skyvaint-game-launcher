@@ -9,6 +9,7 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>bin\$(Configuration)\net9.0-windows\</OutputPath>
     <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Skyvaint</RootNamespace>
@@ -21,6 +22,12 @@
     <TieredPGO>true</TieredPGO>
     <NoWarn>$(NoWarn);MSB3277;CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8619;CS8620;CS8625;CS8629;CS0162</NoWarn>
   </PropertyGroup>
+
+  <!-- WPF is only here for UI Automation (driving Dolphin's NetPlay window); it drops these usings, so add them back. -->
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />

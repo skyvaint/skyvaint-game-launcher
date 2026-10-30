@@ -20,10 +20,19 @@ sealed class SidePanel : Panel
     readonly TextBox address = new() { BorderStyle = BorderStyle.None, Font = new Font("Segoe UI", 10f) };
     readonly ToolTip tips = new();
     WebView2? view;
+    internal CoreWebView2? Core => view?.CoreWebView2;
     static readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(10) };
     Color accent = Color.FromArgb(255, 31, 31), bg = Color.FromArgb(14, 10, 10);
     int normalWidth = 420, dragX = -1;
     bool wide, mobile = true;
+    // How the browser shows: "side" (docked next to HOME), "wide", "full" (fills the launcher) or "window" (its own
+    // window you can move, resize and maximize). A video going full screen fills the launcher or the window.
+    string view_ = "side";
+    Form? ownWindow;
+    Control? home; // where the panel lives when it isn't in its own window
+    DockStyle sideDock = DockStyle.Right;
+    bool videoFull;
+    public string ViewMode => view_;
     string sitesKey = "";
 
     const string MobileUA = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36";
@@ -77,11 +86,12 @@ sealed class SidePanel : Panel
         address.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; Go(address.Text); } };
         box.Controls.Add(address);
         row.Controls.Add(box);
-        row.Controls.Add(Btn("⤢", "Wide (full browser)", ToggleWide));
+        row.Controls.Add(Btn("＋", "Save this site to your list", () => { var u = view?.Source?.AbsoluteUri; if (!string.IsNullOrEmpty(u) && u != "about:blank") owner.OnSideMessage(new JsonObject { ["type"] = "addSite", ["url"] = u, ["title"] = view?.CoreWebView2?.DocumentTitle ?? "" }); }));
+        row.Controls.Add(Btn("▣", "View: side, wide, full screen or its own window", () => ViewMenu(row)));
         row.Controls.Add(Btn("↗", "Open in your browser", () => { var u = view?.Source?.AbsoluteUri; if (!string.IsNullOrEmpty(u)) try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(u) { UseShellExecute = true })?.Dispose(); } catch { } }));
         row.Controls.Add(Btn("✕", "Close", () => owner.OnSideMessage(new JsonObject { ["type"] = "close" })));
         header.Controls.Add(row);
-        header.Resize += (_, _) => box.Width = Math.Max(80, header.Width - 6 * 38 - 20);
+        header.Resize += (_, _) => box.Width = Math.Max(80, header.Width - 7 * 38 - 20);
     }
 
     /// <summary>Colours, sites, side and width from the settings.</summary>
@@ -97,7 +107,8 @@ sealed class SidePanel : Panel
         address.ForeColor = Color.FromArgb(245, 239, 238);
         if (address.Parent is Panel p) p.BackColor = address.BackColor;
         var side = social?["side"]?.ToString() == "left" ? DockStyle.Left : DockStyle.Right;
-        if (Dock != side) { Dock = side; grip.Dock = side == DockStyle.Left ? DockStyle.Right : DockStyle.Left; }
+        sideDock = side;
+        if (view_ is "side" or "wide" && !videoFull && Dock != side) { Dock = side; grip.Dock = side == DockStyle.Left ? DockStyle.Right : DockStyle.Left; }
         try { normalWidth = Math.Clamp(social?["width"]?.GetValue<int>() ?? 420, 300, 2400); } catch { }
         if (!wide) Width = normalWidth;
         try { mobile = social?["mobile"]?.GetValue<bool>() ?? true; } catch { }
@@ -161,6 +172,14 @@ sealed class SidePanel : Panel
         core.Settings.AreDevToolsEnabled = false;
         // Links that would open a new window open here instead.
         core.NewWindowRequested += (_, a) => { a.Handled = true; core.Navigate(a.Uri); };
+        // A video (YouTube, TikTok…) asking for full screen fills the launcher, or the browser's own window.
+        core.ContainsFullScreenElementChanged += (_, _) =>
+        {
+            videoFull = core.ContainsFullScreenElement;
+            header.Visible = rail.Visible = grip.Visible = !videoFull;
+            if (ownWindow != null) ownWindow.WindowState = videoFull ? FormWindowState.Maximized : FormWindowState.Normal;
+            else Apply();
+        };
         core.SourceChanged += (_, _) => { if (!address.Focused) address.Text = core.Source; };
         core.DocumentTitleChanged += (_, _) => owner.OnSideMessage(new JsonObject { ["type"] = "title", ["title"] = core.DocumentTitle, ["url"] = core.Source });
     }
@@ -182,20 +201,93 @@ sealed class SidePanel : Panel
     public async void Open(string? url = null)
     {
         Visible = true;
-        BringToFront();
+        if (ownWindow != null) { ownWindow.Show(); ownWindow.Activate(); }
+        else BringToFront();
         await EnsureView();
         if (url != null) Go(url);
         else if (view?.CoreWebView2 != null && (view.Source == null || view.Source.AbsoluteUri == "about:blank")) Go(Sites(null)[0].url);
         owner.OnSideMessage(new JsonObject { ["type"] = "opened" });
     }
 
-    public void Close() => Visible = false;
+    public void Close() { if (ownWindow != null) { ownWindow.Hide(); return; } Visible = false; }
+    public bool InWindow => ownWindow != null;
 
-    void ToggleWide()
+    void ViewMenu(Control anchor)
     {
-        wide = !wide;
-        Width = wide ? Math.Max(normalWidth, (int)((Parent?.Width ?? 1600) * 0.62)) : normalWidth;
-        if (view?.CoreWebView2 != null) { view.CoreWebView2.Settings.UserAgent = mobile && !wide ? MobileUA : ""; view.Reload(); }
+        var menu = new ContextMenuStrip { ShowImageMargin = false };
+        void Item(string text, string mode)
+        {
+            var it = new ToolStripMenuItem((view_ == mode ? "● " : "   ") + text);
+            it.Click += (_, _) => SetView(mode);
+            menu.Items.Add(it);
+        }
+        Item("Side panel", "side");
+        Item("Wide", "wide");
+        Item("Full screen (fills the launcher)", "full");
+        Item("Its own window", "window");
+        menu.Show(anchor, new Point(anchor.Width - 200, anchor.Height));
+    }
+
+    /// <summary>Switches how the browser shows. The page stays loaded throughout.</summary>
+    public void SetView(string mode)
+    {
+        if (mode == view_) return;
+        bool wasWide = wide;
+        view_ = mode;
+        wide = mode != "side";
+        if (mode == "window") ToWindow(); else FromWindow();
+        Apply();
+        if (wasWide != wide && view?.CoreWebView2 != null) { view.CoreWebView2.Settings.UserAgent = mobile && !wide ? MobileUA : ""; view.Reload(); }
+        owner.OnSideMessage(new JsonObject { ["type"] = "view", ["mode"] = mode });
+    }
+
+    void Apply()
+    {
+        if (ownWindow != null) { Dock = DockStyle.Fill; return; }
+        if (videoFull || view_ == "full") { Dock = DockStyle.Fill; BringToFront(); return; }
+        Dock = sideDock;
+        grip.Dock = sideDock == DockStyle.Left ? DockStyle.Right : DockStyle.Left;
+        Width = view_ == "wide" ? Math.Max(normalWidth, (int)((Parent?.Width ?? 1600) * 0.62)) : normalWidth;
+    }
+
+    void ToWindow()
+    {
+        if (ownWindow != null) return;
+        home ??= Parent;
+        var screen = Screen.FromControl(this).WorkingArea;
+        ownWindow = new Form
+        {
+            Text = "Skyvaint browser", StartPosition = FormStartPosition.Manual, BackColor = bg, Icon = owner.Icon,
+            Bounds = new Rectangle(screen.Left + screen.Width / 6, screen.Top + screen.Height / 8, screen.Width * 2 / 3, screen.Height * 3 / 4),
+        };
+        // Closing the window puts the browser back beside HOME (hidden until you open it again).
+        ownWindow.FormClosing += (_, e) =>
+        {
+            if (view_ != "window") return;
+            e.Cancel = true;
+            view_ = "side"; wide = false;
+            FromWindow();
+            Apply();
+            Close();
+            owner.OnSideMessage(new JsonObject { ["type"] = "close" });
+        };
+        Parent?.Controls.Remove(this);
+        ownWindow.Controls.Add(this);
+        Dock = DockStyle.Fill;
+        Visible = true;
+        ownWindow.Show();
+    }
+
+    void FromWindow()
+    {
+        if (ownWindow == null) return;
+        var w = ownWindow;
+        ownWindow = null;
+        w.Controls.Remove(this);
+        home?.Controls.Add(this);
+        if (Visible) BringToFront();
+        w.Hide();
+        w.Dispose();
     }
 
     static Color Hex(string? hex, Color fallback)

@@ -154,17 +154,19 @@
       meshStyle: 'poly', meshDensity: 13, meshMotion: 1, meshLines: 1, meshFill: 1, meshColor: 'duo', image: '', imageDim: 0.55,
       intensity: 0.8, speed: 1, quality: 'auto', fps: 0, slowFps: 60, motion: true, calmWhilePlaying: true, video: '', videoMix: 0.45, videoSpeed: 1, photo: '',
       videoBlend: 'screen', videoDim: 0.2, videoBlur: 0, videoSaturate: 1 },
-    perf: { smooth: true, meter: false, uncapped: false, dgpu: false },
+    perf: { smooth: true, meter: false, uncapped: false, dgpu: false, memorySaver: 'balanced', memoryLimit: 0 },
     fx: { trail: true, ripple: true, tilt: true, glitch: true, scramble: true, rgb: true, chroma: false, scan: false, shake: true, confetti: true, warp: true, pulse: true,
       launchStyle: 'slabs', sparks: 1, space: true, focusFx: true, bootStyle: 'space', fadeWindow: true, wipe: true,
       spotlight: true, rays: false, dust: true, breathe: false, bloom: true, sweep: true, flare: false, light: 1, transition: 'slash',
       introVideo: '', introMuted: false, introMax: 30, rotateText: '', rotateEvery: 6, cursorGlow: false,
       rim: false, bars: false, barsSize: 7, parallax: false, parallaxAmount: 1, reflect: false, beat: false, grainAnim: false, chromaHover: false, glowColor: '',
-      transitionVideo: '', transitionCover: 0.4, transitionMax: 3, transitionSound: false, launchVideo: '', launchVideoSound: true, launchVideoOnly: false },
+      transitionVideo: '', transitionCover: 0.4, transitionMax: 3, transitionSound: false,
+      transitionSpeed: 1, transitionTint: 'none', transitionTintColor: '#ff1f1f', transitionTintAmount: 0.6, transitionHue: 0, transitionSaturate: 1, transitionBright: 1, transitionContrast: 1, transitionOpacity: 1, launchVideo: '', launchVideoSound: true, launchVideoOnly: false, videos: {}, introThenOpening: false,
+      launchVideoSpeed: 1, launchVideoTint: 'none', launchVideoTintColor: '#ff1f1f', launchVideoTintAmount: 0.6, launchVideoHue: 0, launchVideoSaturate: 1, launchVideoBright: 1, launchVideoContrast: 1, launchVideoOpacity: 1 },
     sound: { master: 0.6, pack: 'pulse', events: { nav: true, confirm: true, back: true, boot: true, launch: true }, custom: { boot: '', launch: '', nav: '', confirm: '', back: '', toggle: '', open: '', pick: '', star: '', error: '', slam: '' }, ambient: 0, bgmTracks: [], bgmVolume: 0.4, bgmShuffle: false, bgmLoop: true, bgmPauseInGame: true, bgmInBackground: false, funcs: {}, haptics: true, hover: true, hoverGap: 220, hoverVolume: 0.6, hoverDwell: 70, library: [],
       pitch: 0, echo: 0 },
     behavior: { bootAnim: true, afterLaunch: 'hidden', onGameExit: 'home', closeAction: 'hidden', autostartMode: 'hidden', miniOnTop: true, miniSize: 'm', clock24: true,
-      promptAccount: true, hideUninstalled: false, waitForGame: true, launchWait: 120, launchSettle: 2 },
+      promptAccount: true, hideUninstalled: false, waitForGame: true, launchWait: 120, launchSettle: 2, hotkeyShow: 'Ctrl+Alt+Home', hotkeyMenu: 'Ctrl+Alt+M', holdFront: true },
     games: [],
     imported: { steam: false, epic: false, roblox: false, robloxManager: false },
     epic: { accounts: [], last: {} },
@@ -421,6 +423,7 @@
     bg.setThrottled(calm);
     fx.setEnabled(mode === 'home' && cfg.backdrop.motion && !calm);
     document.body.classList.toggle('calm', calm);
+    SV.effects && SV.effects.sync && SV.effects.sync();
   }
 
   // FPS counter: the interface's own frame rate (this thread) next to the backdrop worker's.
@@ -485,6 +488,7 @@
     discover: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
     quests: '<path d="M6 3h12v5a6 6 0 0 1-12 0zM9 20h6M12 14v6M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3"/>',
     social: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.3" cy="6.7" r=".9"/>',
+    shop: '<path d="M4 8h16l-1.4 11.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8z"/><path d="M8.5 8V6.5a3.5 3.5 0 0 1 7 0V8"/>',
     dev: '<path d="M5.2 3.6l15.2 4.1-4.1 15.2L1.1 18.8z"/><path d="M10.2 10.1l3.9 1-1 3.9-3.9-1z"/>',
     nexus: '<rect x="3" y="15" width="18" height="5" rx="1.5"/><rect x="5.5" y="9" width="4" height="4" rx="1"/><rect x="10.5" y="9" width="4" height="4" rx="1"/><rect x="15.5" y="9" width="3" height="4" rx="1"/>',
   };
@@ -497,6 +501,7 @@
     { id: 'clips', label: 'Clips', desc: 'Your recorded clips', run: () => SV.clips.open() },
     { id: 'dev', label: 'Developer', desc: 'Roblox Studio, commissions and dev tools', dev: true, run: () => SV.dev.open() },
     { id: 'social', label: 'Social', desc: 'TikTok, Instagram, YouTube and a browser, beside HOME', run: () => SV.social.toggle() },
+    { id: 'shop', label: 'Shop', desc: 'Themes: get them, swap between them, share a code', run: () => SV.themes.open() },
     { id: 'nexus', label: 'Nexus', desc: 'Your desktop app bar', run: () => SV.nexus.open() },
     { id: 'accounts', label: 'Accounts', desc: 'Steam, Epic and Roblox accounts', run: () => openSettings('accounts') },
     { id: 'tasks', label: 'Stop', desc: 'Close running games and apps', run: () => openTasks() },
@@ -510,7 +515,7 @@
   const funcSound = (f) => { const u = (cfg.sound.funcs || {})[f.id]; if (u) audio.preview(u); else audio.play('confirm'); };
   // The Developer button only shows in developer mode.
   const funcs = () => FUNCS.filter((f) => !f.dev || cfg.dev.enabled);
-  const PLATFORM = { epic: 'EPIC GAMES', steam: 'STEAM', roblox: 'ROBLOX', pc: 'PC' };
+  const PLATFORM = { epic: 'EPIC GAMES', steam: 'STEAM', roblox: 'ROBLOX', emu: 'EMULATOR', pc: 'PC' };
   // RECENT is not a platform: the games you played, newest first.
   const FILTERS = [['all', 'ALL'], ['recent', 'RECENT'], ['steam', 'STEAM'], ['epic', 'EPIC'], ['roblox', 'ROBLOX'], ['pc', 'PC']];
   const TILE = 13, GAP = 1.2, GROW = 1.4;
@@ -530,7 +535,7 @@
     sub = { kind, p, parent, back: sel };
     sel = 0; zone = 'shelf';
     audio.play('confirm');
-    SV.title.slash(renderHome, 30);
+    SV.title.slash(renderHome, 30, 'list');
     return true;
   }
   function exitList() {
@@ -539,7 +544,7 @@
     sub = null;
     sel = back; zone = 'shelf';
     audio.play('back');
-    SV.title.slash(renderHome, 30);
+    SV.title.slash(renderHome, 30, 'back');
   }
   function refreshList() { if (sub && mode === 'home') { const keep = sel; renderHome(); select(keep, true); } }
   // Starts the game itself, skipping its list (Studio's "Open Studio").
@@ -548,9 +553,11 @@
   const playedAt = (g) => (stats[g.id] || {}).lastPlayed || 0;
   const recentGames = () => cfg.games.filter((g) => playedAt(g) > 0).sort((a, b) => playedAt(b) - playedAt(a));
   const inFilter = (k) => (k === 'all' ? cfg.games : k === 'recent' ? recentGames() : cfg.games.filter((g) => platformOf(g) === k));
+  // An add-on that is switched off in Settings → SYSTEM takes its card off the shelf too.
+  const addonOff = (g) => SV.features && ((g.target === 'sv:roblox' && !SV.features.on('roblox.card')) || (g.target === 'sv:budokai' && !SV.features.on('budokai')));
   function visibleGames() {
     if (sub) return sub.p.items(sub.parent);
-    const games = inFilter(filter).filter((g) => !(cfg.behavior.hideUninstalled && !isInstalled(g)));
+    const games = inFilter(filter).filter((g) => !(cfg.behavior.hideUninstalled && !isInstalled(g)) && !addonOff(g));
     return filter === 'all' ? [...games, ...setupCards()] : games;
   }
 
@@ -894,7 +901,7 @@
     SV.title.slash(() => {
       if (cfg.fx.space) softLeave();
       host.send('setMode', { mode: m });
-    }, 60);
+    }, 60, m === 'hidden' ? 'hide' : 'mini');
   }
   let leaveTimer = 0;
   function softLeave() {
@@ -1028,6 +1035,7 @@
       if (kind && cfg.lists[kind] !== false && enterList(kind, g)) return;
     }
     if (g.target === 'sv:roblox') return SV.roblox.open(g);
+    if (g.target === 'sv:budokai') return SV.budokai.open(g);
     if (!g.target) { audio.play('error'); toast('No launch target set — open Options to add one.', 'bad'); return; }
 
     // Epic games ask which account when there is a choice; the answer comes back through opts.account.
@@ -1117,7 +1125,7 @@
   }
 
   // Launching from the widget skips the big animation, unless an account has to be chosen first.
-  const needsPrompt = (g) => g.target === 'sv:roblox' || (g.platform === 'epic' && cfg.epic.accounts.length > 1 && cfg.behavior.promptAccount);
+  const needsPrompt = (g) => g.target === 'sv:roblox' || g.target === 'sv:budokai' || (g.platform === 'epic' && cfg.epic.accounts.length > 1 && cfg.behavior.promptAccount);
   let pendingLaunch = null;
 
   $('#miniHome').addEventListener('click', () => host.send('setMode', { mode: 'home' }));
@@ -1340,7 +1348,7 @@
 
   // ------------------------------------------------------------------ settings
 
-  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['widgets', 'WIDGETS'], ['social', 'SOCIAL'], ['discord', 'DISCORD'], ['developer', 'DEVELOPER'], ['system', 'SYSTEM'], ['updates', 'UPDATES']];
+  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['widgets', 'WIDGETS'], ['social', 'SOCIAL'], ['discord', 'DISCORD'], ['developer', 'DEVELOPER'], ['performance', 'PERFORMANCE'], ['system', 'SYSTEM'], ['updates', 'UPDATES']];
   const pct = (v) => Math.round(v * 100) + '%';
 
   function settingsRows(tab, rerender) {
@@ -1430,6 +1438,7 @@
         R.toggle('Feature panel', 'Large artwork panel beside the game details.', at('theme.hero')),
         R.toggle('Ticker', 'Scrolling headline strip.', at('theme.ticker')),
         R.toggle('Vignette', 'Darkened screen edges.', at('theme.vignette')),
+        ...(SV.themes ? SV.themes.rows(rerender) : []),
       ];
     }
 
@@ -1492,6 +1501,7 @@
         heading('VIDEO'),
         R.file('Video backdrop', 'An MP4 or WebM that loops behind everything.  ← clears it.', at('backdrop.video'), 'video'),
         R.slider('Effects over the video', 'How much of the animated backdrop is drawn on top of the video.', at('backdrop.videoMix'), 0, 1, 0.05, pct),
+        R.toggle('Pause when not in front', 'Saves a little power while another window has focus.', at('backdrop.videoPauseUnfocused')),
         R.slider('Video speed', '', at('backdrop.videoSpeed'), 0.25, 2, 0.05, (v) => v.toFixed(2) + '×'),
         R.choice('Effects blend', 'How the animated effects mix with the video. Screen only adds light, so the video stays clear.', at('backdrop.videoBlend'), [['screen', 'Screen (adds light)'], ['lighten', 'Lighten'], ['soft', 'Soft light'], ['overlay', 'Overlay'], ['normal', 'Normal (covers it)']]),
         R.slider('Video dimming', '', at('backdrop.videoDim'), 0, 0.9, 0.05, pct),
@@ -1541,15 +1551,25 @@
       R.slider('Screen changes at', 'When in the video the screen behind it switches.', at('fx.transitionCover'), 0, 3, 0.1, (v) => v.toFixed(1) + ' s'),
       R.slider('Longest transition', '', at('fx.transitionMax'), 0.5, 10, 0.5, (v) => v + ' s'),
       R.toggle('Transition video sound', '', at('fx.transitionSound')),
+      ...SV.effects.lookRows('fx.transition', 'The two times above follow the video, so they stay in step.'),
+      R.button('Preview the video', 'Plays it with these settings.', 'PLAY', () => { if (!cfg.fx.transitionVideo) return toast('Pick a transition video first.', 'bad'); SV.effects && SV.effects.transition(null); }),
+      heading('A VIDEO FOR EVERY MOMENT'),
+      el('<div class="row-note">Give any moment its own video. It plays whatever the transition style is; moments left empty use the style above. They all share the speed, colour and timing settings above, and are loaded ahead of time so they start instantly.</div>'),
+      ...[['list', 'Opening a list', 'Going into RECENT, STEAM, a Roblox list…'], ['back', 'Going back', 'Leaving a list back to HOME.'], ['mini', 'Going to mini', ''],
+        ['hide', 'Hiding to the tray', ''], ['return', 'Coming back', 'When the launcher shows again (from the tray, mini or after a game).'], ['leave', 'Leaving HOME', 'When another window takes over.'], ['off', 'Turning off', '']]
+        .map(([k, label, desc]) => { cfg.fx.videos = cfg.fx.videos || {}; return R.file(label, (desc ? desc + '  ' : '') + '← clears it.', { get: () => cfg.fx.videos[k] || '', set: (v) => { cfg.fx.videos[k] = v; } }, 'video'); }),
+      el('<div class="row-note">The opening and game launch videos are set in their own sections below.</div>'),
       heading('GAME LAUNCH VIDEO'),
       R.file('Launch video', 'Plays full screen while a game starts. Each game can have its own (game Options → Launch video).  ← clears it.', at('fx.launchVideo'), 'video'),
       R.toggle('Launch video sound', '', at('fx.launchVideoSound')),
       R.toggle('Video only', 'Hide the launch screen text so only the video shows.', at('fx.launchVideoOnly')),
+      ...SV.effects.lookRows('fx.launchVideo', ''),
       R.button('Preview launch', '', 'PLAY', () => { launchFx('PREVIEW', 'NOTHING IS STARTING'); setTimeout(endLaunch, 4000); }),
       heading('INTRO VIDEO'),
       R.file('Intro video', 'Your own MP4 or WebM, played full screen when the launcher opens. Any key skips it.  ← clears it.', at('fx.introVideo'), 'video'),
       R.toggle('Intro without sound', '', at('fx.introMuted')),
       R.slider('Longest intro', 'Skips ahead after this long, even if the video is longer.', at('fx.introMax'), 3, 120, 1, (v) => v + ' s'),
+      R.toggle('Then the built-in opening', 'Off: your video is the whole opening, straight to HOME after it.', at('fx.introThenOpening')),
       R.button('Preview intro', cfg.fx.introVideo ? '' : 'Pick a video first.', 'PLAY', () => { if (!cfg.fx.introVideo) return toast('Pick an intro video first.', 'bad'); while (stack.length) pop(); SV.effects.intro(cfg.fx.introVideo); }),
       heading('CHANGING TEXT'),
       R.text('Top bar lines', 'Lines that take turns under the logo, separated by | (e.g. NO MERCY | GG ONLY | SKYVAINT). Empty keeps the tag line.', at('fx.rotateText'), 'NO MERCY | GG ONLY'),
@@ -1675,6 +1695,7 @@
     if (tab === 'developer') return SV.dev.rows(rerender);
     if (tab === 'widgets') return SV.widgets.rows(rerender);
     if (tab === 'social') return SV.social.rows(rerender);
+    if (tab === 'performance') return SV.care.rows(rerender);
     if (tab === 'texts') return [
       heading('WORDING'),
       ...Object.entries(TEXTS).map(([k, [label, fallback]]) => R.text(label, 'Default: ' + fallback, at('texts.' + k), fallback, 'games')),
@@ -1684,6 +1705,8 @@
 
     const startChoice = { get: () => (autostart ? cfg.behavior.autostartMode : 'off'), set: (v) => { autostart = v !== 'off'; if (autostart) cfg.behavior.autostartMode = v; host.send('setAutostart', { on: autostart }); } };
     return [
+      ...(SV.features ? SV.features.rows(rerender) : []),
+      heading('GENERAL'),
       R.choice('Language', 'The language of the interface. Your game names and own wording stay as they are.', at('language'), SV.i18n.LANGS, () => { changed('games'); rerender(0); }),
       R.text('Profile name', 'Shown in the top bar.', at('profile.name'), 'your name', 'games'),
       heading('CLIPS'),
@@ -1992,7 +2015,7 @@
   function autoImport() {
     let added = 0;
     const take = (list) => list.filter((s) => !known(s)).forEach((s) => { cfg.games.push(fromScan(s)); added++; });
-    for (const k of ['roblox', 'epic', 'steam']) {
+    for (const k of ['roblox', 'epic', 'steam', 'emu']) {
       const found = scan.filter((s) => s.platform === k);
       if (cfg.imported[k] || !found.length) continue;
       take([...found.filter((s) => s.installed !== false), ...found.filter((s) => s.installed === false)]);
@@ -2203,7 +2226,11 @@
     const body = document.body;
     body.classList.remove('preinit');
     // Your own intro video plays first, then the normal opening (or straight to HOME if that is off).
-    if (mode === 'home' && cfg.fx.introVideo && !introPlayed && SV.effects) { introPlayed = true; return SV.effects.intro(cfg.fx.introVideo, boot); }
+    if (mode === 'home' && cfg.fx.introVideo && !introPlayed && SV.effects) {
+      introPlayed = true;
+      // Your video is the opening: straight to HOME after it, unless you want the built-in one as well.
+      return SV.effects.intro(cfg.fx.introVideo, cfg.fx.introThenOpening ? boot : () => { body.classList.remove('preinit'); body.classList.add('entered'); });
+    }
     if (mode !== 'home' || !cfg.behavior.bootAnim) { body.classList.add('entered'); return; }
     $('#bootName').innerHTML = [...cfg.texts.brand].map((c, i) => `<span style="--i:${i}">${c === ' ' ? '&nbsp;' : esc(c)}</span>`).join('');
     $('#bootWelcome').textContent = cfg.texts.welcome ? `${cfg.texts.welcome}, ${cfg.profile.name}`.toUpperCase() : '';
@@ -2241,7 +2268,7 @@
       document.body.classList.remove('entered');
       void document.body.offsetWidth;
       document.body.classList.add('entered'); // replay the entrance
-      if (cfg.fx.wipe) SV.title.reveal();
+      if (cfg.fx.wipe || (cfg.fx.videos || {}).return) SV.title.reveal();
       else if (cfg.fx.space && cfg.backdrop.motion && !document.body.classList.contains('booting')) SV.space.play('arrive');
       audio.play('open');
       if (pendingLaunch) { const g = pendingLaunch; pendingLaunch = null; setTimeout(() => launch(g), 350); }
@@ -2311,7 +2338,7 @@
   });
   host.on('mode', (m) => setMode(m.mode));
   // Leaving HOME by other means (tray, hotkey, closing the window): the shell waits for this warp-out.
-  host.on('leave', () => { if (mode === 'home') SV.title.slash(() => { if (cfg.fx.space) softLeave(); }, 60); });
+  host.on('leave', () => { if (mode === 'home') SV.title.slash(() => { if (cfg.fx.space) softLeave(); }, 60, 'leave'); });
   // Alt-tabbing to a game dims and pauses HOME; coming back plays a short re-entry.
   // Coming back after installing or signing in to a store: look again, so its games appear without a restart.
   const setupShown = () => mode === 'home' && !sub && shown.some((g) => g.setup);

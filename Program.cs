@@ -43,15 +43,20 @@ internal static class Program
 		using (new Mutex(initiallyOwned: true, "SkyvaintGameLauncher.Single" + inst, out first))
 		{
 			using EventWaitHandle wake = new EventWaitHandle(initialState: false, EventResetMode.AutoReset, "SkyvaintGameLauncher.Wake" + inst);
+			// "--quit" asks the running launcher to close the same way as tray -> Quit (it saves first).
+			using EventWaitHandle quit = new EventWaitHandle(initialState: false, EventResetMode.AutoReset, "SkyvaintGameLauncher.Quit" + inst);
 			if (!first)
 			{
-				wake.Set();
+				if (args.Contains("--quit")) quit.Set(); else wake.Set();
 				return;
 			}
+			if (args.Contains("--quit")) return; // nothing running to close
 			ApplicationConfiguration.Initialize();
 			int port = Array.IndexOf(args, "--debug-port");
 			MainForm.DebugPort = ((port >= 0 && port + 1 < args.Length && int.TryParse(args[port + 1], out var n)) ? n : 0);
-			Application.Run(new MainForm(wake, args.Contains("--background"), args.Contains("--dev")));
+			var form = new MainForm(wake, args.Contains("--background"), args.Contains("--dev"));
+			new Thread(() => { quit.WaitOne(); try { form.BeginInvoke(form.QuitFromOutside); } catch { } }) { IsBackground = true }.Start();
+			Application.Run(form);
 		}
 	}
 
