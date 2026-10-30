@@ -1412,3 +1412,11 @@ body[data-mode=mini] #nppop { display: none; }
 .prof-card small { opacity: .6; font-size: .72rem; letter-spacing: .08em; }
 .prof-card.now small { color: var(--accent); opacity: 1; }
 .prof-card.add .prof-art { border: 2px dashed rgba(255, 255, 255, .25); background: transparent; }
+
+/* Now playing: just the spinning cover in a circle; the song name slides out on hover (or keyboard focus). */
+.np-pill { max-width: 2.6rem; width: auto; gap: 0; padding: 0 .2rem; overflow: hidden;
+  transition: max-width .35s cubic-bezier(.2, .8, .2, 1), padding .35s, gap .35s, border-color .15s, background .15s; }
+.np-pill .np-txt, .np-pill .np-eq { max-width: 0; opacity: 0; transition: max-width .35s cubic-bezier(.2, .8, .2, 1), opacity .2s; }
+.np-pill:hover, .np-pill:focus-visible { max-width: 16rem; gap: .6rem; padding: 0 .9rem 0 .25rem; }
+.np-pill:hover .np-txt, .np-pill:focus-visible .np-txt { max-width: 10rem; opacity: 1; transition-delay: 0s, .08s; }
+.np-pill:hover .np-eq, .np-pill:focus-visible .np-eq { max-width: 1.2rem; opacity: 1; }
