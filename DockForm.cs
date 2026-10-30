@@ -68,6 +68,7 @@ sealed class DockForm : Form
         StartPosition = FormStartPosition.Manual;
         edge.Tick += (_, _) => CheckEdge();
         anim.Tick += (_, _) => Step();
+        showDelay.Tick += (_, _) => { showDelay.Stop(); Apply(false); };
     }
 
     protected override bool ShowWithoutActivation => true;
@@ -145,8 +146,21 @@ sealed class DockForm : Form
         if (fade != fadeTarget) Wake(); // the first time: fade in
     }
 
-    /// <summary>Steps aside while a fullscreen program (usually a game) has the screen.</summary>
+    // Coming back waits a moment and only happens if it still should, so a quick change of focus (pressing the
+    // taskbar, holding the click on an app, a window closing and another taking its place) can't make the bar
+    // flash in and fade straight back out. Hiding is still immediate.
+    readonly System.Windows.Forms.Timer showDelay = new() { Interval = 180 };
+
+    /// <summary>Steps aside while a fullscreen program (usually a game) has the screen, or while a desktop-only
+    /// bar is covered.</summary>
     public void Suppress(bool on)
+    {
+        if (on) { showDelay.Stop(); Apply(true); return; }
+        if (!suppressed) { showDelay.Stop(); return; }
+        if (!showDelay.Enabled) showDelay.Start();
+    }
+
+    void Apply(bool on)
     {
         if (on == suppressed) return;
         suppressed = on;
@@ -779,6 +793,7 @@ sealed class DockForm : Form
         {
             edge.Dispose();
             anim.Dispose();
+            showDelay.Dispose();
             frame?.Dispose();
             foreach (var it in items) { it.Tile?.Dispose(); it.Shadow?.Dispose(); }
             foreach (var b in images.Values) b?.Dispose();

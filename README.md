@@ -11,7 +11,7 @@ A console-style game launcher for Windows: one fullscreen HOME for your Steam, E
 
 **Needs:** Windows 10 or 11 (64-bit) and the Microsoft Edge WebView2 Runtime, which Windows 11 already has. On an older PC without it, get it from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/#download-section) (Evergreen Bootstrapper).
 
-Your settings and accounts are saved in `%APPDATA%\SkyvaintGameLauncher` on your own PC. Nothing is uploaded anywhere.
+Your settings and accounts are saved in `%APPDATA%\SkyvaintGameLauncher` on your own PC. Nothing is uploaded anywhere. Backups are kept in `%LOCALAPPDATA%\SkyvaintGameLauncher\backups` and put back by themselves if the settings ever go missing.
 
 ## What it does
 
@@ -59,3 +59,4 @@ The shell is WinForms + WebView2 (C#). The whole interface is plain HTML, CSS an
 | `--background` | Start hidden in the tray |
 | `--debug-port 9333` | Open the page to Edge/Chrome dev tools |
 | `--dump <folder>` | Write what the game and clip scanners find, then exit |
+| `--data <folder>` | Run on a separate data folder (for testing builds): your real settings are not touched |

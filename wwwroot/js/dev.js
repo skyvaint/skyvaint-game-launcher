@@ -69,6 +69,9 @@
         ['EARNED (PAID)', money(paid)], ['WAITING ON', money(live)], ['STUDIO GAMES', String(studio.cloud.length)],
         ['PLAYERS NOW', num(studio.cloud.reduce((s, g) => s + (+g.playing || 0), 0))],
       ].map(([k, v]) => `<div class="stat"><span>${esc(A.T(k))}</span><b>${esc(v)}</b></div>`).join('')}</div>`),
+      heading('DATA'),
+      R.toggle('Prompt data selection', 'On start, asks which settings to load: the current ones, the copies in the settings folder (.bak and other .json files) or an automatic backup. Whatever you have now is backed up first.', A.at('dev.promptData')),
+      R.button('Load other data', 'Pick a settings file and restart on it.', 'CHOOSE', () => host.send('dataFiles', { prompt: false })),
       heading('QUICK'),
       R.buttons('Roblox Studio', 'Open Studio, or jump to your creations on the web.', [
         ['OPEN STUDIO', () => { const g = A.cfg.games.find((x) => x.id === 'roblox_studio' || /roblox studio/i.test(x.name)); if (g) { A.pop(); A.launchDirect(g); } else openUrl('https://create.roblox.com/'); }],
@@ -138,6 +141,29 @@
       R.button('New commission', '', 'ADD', () => addCommission(rerender)),
     ];
   }
+
+  // ---------------------------------------------------------------- data picker
+  // "Prompt data selection": on start, choose which settings file to load. The shell lists the files, backs up
+  // what is there now, writes the chosen one and restarts (without asking again).
+  const stamp = (ms) => new Date(ms).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  function pickData(files) {
+    if (!files || !files.length) return toast('No settings files found.', 'bad');
+    A.openMenu('LOAD WHICH DATA?', files.map((f) => ({
+      label: (f.current ? '● ' : '') + f.label,
+      sub: `${f.current ? 'LOADED NOW · ' : ''}${stamp(f.at)} · ${f.games} GAMES · ${f.accounts} ROBLOX · ${f.bars} BARS${f.sounds ? ' · ' + f.sounds + ' SOUNDS' : ''}`,
+      run: () => { if (f.current) return; toast('Loading that data — the launcher restarts'); host.send('loadData', { file: f.file }); },
+    })), 'Pick the settings to start with. The ones you have now are backed up first. BACK keeps the current ones.');
+  }
+  let pendingPick = null;
+  host.on('init', () => { if (dev().enabled && dev().promptData) host.send('dataFiles', { prompt: true }); });
+  host.on('dataFiles', (m) => {
+    if (m.prompt && m.skip) return; // this start came from a pick
+    const show = () => pickData(m.files);
+    if (!m.prompt) return show();
+    // At start: after the opening animation, and only once HOME is actually on screen.
+    if (A.mode === 'home') setTimeout(show, 3800); else pendingPick = show;
+  });
+  host.on('mode', (m) => { if (m.mode === 'home' && pendingPick) { const show = pendingPick; pendingPick = null; setTimeout(show, 900); } });
 
   SV.dev = { open: hub, rows: settingsRows, addCommission };
 })();

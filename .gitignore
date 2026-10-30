@@ -7,3 +7,7 @@ dist/
 .vs/
 .vscode/
 *.zip
+_realdata/
+_restore/
+build.log
+git-push.log

@@ -138,7 +138,9 @@
     lists: { roblox: true, studio: true },
     rails: { enabled: true, show: { recent: true, friends: true, roblox: true, trending: true, topPlaying: true, rising: true, steamTop: true, steamDeals: true, epicFree: true, steamNew: true, clips: true, studio: true, upcoming: true, news: true, commissions: true } },
     clips: { favorites: [], categories: [], tagged: {}, folders: [], videos: true, medal: '', autoplay: true },
-    dev: { enabled: false, commissions: [], showStudioHome: true },
+    dev: { enabled: false, commissions: [], showStudioHome: true, promptData: false },
+    // UPDATES tab: the launcher's GitHub releases, keeping Roblox up to date.
+    updates: { auto: true, notify: true, beta: false, skipped: '', lastSeen: '', roblox: true },
     language: 'en',
   });
 
@@ -439,7 +441,8 @@
   // The Developer button only shows in developer mode.
   const funcs = () => FUNCS.filter((f) => !f.dev || cfg.dev.enabled);
   const PLATFORM = { epic: 'EPIC GAMES', steam: 'STEAM', roblox: 'ROBLOX', pc: 'PC' };
-  const FILTERS = [['all', 'ALL'], ['steam', 'STEAM'], ['epic', 'EPIC'], ['roblox', 'ROBLOX'], ['pc', 'PC']];
+  // RECENT is not a platform: the games you played, newest first.
+  const FILTERS = [['all', 'ALL'], ['recent', 'RECENT'], ['steam', 'STEAM'], ['epic', 'EPIC'], ['roblox', 'ROBLOX'], ['pc', 'PC']];
   const TILE = 13, GAP = 1.2, GROW = 1.4;
 
   let heroToken = 0;
@@ -472,9 +475,12 @@
   // Starts the game itself, skipping its list (Studio's "Open Studio").
   const launchDirect = (g) => g && launch(g, { direct: true });
 
+  const playedAt = (g) => (stats[g.id] || {}).lastPlayed || 0;
+  const recentGames = () => cfg.games.filter((g) => playedAt(g) > 0).sort((a, b) => playedAt(b) - playedAt(a));
+  const inFilter = (k) => (k === 'all' ? cfg.games : k === 'recent' ? recentGames() : cfg.games.filter((g) => platformOf(g) === k));
   function visibleGames() {
     if (sub) return sub.p.items(sub.parent);
-    const games = cfg.games.filter((g) => (filter === 'all' || platformOf(g) === filter) && !(cfg.behavior.hideUninstalled && !isInstalled(g)));
+    const games = inFilter(filter).filter((g) => !(cfg.behavior.hideUninstalled && !isInstalled(g)));
     return filter === 'all' ? [...games, ...setupCards()] : games;
   }
 
@@ -519,7 +525,7 @@
   }
   function renderHome() {
     setTimeout(preloadArt, 200);
-    const used = sub ? [] : FILTERS.filter(([k]) => k === 'all' || cfg.games.some((g) => platformOf(g) === k));
+    const used = sub ? [] : FILTERS.filter(([k]) => k === 'all' || inFilter(k).length);
     if (!sub && !used.some(([k]) => k === filter)) filter = 'all';
     shown = visibleGames();
     const addTile = sub ? !!sub.p.add : filter === 'all';
@@ -530,7 +536,7 @@
       `<button class="func" data-i="${i}" data-id="${f.id}" aria-label="${esc(T(f.label))}"><svg viewBox="0 0 24 24">${ICON[f.id]}</svg><span class="func-tip"><b>${esc(T(f.label))}</b><small>${esc(T(f.desc))}</small></span></button>`).join('');
     $('#filters').innerHTML = sub ? `<button class="chip on crumb" data-k="__back">‹ ALL GAMES</button><span class="crumb-now">${esc(sub.p.title)} <i>${shown.length}</i></span>`
       : used.length > 2 ? used.map(([k, label]) =>
-      `<button class="chip ${k === filter ? 'on' : ''}" data-k="${k}">${label}<i>${k === 'all' ? cfg.games.length : cfg.games.filter((g) => platformOf(g) === k).length}</i></button>`).join('') : '';
+      `<button class="chip ${k === filter ? 'on' : ''}" data-k="${k}">${label}<i>${inFilter(k).length}</i></button>`).join('') : '';
 
     $('#tiles').innerHTML = shown.map((g, i) => `
       <div class="tile ${isInstalled(g) ? '' : 'absent'}" data-i="${i}">
@@ -1206,7 +1212,7 @@
 
   // ------------------------------------------------------------------ settings
 
-  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['discord', 'DISCORD'], ['developer', 'DEVELOPER'], ['system', 'SYSTEM']];
+  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['discord', 'DISCORD'], ['developer', 'DEVELOPER'], ['system', 'SYSTEM'], ['updates', 'UPDATES']];
   const pct = (v) => Math.round(v * 100) + '%';
 
   function settingsRows(tab, rerender) {
@@ -1468,6 +1474,7 @@
 
     if (tab === 'accounts') return [...SV.steam.rows(rerender), ...SV.epic.rows(rerender), ...SV.roblox.rows(rerender)];
     if (tab === 'nexus') return SV.nexus.rows(rerender);
+    if (tab === 'updates') return SV.updates.rows(rerender);
     if (tab === 'developer') return SV.dev.rows(rerender);
     if (tab === 'texts') return [
       heading('WORDING'),
