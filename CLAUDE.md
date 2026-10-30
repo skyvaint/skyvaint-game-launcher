@@ -27,3 +27,15 @@ Rules:
 
 If the user's data does get lost, backups are in `%LOCALAPPDATA%\SkyvaintGameLauncher\backups\`. The launcher
 restores from them by itself on start, and Settings → UPDATES → BACKUPS can restore a chosen one (see `DataSafety.cs`).
+
+## Never start the launcher from a Claude shell
+
+The Claude desktop app is a packaged (MSIX) app. Windows gives it, and every program it starts, a **virtual copy of
+AppData** (`%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\...`). A launcher started from a
+Claude shell or tool therefore reads and writes a *different* `config.json` than the one the user's own shortcut
+uses, and the user's setup seems to "reset" or "come back wrong" after every rebuild. Reading or writing
+`%APPDATA%\SkyvaintGameLauncher` through Claude's file tools hits that virtual copy too.
+
+- Build with `build-and-run.cmd`, started from File Explorer (double-click), not from a Claude shell.
+- Don't copy, export or upload the user's settings. Don't edit them with Claude's file tools either (those only reach
+  the virtual copy). If a settings change is really needed, ask the user first.

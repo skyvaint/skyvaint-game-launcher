@@ -536,6 +536,8 @@ public sealed partial class MainForm
     /// <summary>Shows or hides each bar for what is in front right now (desktop-only bars, fullscreen games).</summary>
     void UpdateBarVisibility()
     {
+        // A window change can still come in while the launcher is closing.
+        if (IsDisposed || Disposing || quitting) return;
         bool? full = null, desk = null;
         bool opening = DateTime.Now < openingUntil;
         foreach (var (id, bar) in Bars())

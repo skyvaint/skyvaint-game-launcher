@@ -69,12 +69,22 @@
       R.toggle('Include beta versions', 'Pre-releases count as updates too.', A.prop(u, 'beta')),
     );
 
+    out.push(R.button('Apps on this PC', 'What the launcher works with (Bloxstrap, Medal, Steam, Epic, Discord) and what is still missing.', 'OPEN', () => SV.setup && SV.setup.open()));
+
     out.push(heading('ROBLOX'));
     out.push(R.toggle('Keep Roblox updated', 'Checks for a new Roblox version and installs it through Bloxstrap in the background, so games start without the update wait. Never while Roblox is open or you are playing.', A.prop(u, 'roblox')));
     out.push(R.buttons(`Roblox ${rb.latest || ''}`.trim(),
       rb.checking ? 'Checking…' : rb.updating ? (rb.status || 'Updating…') : (rb.status || 'Not checked yet.') + (rb.checkedAt ? ` · ${ago(rb.checkedAt)}` : ''),
       rb.updating || rb.checking ? [] : [['UPDATE NOW', () => { audio.play('confirm'); host.send('updateRoblox'); }]]));
     if (rb.status && rb.bloxstrap === false) out.push(note('Bloxstrap isn\'t installed, so Roblox updates itself when it starts.'));
+
+    out.push(heading('GRAPHICS'));
+    out.push(R.buttons(`Safe graphics: ${st.safeGraphics ? 'ON' : 'OFF'}`,
+      st.safeGraphics
+        ? `Drawing without GPU acceleration because ${st.safeReason || 'it was switched on'}. Smoother with it off, if your graphics driver allows. Changes apply on the next start.`
+        : 'Turn on if the launcher ever shows a black screen. Changes apply on the next start.',
+      [[st.safeGraphics ? 'TURN OFF' : 'TURN ON', () => { audio.play('toggle'); host.send('safeGraphics', { on: !st.safeGraphics }); st.safeGraphics = !st.safeGraphics; rerender(); }],
+       ['OPEN LOG', () => host.send('openLog'), 'ghost']]));
 
     out.push(heading(`BACKUPS · ${(st.backups || []).length}`));
     out.push(R.buttons('Your settings are backed up',

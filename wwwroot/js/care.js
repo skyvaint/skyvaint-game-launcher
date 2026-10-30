@@ -5,7 +5,7 @@
   const { $, el, esc, clamp, toast, hints, R, heading } = A;
   let check = null, memory = { mb: 0, limit: 0 };
 
-  host.on('setupCheck', (m) => { check = m; wizardRefresh && wizardRefresh(); });
+  host.on('careCheck', (m) => { check = m; wizardRefresh && wizardRefresh(); });
   host.on('memory', (m) => { memory = m; const n = document.querySelector('.mem-now'); if (n) n.textContent = memText(); });
   host.on('openMenu', () => { while (A.stack.length) A.pop(); A.openSettings('theme'); });
   const memText = () => `${memory.mb || '…'} MB in use${memory.limit ? ` · limit ${memory.limit} MB` : ''}`;
@@ -90,7 +90,7 @@
   }
   const suiteApps = () => SUITES.flatMap((x) => x.apps);
   function wizard() {
-    host.send('setupCheck');
+    host.send('careCheck');
     let step = 0, pick = null, idx = 0;
     const root = el(`<div class="overlay center"><div class="picker wide wizard">
       <div class="picker-head"><div><div class="tag wz-tag"></div><h2 class="wz-title"></h2></div><div class="picker-note wz-note"></div></div>
@@ -111,7 +111,7 @@
           const s = ok(k);
           return `<div class="wz-item ${s ? 'ok' : s === false ? 'no' : ''}"><i>${s ? '✓' : s === false ? (need ? '✕' : '–') : '…'}</i><b>${esc(label)}</b><small>${s ? 'READY' : s === false ? (need ? 'NEEDED' : 'OPTIONAL · NOT FOUND') : ''}</small>${s === false ? `<button class="btn small" data-get="${k}">GET IT</button>` : ''}</div>`;
         }).join('')}</div>`;
-        actions = [{ label: 'NEXT', primary: true, run: () => { step = 1; pick = pick || recommend(); build(); } }, { label: 'CHECK AGAIN', run: () => { check = null; host.send('setupCheck'); build(); } }];
+        actions = [{ label: 'NEXT', primary: true, run: () => { step = 1; pick = pick || recommend(); build(); } }, { label: 'CHECK AGAIN', run: () => { check = null; host.send('careCheck'); build(); } }];
       } else if (step === 1) {
         $('.wz-tag', root).textContent = '[ SETUP · 2 OF 3 ]';
         $('.wz-title', root).textContent = 'HOW SMOOTH?';
@@ -127,7 +127,7 @@
           · <b>${esc(A.cfg.behavior.hotkeyShow || 'Ctrl+Alt+Home')}</b> shows the launcher from anywhere, <b>${esc(A.cfg.behavior.hotkeyMenu || 'Ctrl+Alt+M')}</b> opens the menu.<br>
           · The <b>SHOP</b> in the top bar has themes, and you can share yours as a code.<br>
           · Settings → PERFORMANCE changes the profile and sets a memory limit. Run this setup again from there.</div>`;
-        actions = [{ label: 'START', primary: true, run: () => { A.cfg.setup = { done: true, at: Date.now() }; A.save(); A.pop(); } }];
+        actions = [{ label: 'START', primary: true, run: () => { A.cfg.setup = { ...(A.cfg.setup || {}), done: true, seen: true, at: Date.now() }; A.save(); A.pop(); } }];
       }
       btns.innerHTML = actions.map((b, i) => `<button class="btn ${b.primary ? 'primary' : ''} ${i === idx ? 'focus' : ''}" data-i="${i}">${esc(b.label)}</button>`).join('');
     }
@@ -145,7 +145,7 @@
     A.push({
       el: root, onClose: () => { wizardRefresh = null; },
       action(a) {
-        if (a === 'back') { if (!(A.cfg.setup && A.cfg.setup.done)) { A.cfg.setup = { done: true, skipped: true }; A.save(); } A.pop(); }
+        if (a === 'back') { if (!(A.cfg.setup && A.cfg.setup.done)) { A.cfg.setup = { ...(A.cfg.setup || {}), done: true, seen: true, later: true }; A.save(); } A.pop(); }
         else if (step === 1 && (a === 'up' || a === 'down')) { const ks = Object.keys(PROFILES); pick = ks[clamp(ks.indexOf(pick || recommend()) + (a === 'down' ? 1 : -1), 0, ks.length - 1)]; audio.play('nav'); build(); }
         else if (a === 'left' || a === 'right') { idx = clamp(idx + (a === 'left' ? -1 : 1), 0, actions.length - 1); audio.play('nav'); build(); }
         else if (a === 'confirm') actions[idx] && actions[idx].run();
@@ -156,9 +156,9 @@
   // First start on a fresh install shows the wizard; a launcher that already has games skips it.
   host.on('init', (m) => {
     // A fresh install starts with no saved settings at all; anyone with saved settings skips the wizard.
-    const fresh = !m.config;
+    const fresh = m.fresh ?? !m.config;
     const c0 = A.cfg;
-    if (!fresh && !(c0.setup && c0.setup.done)) { c0.setup = { done: true, existing: true }; A.save(); }
+    if (!fresh && !(c0.setup && c0.setup.done)) { c0.setup = { ...(c0.setup || {}), done: true, existing: true }; A.save(); }
     // Waits until the opening is over and the launcher is in front with nothing else open.
     let tries = 0;
     const t = setInterval(() => {

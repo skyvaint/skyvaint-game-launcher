@@ -177,6 +177,8 @@
     dev: { enabled: false, commissions: [], showStudioHome: true, promptData: false },
     // UPDATES tab: the launcher's GitHub releases, keeping Roblox up to date.
     updates: { auto: true, notify: true, beta: false, skipped: '', lastSeen: '', roblox: true },
+    // First-start setup check: shown once, then only for recommended apps that are missing and not skipped.
+    setup: { seen: false, skipped: [] },
     language: 'en',
   });
 
@@ -2310,27 +2312,39 @@
   }
 
   host.on('init', (m) => {
-    scan = m.scan || [];
-    stats = m.stats || {};
-    autostart = !!m.autostart;
-    cfg = merge(defaults(), m.config || {});
-    if (m.config && Array.isArray(m.config.games)) cfg.games = m.config.games;
-    const added = upgrade(m.config);
-    SV.epic.init(m.epic);
-    SV.steam.init(m.steam);
-    const imported = SV.roblox.init(m.robloxImport);
-    mode = m.mode || 'home';
-    document.body.dataset.mode = mode === 'home' ? 'home' : 'mini';
-    applyConfig();
-    renderHome();
-    renderMini();
-    bg.setActive(mode === 'home');
-    audio.setAmbientActive(mode === 'home');
-    input.setEnabled(mode === 'home');
-    save();
-    applyLogo();
-    host.send('appIcon');
-    boot();
+    // Every step is guarded: one that fails (odd data from a store on someone's PC, a missing value) is reported and
+    // logged, and the launcher still opens, instead of staying on a black screen.
+    let added = 0, imported = false;
+    try {
+      scan = m.scan || [];
+      stats = m.stats || {};
+      autostart = !!m.autostart;
+      cfg = merge(defaults(), m.config || {});
+      if (m.config && Array.isArray(m.config.games)) cfg.games = m.config.games;
+      added = upgrade(m.config);
+      SV.epic.init(m.epic);
+      SV.steam.init(m.steam);
+      imported = SV.roblox.init(m.robloxImport);
+      mode = m.mode || 'home';
+      document.body.dataset.mode = mode === 'home' ? 'home' : 'mini';
+      applyConfig();
+      renderHome();
+      renderMini();
+      bg.setActive(mode === 'home');
+      audio.setAmbientActive(mode === 'home');
+      input.setEnabled(mode === 'home');
+      save();
+      applyLogo();
+      host.send('appIcon');
+    } catch (err) {
+      host.report && host.report('Start-up failed: ' + (err && err.stack ? err.stack : err));
+      try { applyConfig(); renderHome(); } catch {}
+    }
+    try { boot(); } catch (err) {
+      host.report && host.report('Opening animation failed: ' + (err && err.stack ? err.stack : err));
+      document.body.classList.remove('preinit', 'booting', 'boot-space');
+      document.body.classList.add('entered');
+    }
     setTimeout(() => { SV.clips.ensure(); SV.quests.badge(); }, 3600);
     if (added) setTimeout(() => toast(`${added} games found on this PC`), 3400);
     else if (!cfg.games.length) setTimeout(() => toast('No games found yet — link Steam or Epic, or add any game yourself.'), 3400);

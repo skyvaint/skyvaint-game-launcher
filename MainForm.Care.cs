@@ -270,7 +270,7 @@ start "" "{exe}"
         bool Proto(string p) => GameScanner.ProtocolCommand(p).HasValue;
         return new JsonObject
         {
-            ["type"] = "setupCheck",
+            ["type"] = "careCheck",
             ["webview"] = webview ?? "",
             ["dotnet"] = Environment.Version.ToString(),
             ["os"] = Environment.OSVersion.VersionString,
@@ -300,7 +300,7 @@ start "" "{exe}"
     {
         switch (m["type"]?.ToString())
         {
-            case "setupCheck": Send(SetupCheck()); return true;
+            case "careCheck": Send(SetupCheck()); return true;
             case "updateFromCode": UpdateFromCode(); return true;
             case "memoryNow": _ = Task.Run(async () => { var (mb, _) = await MemoryNow(); BeginInvoke(() => Send(new JsonObject { ["type"] = "memory", ["mb"] = mb, ["limit"] = MemoryLimit() })); }); return true;
             case "trimMemory": _ = Task.Run(async () => { var (_, pids) = await MemoryNow(); BeginInvoke(async () => { await Trim(pids, hard: true); var (mb, _) = await MemoryNow(); Send(new JsonObject { ["type"] = "memory", ["mb"] = mb, ["limit"] = MemoryLimit() }); }); }); return true;
