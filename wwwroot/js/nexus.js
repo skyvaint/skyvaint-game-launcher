@@ -115,7 +115,7 @@
   // The main bar is cfg.nexus itself; extra bars live in cfg.nexus.bars, each with its own items and settings.
   const BAR_DEFAULTS = { enabled: true, position: 'bottom', size: 52, backing: 'glass', names: true, autohide: false, magnify: true, hideFullscreen: true,
     align: 'center', gap: 12, radius: 22, offset: 0, idleOpacity: 100, opacity: 47, magnifyAmount: 145, glow: 100, indicator: 'dot', bounce: true, alwaysNames: false,
-    tagStyle: 'dark', visibility: 'always', fadeStyle: 'fade', fadeMs: 220, length: 0, hoverStyle: 'magnify', clickMode: 'single', launchMode: 'normal' };
+    tagStyle: 'dark', group: true, visibility: 'always', fadeStyle: 'fade', fadeMs: 220, length: 0, hoverStyle: 'magnify', clickMode: 'single', launchMode: 'normal' };
   const PRESETS = {
     desktop: { name: 'Desktop dock', visibility: 'desktop', position: 'bottom', length: 55, backing: 'glass', size: 60, hoverStyle: 'magnify' },
     side: { name: 'Side bar', visibility: 'always', position: 'left', backing: 'pill', size: 44, hoverStyle: 'lift', autohide: true },
@@ -179,7 +179,8 @@
       R.toggle('Step aside for fullscreen', 'Hides while a game or video covers the whole screen.', P('hideFullscreen')),
       R.toggle('Auto-hide', 'Tucks away until the pointer reaches that edge.', P('autohide')),
       R.choice('Position', 'Which screen edge it sits on.', P('position'), [['bottom', 'Bottom'], ['top', 'Top'], ['left', 'Left'], ['right', 'Right']]),
-      R.choice('Alignment', 'Where along the edge the bar sits.', P('align'), [['center', 'Centre'], ['start', 'Start (left / top)'], ['end', 'End (right / bottom)']]),
+      R.toggle('Share the edge', 'Bars on the same edge sit side by side in the middle; when they do not fit they all shrink, and a hidden one makes room.', P('group')),
+      R.choice('Alignment', 'Where along the edge the bar sits (when it has the edge to itself).', P('align'), [['center', 'Centre'], ['start', 'Start (left / top)'], ['end', 'End (right / bottom)']]),
       R.slider('Bar length', '0 fits the icons; higher stretches the bar along the edge.', P('length'), 0, 100, 5, (v) => (v ? v + '% of the edge' : 'FIT')),
       R.slider('Distance from the edge', '', P('offset'), 0, 120, 4, (v) => v + ' px'),
       heading('FADE IN AND OUT'),
@@ -212,6 +213,8 @@
       ...items.map((it, i) => R.buttons(it.name, `${{ game: 'GAME', url: 'WEBSITE', home: 'LAUNCHER · opens HOME' }[it.kind] || 'APP'}${it.target ? ' · ' + it.target : ''}${it.launchMode && it.launchMode !== 'bar' ? ' · OPENS ' + it.launchMode.toUpperCase() : ''}   ← → reorders`, [
         ['▲', () => move(i, -1), 'ghost'], ['▼', () => move(i, 1), 'ghost'],
         ['ICON', () => A.pick('image').then((f) => { if (f.url) { it.icon = f.url; it.customIcon = true; A.changed(); rerender(); } })],
+        [it.sound ? 'SOUND ✓' : 'SOUND', () => (it.sound ? A.openMenu(it.name, [{ label: 'PLAY IT', run: () => audio.preview(it.sound) }, { label: 'CHANGE', run: () => A.pick('audio').then((f) => { if (f.url) { it.sound = f.url; A.changed(); rerender(); } }) }, { label: 'REMOVE', danger: true, run: () => { it.sound = ''; A.changed(); rerender(); } }])
+          : A.pick('audio').then((f) => { if (f.url) { it.sound = f.url; A.changed(); rerender(); audio.preview(f.url); } }))],
         ...(it.kind === 'app' ? [['OPENS', () => A.openMenu(it.name, [['bar', 'Like the bar'], ['normal', 'Normal window'], ['maximized', 'Maximized'], ['minimized', 'Minimized'], ['focus', 'Bring forward if open']]
           .map(([k, label]) => ({ label, sub: (it.launchMode || 'bar') === k ? 'current' : '', run: () => { it.launchMode = k; A.changed(); rerender(); } })))]] : []),
         ...(bars.length > 1 ? [['MOVE TO…', () => A.openMenu('MOVE TO WHICH BAR?', bars.filter((x) => x !== b).map((x) => ({ label: nameOf(x), run: () => { items.splice(i, 1); (x.items || (x.items = [])).push(it); A.changed(); rerender(); } })))]] : []),

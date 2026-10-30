@@ -188,7 +188,7 @@
       <div class="overlay full"><div class="clips">
         <div class="clips-head">
           <div><div class="tag clips-count"></div><h2>CLIPS</h2></div>
-          <div class="clips-tools"><button class="btn small ghost" data-t="sort"></button><button class="btn small ghost" data-t="more">LIBRARY ⋯</button><button class="btn small ghost" data-t="close">CLOSE</button></div>
+          <div class="clips-tools"><button class="btn small ghost" data-t="sort"></button><button class="btn small primary" data-t="record">● SAVE A CLIP</button><button class="btn small ghost" data-t="more">LIBRARY ⋯</button><button class="btn small ghost" data-t="close">CLOSE</button></div>
         </div>
         <div class="clips-chips"></div>
         <div class="clips-grid"></div>
@@ -328,6 +328,7 @@
       if (!t) return;
       if (t.dataset.t === 'sort') cycleSort();
       else if (t.dataset.t === 'more') libraryMenu();
+      else if (t.dataset.t === 'record') SV.clips.record();
       else A.pop();
     });
 
@@ -414,7 +415,19 @@
     });
   }
 
+  // Saving a clip: presses your recorder's shortcut for you (Xbox Game Bar, Medal, ShadowPlay, OBS…).
+  const RECORDERS = { gamebar: 'Win+Alt+G', gamebarRec: 'Win+Alt+R', nvidia: 'Alt+F10', amd: 'Ctrl+Shift+S', medal: 'F8', obs: 'Ctrl+Alt+R' };
+  function record() {
+    const c = A.cfg.clips, keys = c.recorder === 'custom' ? c.recordKeys : RECORDERS[c.recorder || 'gamebar'];
+    if (!keys) return toast('Set the shortcut of your recorder in Settings → System → Clips.', 'bad');
+    SV.audio.play('pick');
+    host.send('recordClip', { keys });
+    toast('Clip shortcut sent: ' + keys);
+  }
+
   SV.clips = {
+    record,
+    RECORDERS,
     open,
     play,
     pause() { if (player) player.pause(); },

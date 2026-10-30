@@ -1677,20 +1677,40 @@ public sealed partial class MainForm : Form
 			string name = Path.GetFileName(Uri.UnescapeDataString(uri.AbsolutePath));
 			string file = Path.Combine(MediaDir, name);
 			string video = Path.GetExtension(name).ToLowerInvariant() switch { ".mp4" or ".m4v" => "video/mp4", ".webm" => "video/webm", ".mov" => "video/quicktime", _ => "" };
-			var (stream, mime) = await Task.Run<(Stream?, string)>(() =>
+			// Video players ask for the file in pieces (Range: bytes=start-end) to seek and loop; answer with that piece.
+			string range = "";
+			try { range = e.Request.Headers.Contains("Range") ? e.Request.Headers.GetHeader("Range") : ""; } catch { }
+			var (stream, mime, status, contentRange, length) = await Task.Run<(Stream?, string, int, string, long)>(() =>
 			{
-				if (name == "" || !File.Exists(file)) return (null, "");
-				if (video != "") return (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.Asynchronous | FileOptions.SequentialScan), video);
+				if (name == "" || !File.Exists(file)) return (null, "", 404, "", 0);
+				if (video != "")
+				{
+					var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.Asynchronous);
+					long size = fs.Length;
+					var m = System.Text.RegularExpressions.Regex.Match(range, @"bytes=(\d*)-(\d*)");
+					if (m.Success && size > 0)
+					{
+						long start = m.Groups[1].Value == "" ? Math.Max(0, size - long.Parse(m.Groups[2].Value)) : long.Parse(m.Groups[1].Value);
+						long end = m.Groups[1].Value != "" && m.Groups[2].Value != "" ? Math.Min(size - 1, long.Parse(m.Groups[2].Value)) : size - 1;
+						// Pieces of at most 8 MB, so a seek never has to wait for the rest of a huge file.
+						end = Math.Min(end, start + 8 * 1024 * 1024 - 1);
+						if (start >= size) { fs.Dispose(); return (null, video, 416, $"bytes */{size}", 0); }
+						return (new RangeStream(fs, start, end - start + 1), video, 206, $"bytes {start}-{end}/{size}", end - start + 1);
+					}
+					return (fs, video, 200, "", size);
+				}
 				byte[] bytes = File.ReadAllBytes(file);
-				return (new MemoryStream(bytes), MimeOf(name, bytes));
+				return (new MemoryStream(bytes), MimeOf(name, bytes), 200, "", bytes.Length);
 			});
 			if (stream == null)
 			{
-				e.Response = env.CreateWebResourceResponse(null, 404, "Not Found", "");
+				e.Response = env.CreateWebResourceResponse(null, status, status == 416 ? "Range Not Satisfiable" : "Not Found", status == 416 ? "Content-Range: " + contentRange : "");
 				return;
 			}
-			CoreWebView2WebResourceResponse response = env.CreateWebResourceResponse(stream, 200, "OK", "");
+			CoreWebView2WebResourceResponse response = env.CreateWebResourceResponse(stream, status, status == 206 ? "Partial Content" : "OK", "");
 			response.Headers.AppendHeader("Content-Type", mime);
+			if (video != "") { response.Headers.AppendHeader("Accept-Ranges", "bytes"); response.Headers.AppendHeader("Content-Length", length.ToString()); }
+			if (contentRange != "") response.Headers.AppendHeader("Content-Range", contentRange);
 			response.Headers.AppendHeader("Access-Control-Allow-Origin", "*");
 			// Files you picked are saved under a unique name, so they can be cached for good.
 			bool picked = System.Text.RegularExpressions.Regex.IsMatch(name, @"^(image|media|video|audio|icon)_[0-9a-f]{32}\.", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -2013,6 +2033,7 @@ public sealed partial class MainForm : Form
 	private void SetMode(string m, bool notify = true)
 	{
 		mode = m;
+		SideForMode();
 		if (notify)
 		{
 			Send(new JsonObject
@@ -2164,6 +2185,7 @@ public sealed partial class MainForm : Form
 		tray.Visible = false;
 		try { discord.SetActivity(null); discord.Close(); } catch { }
 		foreach (var d in docks.Values) d.Close();
+		foreach (var w in widgetForms.Values) w.Close();
 		SaveState();
 		base.OnFormClosing(e);
 	}
@@ -2632,7 +2654,7 @@ public sealed partial class MainForm : Form
 		}
 		OpenFileDialog openFileDialog = new OpenFileDialog();
 		OpenFileDialog openFileDialog2 = openFileDialog;
-		string filter = kind == "media" ? "Pictures, GIFs and videos|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico;*.mp4;*.webm;*.m4v;*.mov|Pictures|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico|Videos|*.mp4;*.webm;*.m4v;*.mov" : kind == "video" ? "Videos|*.mp4;*.webm;*.m4v;*.mov" : ((kind == "image") ? "Images|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico" : ((!(kind == "audio")) ? "Games and shortcuts|*.exe;*.lnk;*.url;*.bat|All files|*.*" : "Audio|*.mp3;*.wav;*.ogg;*.m4a;*.flac"));
+		string filter = kind == "font" ? "Fonts|*.ttf;*.otf;*.woff;*.woff2" : kind == "media" ? "Pictures, GIFs and videos|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico;*.mp4;*.webm;*.m4v;*.mov|Pictures|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico|Videos|*.mp4;*.webm;*.m4v;*.mov" : kind == "video" ? "Videos|*.mp4;*.webm;*.m4v;*.mov" : ((kind == "image") ? "Images|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico" : ((!(kind == "audio")) ? "Games and shortcuts|*.exe;*.lnk;*.url;*.bat|All files|*.*" : "Audio|*.mp3;*.wav;*.ogg;*.m4a;*.flac"));
 		openFileDialog2.Filter = filter;
 		using OpenFileDialog dlg = openFileDialog;
 		if (dlg.ShowDialog(this) == DialogResult.OK)

@@ -21,6 +21,7 @@
   // Covers the screen with three slashing slabs; `covered` runs once it is fully covered, then it slides away.
   function slash(covered, hold = 120) {
     if (!A.cfg.fx.wipe || A.cfg.fx.transition === 'none') { covered && covered(); return; }
+    if (A.cfg.fx.transition === 'video' && A.cfg.fx.transitionVideo && SV.effects) { SV.effects.transition(covered); return; }
     clearTimeout(wipeTimer);
     wipe.className = '';
     void wipe.offsetWidth;
@@ -35,6 +36,7 @@
   // Coming back: start covered, then open up.
   function reveal() {
     if (!A.cfg.fx.wipe || A.cfg.fx.transition === 'none') return;
+    if (A.cfg.fx.transition === 'video' && A.cfg.fx.transitionVideo && SV.effects) { SV.effects.transition(null); return; }
     clearTimeout(wipeTimer);
     wipe.className = 'held';
     void wipe.offsetWidth;

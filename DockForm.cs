@@ -42,6 +42,20 @@ sealed class DockForm : Form
     string fadeStyle = "fade", hoverStyle = "magnify", clickMode = "single";
     DateTime lastClick = DateTime.MinValue;
     int lastClickItem = -1;
+    // Bars sharing an edge sit side by side: the shell gives each one a start along the edge, and a size factor
+    // when they don't all fit (so they shrink together instead of overlapping).
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public float SizeFactor { get; set; } = 1;
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public int? AlongStart { get; set; }
+    public string Edge => position;
+    public bool Grouped { get; private set; }
+    public bool Hidden => suppressed;
+    /// <summary>How long the bar is along its edge at a given size factor.</summary>
+    public int LengthAt(float factor) { var keep = SizeFactor; SizeFactor = factor; Measure(); int len = L; SizeFactor = keep; Measure(); return len; }
+    /// <summary>Puts the bar where the shell's group layout says.</summary>
+    public void Relayout() { foreach (var it in items) it.TileKey = ""; Place(); }
+    public int EdgeLength => Vertical ? Area().Height : Area().Width;
     /// <summary>Which bar this is (the main bar is "main"); sent back with every click.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public string BarId { get; set; } = "main";
@@ -108,6 +122,7 @@ sealed class DockForm : Form
         align = s?["align"]?.ToString() ?? "center";
         alwaysNames = Bool(s?["alwaysNames"], false);
         bounceOn = Bool(s?["bounce"], true);
+        Grouped = Bool(s?["group"], true);
         fadeMs = Clamp(Int(s?["fadeMs"], 220), 0, 2000);
         fadeStyle = s?["fadeStyle"]?.ToString() ?? "fade";
         lengthPct = Clamp(Int(s?["length"], 0), 0, 100);
@@ -179,7 +194,7 @@ sealed class DockForm : Form
     void Measure()
     {
         k = DeviceDpi / 96f;
-        ic = size * k;
+        ic = size * k * SizeFactor;
         gap = spacing * k;
         pad = 12 * k;
         maxS = magnify ? magnifyAmt : 1.1f;
@@ -202,7 +217,7 @@ sealed class DockForm : Form
     {
         var a = Area();
         // Where along the edge: centred, or pushed to the start or end of it.
-        int AlongX(int span) => align == "start" ? 8 : align == "end" ? span - L - 8 : (span - L) / 2;
+        int AlongX(int span) => AlongStart is int at ? at : align == "start" ? 8 : align == "end" ? span - L - 8 : (span - L) / 2;
         return position switch
         {
             "top" => new Rectangle(a.Left + AlongX(a.Width), a.Top, L, T),

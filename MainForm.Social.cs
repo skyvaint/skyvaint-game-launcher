@@ -59,11 +59,83 @@ public sealed partial class MainForm
 })()
 """;
 
+    // ---------- the side panel (social sites / browser) ----------
+
+    SidePanel? sidePanel;
+    bool sideWanted;
+    SidePanel? Side()
+    {
+        if (sidePanel != null || mainEnv == null) return sidePanel;
+        sidePanel = new SidePanel(this, () => mainEnv);
+        Controls.Add(sidePanel);
+        web.BringToFront(); // the page fills whatever the panel leaves
+        return sidePanel;
+    }
+    void SendSideState() => Send(new JsonObject { ["type"] = "sideState", ["open"] = sidePanel?.Visible == true });
+    // The panel belongs to HOME: it steps out of the way in mini mode and comes back with HOME.
+    void SideForMode()
+    {
+        if (sidePanel == null) return;
+        if (mode == "home") { if (sideWanted && !sidePanel.Visible) sidePanel.Open(); }
+        else if (sidePanel.Visible) sidePanel.Visible = false;
+    }
+    internal void OnSideMessage(JsonObject m)
+    {
+        switch (m["type"]?.ToString())
+        {
+            case "close": sidePanel?.Close(); sideWanted = false; SendSideState(); break;
+            case "opened": SendSideState(); break;
+            case "width": Send(new JsonObject { ["type"] = "sideWidth", ["width"] = m["width"]?.DeepClone() }); break;
+            case "addSite": Send(new JsonObject { ["type"] = "socialAdd" }); break;
+        }
+    }
+
+    NowPlaying? nowPlaying;
+    /// <summary>The last track Windows reported (for Discord's {song} / {artist} and the widgets).</summary>
+    internal JsonObject? LastTrack { get; private set; }
+    NowPlaying Np => nowPlaying ??= new NowPlaying(MediaDir, "media.skyvaint.example");
+
+    internal async Task<JsonObject> ReadTrack()
+    {
+        var t = await Np.Read();
+        LastTrack = t;
+        return t;
+    }
+    internal string? TrackArtFile => nowPlaying?.ArtFile;
+    internal Task TrackCommand(string cmd, double value = 0) => Np.Command(cmd, value);
+
     bool OnSocialMessage(JsonObject m)
     {
         string Str(string key) => m[key]?.ToString() ?? "";
         switch (Str("type"))
         {
+            case "side":
+                {
+                    var p = Side();
+                    if (p == null) return true;
+                    p.Configure(config?["social"] as JsonObject, config?["theme"] as JsonObject);
+                    switch (Str("action"))
+                    {
+                        // The panel only shows with HOME; asked for while hidden, it comes up when HOME does.
+                        case "open": sideWanted = true; if (mode == "home") p.Open(Str("url") is { Length: > 0 } u ? u : null); break;
+                        case "toggle": if (p.Visible) { p.Close(); sideWanted = false; } else { sideWanted = true; if (mode == "home") p.Open(); } break;
+                        case "close": p.Close(); sideWanted = false; break;
+                        case "go": p.Go(Str("url")); sideWanted = true; break;
+                    }
+                    SendSideState();
+                }
+                return true;
+            case "nowPlaying":
+                _ = Task.Run(async () => { var t = await ReadTrack(); BeginInvoke(() => Send(t)); });
+                return true;
+            case "media":
+                {
+                    var cmd = Str("cmd");
+                    double value = 0;
+                    try { value = m["value"]?.GetValue<double>() ?? 0; } catch { }
+                    _ = Task.Run(async () => { await TrackCommand(cmd, value); await Task.Delay(250); var t = await ReadTrack(); BeginInvoke(() => Send(t)); });
+                }
+                return true;
             case "robloxFriends":
                 _ = RobloxFriends(Str("id"));
                 return true;

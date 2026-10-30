@@ -71,7 +71,12 @@ SV.media = (() => {
     for (const s of liveSlots) if (!s.firstChild) mount(s);
     if (liveGifs.length) raf = requestAnimationFrame(tick);
   }
-  new MutationObserver(() => { if (liveGifs.length || liveSlots.length) { cancelAnimationFrame(raf); raf = 0; tick(performance.now()); } }).observe(document.documentElement, { childList: true, subtree: true });
+  // Only redraws that add a GIF or video slot matter (the title text, clock and rows change constantly otherwise).
+  const SLOT = 'canvas.anim-gif, .anim-vslot';
+  new MutationObserver((records) => {
+    for (const r of records) for (const n of r.addedNodes)
+      if (n.nodeType === 1 && (n.matches(SLOT) || n.querySelector(SLOT))) { cancelAnimationFrame(raf); raf = 0; tick(performance.now()); return; }
+  }).observe(document.body, { childList: true, subtree: true });
 
   // ---------------------------------------------------------------- video: a pool of players, moved into place
   const pool = new Map(); // url -> [video]

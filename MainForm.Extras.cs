@@ -77,6 +77,10 @@ public sealed partial class MainForm
                 Send(new JsonObject { ["type"] = "notice", ["ok"] = true, ["text"] = string.Join(" | ", docks.Select(kv => kv.Key + ":" + kv.Value.Handle + ":" + kv.Value.Visible + ":" + kv.Value.Bounds)) + " || forms=" + string.Join(",", Application.OpenForms.OfType<DockForm>().Select(f => f.Handle + ":" + f.Visible)) });
                 return true;
 
+            case "recordClip":
+                SendHotkey(Str("keys"));
+                return true;
+
             case "discordReconnect":
                 lastDiscordTry = DateTime.MinValue;
                 presenceSignature = "";
@@ -297,6 +301,7 @@ public sealed partial class MainForm
         if (made) await Task.Yield();
         WatchForeground();
         PushDock(force: true);
+        EnsureWidgets();
         UpdateBarVisibility();
     }
 
@@ -351,6 +356,8 @@ public sealed partial class MainForm
     {
         var item = NexusItems().FirstOrDefault(i => i["id"]?.ToString() == id);
         if (item == null) return;
+        // The icon's own click sound, played by the page (it keeps playing even while the launcher is hidden).
+        if (item["sound"]?.ToString() is { Length: > 0 } sound) Send(new JsonObject { ["type"] = "playSound", ["url"] = sound });
         var kind = item["kind"]?.ToString();
         var target = item["target"]?.ToString() ?? "";
         // How it opens: the item's own choice, else the bar's (normal, maximized, minimized, or bring an open one forward).
@@ -492,7 +499,7 @@ public sealed partial class MainForm
         // covering the desktop. They used to keep desktop-only bars hidden until you clicked the desktop.
         if ((ex & 0x20 /* WS_EX_TRANSPARENT */) != 0 || (ex & 0x08000000 /* WS_EX_NOACTIVATE */) != 0) return false;
         if (DwmGetWindowAttribute(h, 14 /* DWMWA_CLOAKED */, out int cloaked, 4) == 0 && cloaked != 0) return false;
-        if (docks.Values.Any(d => d.Handle == h)) return false;
+        if (docks.Values.Any(d => d.Handle == h) || widgetForms.Values.Any(w => w.Handle == h)) return false;
         if (h == Handle && mode != "home") return false; // the mini widget doesn't cover the desktop
         var name = new System.Text.StringBuilder(256);
         GetClassName(h, name, name.Capacity);
@@ -511,7 +518,7 @@ public sealed partial class MainForm
     bool DesktopInFront()
     {
         var front = GetForegroundWindow();
-        if (front == IntPtr.Zero || docks.Values.Any(d => d.Handle == front)) return !AnyAppWindow();
+        if (front == IntPtr.Zero || docks.Values.Any(d => d.Handle == front) || widgetForms.Values.Any(w => w.Handle == front)) return !AnyAppWindow();
         var name = new System.Text.StringBuilder(256);
         GetClassName(front, name, name.Capacity);
         if (DesktopClasses.Contains(name.ToString())) return true;
@@ -543,6 +550,41 @@ public sealed partial class MainForm
                 || (vis == "apps" && (desk ??= DesktopInFront()));
             d.Suppress(hide);
         }
+        LayoutGroups();
+        // Widgets follow the same rules: "desktop" ones only show on the desktop.
+        foreach (var w in WidgetConfigs())
+        {
+            if (!widgetForms.TryGetValue(w["id"]?.ToString() ?? "", out var f)) continue;
+            var vis = w["visibility"]?.ToString() ?? "desktop";
+            f.Suppress((vis == "desktop" && !(desk ??= DesktopInFront())) || (full ??= SomethingFullscreen()) && vis != "always");
+        }
+    }
+
+    /// <summary>Bars that share an edge (and are showing) sit side by side in the middle with a gap; when they
+    /// don't all fit, they all shrink by the same amount. A bar that hides frees its room for the others.</summary>
+    string groupSig = "";
+    void LayoutGroups()
+    {
+        var sig = new System.Text.StringBuilder();
+        foreach (var edge in docks.Values.Where(d => d.Grouped).GroupBy(d => d.Edge))
+        {
+            var shown = edge.Where(d => !d.Hidden).ToList();
+            foreach (var d in edge.Where(d => d.Hidden)) { d.AlongStart = null; d.SizeFactor = 1; }
+            if (shown.Count < 2) { foreach (var d in shown) if (d.AlongStart != null || d.SizeFactor != 1) { d.AlongStart = null; d.SizeFactor = 1; d.Relayout(); } continue; }
+            int gap = 24, span = shown[0].EdgeLength;
+            var lengths = shown.Select(d => d.LengthAt(1)).ToList();
+            float total = lengths.Sum() + gap * (shown.Count - 1), factor = Math.Min(1f, (span - 40) / Math.Max(1f, total));
+            if (factor < 1) { lengths = shown.Select(d => d.LengthAt(factor)).ToList(); total = lengths.Sum() + gap * (shown.Count - 1); }
+            int at = (int)((span - total) / 2);
+            for (int i = 0; i < shown.Count; i++)
+            {
+                var d = shown[i];
+                sig.Append(d.BarId).Append(':').Append(at).Append(':').Append(factor.ToString("0.000")).Append('|');
+                if (d.AlongStart != at || Math.Abs(d.SizeFactor - factor) > 0.001f) { d.AlongStart = at; d.SizeFactor = factor; d.Relayout(); }
+                at += lengths[i] + gap;
+            }
+        }
+        groupSig = sig.ToString();
     }
 
     // Windows says the moment another window comes to the front (clicking the launcher, opening an app), so
@@ -557,10 +599,10 @@ public sealed partial class MainForm
     {
         if (foregroundHook != IntPtr.Zero) return;
         // Windows changes its mind a few times while a window minimizes or closes, so look again a moment later too.
-        barRecheck.Tick += (_, _) => { barRecheck.Stop(); if (docks.Count > 0) UpdateBarVisibility(); };
+        barRecheck.Tick += (_, _) => { barRecheck.Stop(); if (docks.Count > 0 || widgetForms.Count > 0) UpdateBarVisibility(); };
         foregroundProc = (_, _, _, _, _, _, _) =>
         {
-            if (docks.Count == 0) return;
+            if (docks.Count == 0 && widgetForms.Count == 0) return;
             UpdateBarVisibility();
             barRecheck.Stop(); barRecheck.Start();
         };
@@ -659,6 +701,9 @@ public sealed partial class MainForm
         string account = "";
         if (game?["platform"]?.ToString() == "epic")
             account = (config?["epic"]?["accounts"] as JsonArray)?.OfType<JsonObject>().FirstOrDefault(a => a["id"]?.ToString() == EpicCurrent())?["name"]?.ToString() ?? "";
+        var song = LastTrack?["title"]?.ToString() ?? "";
+        var artist = LastTrack?["artist"]?.ToString() ?? "";
+        text = text.Replace("{song}", song).Replace("{artist}", artist).Replace("{time}", DateTime.Now.ToString("HH:mm"));
         return text.Replace("{game}", gameName).Replace("{platform}", platform).Replace("{account}", account)
             .Replace("{count}", Games().Count().ToString()).Replace("{profile}", config?["profile"]?["name"]?.ToString() ?? "")
             .Trim();
@@ -699,13 +744,26 @@ public sealed partial class MainForm
         JsonObject? activity = null;
         if (playing != null || idle)
         {
+            // A game can have its own presence (Discord settings → per game); it wins over the general lines.
+            var own = playing != null ? d?["perGame"]?[playing["id"]?.ToString() ?? ""] as JsonObject : null;
             // A line you cleared on purpose stays empty; only a setting that was never saved uses the default.
-            string Get(string key, string fallback) => d is JsonObject o && o.ContainsKey(key) ? o[key]?.ToString() ?? "" : fallback;
+            string Get(string key, string fallback) => own != null && own.ContainsKey(key) && own[key]?.ToString() is { Length: > 0 } ov ? ov
+                : d is JsonObject o && o.ContainsKey(key) ? o[key]?.ToString() ?? "" : fallback;
+            // Lines with | in them take turns: "LOCKED IN | GRINDING | ONE MORE GAME".
+            int every = 15;
+            try { every = Math.Clamp(d?["rotateEvery"]?.GetValue<int>() ?? 15, 6, 600); } catch { }
+            long turn = DateTimeOffset.Now.ToUnixTimeSeconds() / every;
+            string Turn(string s) { var parts = s.Split('|').Select(x => x.Trim()).Where(x => x != "").ToArray(); return parts.Length <= 1 ? s : parts[turn % parts.Length]; }
             activity = new JsonObject
             {
-                ["details"] = Clip(Fill(playing != null ? Get("details", "Playing {game}") : Get("idleDetails", "In the launcher"), playing), 128),
-                ["state"] = Clip(Fill(playing != null ? Get("state", "on {platform}") : Get("idleState", "{count} games ready"), playing), 128),
+                ["details"] = Clip(Fill(Turn(playing != null ? Get("details", "Playing {game}") : Get("idleDetails", "In the launcher")), playing), 128),
+                ["state"] = Clip(Fill(Turn(playing != null ? Get("state", "on {platform}") : Get("idleState", "{count} games ready")), playing), 128),
             };
+            // What Discord says you are doing: Playing, Listening to, Watching or Competing in.
+            try { if (d?["activityType"]?.GetValue<int>() is int type && type is 2 or 3 or 5) activity["type"] = type; } catch { }
+            int partySize = 0, partyMax = 0;
+            try { partySize = d?["partySize"]?.GetValue<int>() ?? 0; partyMax = d?["partyMax"]?.GetValue<int>() ?? 0; } catch { }
+            if (partyMax > 0) activity["party"] = new JsonObject { ["id"] = "skyvaint", ["size"] = new JsonArray(Math.Clamp(partySize, 1, partyMax), partyMax) };
             bool elapsed = true;
             try { elapsed = d?["elapsed"]?.GetValue<bool>() ?? true; } catch { }
             if (elapsed)
@@ -714,7 +772,7 @@ public sealed partial class MainForm
                 activity["timestamps"] = new JsonObject { ["start"] = new DateTimeOffset(since).ToUnixTimeSeconds() };
             }
             var assets = new JsonObject();
-            void Asset(string key, string field) { if (Clip(Fill(d?[field]?.ToString(), playing), 256) is { } v) assets[key] = v; }
+            void Asset(string key, string field) { if (Clip(Fill(Turn(Get(field, "")), playing), 256) is { } v) assets[key] = v; }
             Asset("large_image", "largeImage"); Asset("large_text", "largeText"); Asset("small_image", "smallImage"); Asset("small_text", "smallText");
             if (assets.Count > 0) activity["assets"] = assets;
             var buttons = new JsonArray();
@@ -737,6 +795,32 @@ public sealed partial class MainForm
     }
 
     readonly DateTime launchedAt = DateTime.Now;
+
+    // ---------- clips: press the recorder's hotkey for you ----------
+
+    [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+
+    /// <summary>Presses a shortcut like "Win+Alt+G" or "Alt+F10" (Game Bar, Medal, ShadowPlay, OBS…).</summary>
+    static void SendHotkey(string keys)
+    {
+        var vks = new List<byte>();
+        foreach (var part in keys.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var p = part.ToUpperInvariant();
+            byte? vk = p switch
+            {
+                "CTRL" or "CONTROL" => 0x11, "ALT" => 0x12, "SHIFT" => 0x10, "WIN" or "WINDOWS" => 0x5B, "PRTSC" or "PRINTSCREEN" or "PRINT" => 0x2C,
+                "HOME" => 0x24, "END" => 0x23, "INSERT" or "INS" => 0x2D, "DELETE" or "DEL" => 0x2E, "PAGEUP" => 0x21, "PAGEDOWN" => 0x22, "SPACE" => 0x20,
+                _ when p.Length > 1 && p[0] == 'F' && int.TryParse(p[1..], out var f) && f is >= 1 and <= 24 => (byte)(0x6F + f),
+                _ when p.Length == 1 && char.IsLetterOrDigit(p[0]) => (byte)p[0],
+                _ => null,
+            };
+            if (vk.HasValue) vks.Add(vk.Value);
+        }
+        if (vks.Count == 0) return;
+        foreach (var vk in vks) keybd_event(vk, 0, 0, UIntPtr.Zero);
+        for (int i = vks.Count - 1; i >= 0; i--) keybd_event(vks[i], 0, 2, UIntPtr.Zero);
+    }
 
     void TrackRunningSince(HashSet<string> now)
     {
