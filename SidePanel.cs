@@ -13,7 +13,7 @@ namespace Skyvaint;
 sealed class SidePanel : Panel
 {
     readonly MainForm owner;
-    readonly Func<CoreWebView2Environment?> env;
+    readonly Func<Task<CoreWebView2Environment?>> env;
     readonly Panel header = new() { Dock = DockStyle.Top, Height = 44 };
     readonly FlowLayoutPanel rail = new() { Dock = DockStyle.Left, Width = 54, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(6, 8, 0, 8) };
     readonly Panel grip = new() { Dock = DockStyle.Left, Width = 6, Cursor = Cursors.SizeWE };
@@ -37,7 +37,7 @@ sealed class SidePanel : Panel
 
     const string MobileUA = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36";
 
-    public SidePanel(MainForm owner, Func<CoreWebView2Environment?> env)
+    public SidePanel(MainForm owner, Func<Task<CoreWebView2Environment?>> env)
     {
         this.owner = owner;
         this.env = env;
@@ -161,7 +161,8 @@ sealed class SidePanel : Panel
     async Task EnsureView()
     {
         if (view != null) return;
-        var e = env();
+        var e = await env();
+        if (view != null) return;
         if (e == null) return;
         view = new WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = bg };
         Controls.Add(view);
@@ -207,6 +208,16 @@ sealed class SidePanel : Panel
         if (url != null) Go(url);
         else if (view?.CoreWebView2 != null && (view.Source == null || view.Source.AbsoluteUri == "about:blank")) Go(Sites(null)[0].url);
         owner.OnSideMessage(new JsonObject { ["type"] = "opened" });
+    }
+
+    /// <summary>Lets go of the browser while it isn't in use; opening the panel makes it again.</summary>
+    public void Unload()
+    {
+        if (view == null) return;
+        var old = view;
+        view = null;
+        Controls.Remove(old);
+        old.Dispose();
     }
 
     public void Close() { if (ownWindow != null) { ownWindow.Hide(); return; } Visible = false; }

@@ -93,9 +93,12 @@ static class StartupGuard
     /// <summary>The WebView2 switches for this start.</summary>
     public static string BrowserArgs(bool uncapped, bool dgpu)
     {
-        const string common = "--autoplay-policy=no-user-gesture-required --disable-background-timer-throttling";
+        // Things a launcher's page has no use for, and caps on what the page may keep in memory.
+        const string lean = " --disable-extensions --disable-sync --disable-component-update --disable-default-apps --no-pings"
+            + " --disk-cache-size=134217728 --force-gpu-mem-available-mb=384 --force-gpu-mem-discardable-limit-mb=128 --num-raster-threads=2";
+        const string common = "--autoplay-policy=no-user-gesture-required --disable-background-timer-throttling" + lean;
         if (SafeGraphics) return common + " --disable-gpu --disable-gpu-compositing";
-        var args = common + " --enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist";
+        var args = common + " --enable-gpu-rasterization --ignore-gpu-blocklist";
         if (uncapped) args += " --disable-frame-rate-limit --disable-gpu-vsync";
         if (dgpu) args += " --force_high_performance_gpu";
         return args;

@@ -64,6 +64,7 @@
   music.addEventListener('ended', () => { if (tracks().length > 1 || !A.cfg.sound.bgmLoop) nextTrack(); else { music.currentTime = 0; music.play().catch(() => {}); } });
   // Volume eases toward its target so starting, pausing for a game and leaving HOME all fade.
   setInterval(() => {
+    if (!musicTarget && !musicFade && music.paused) return; // nothing playing: nothing to ease
     const want = musicTarget * (A.cfg.sound.bgmVolume ?? 0.4) * Math.min(1, (A.cfg.sound.master ?? 0.6) / 0.6);
     musicFade += (want - musicFade) * 0.18;
     if (Math.abs(musicFade - want) < 0.003) musicFade = want;
@@ -80,8 +81,10 @@
     if (!list.length && music.src) { music.removeAttribute('src'); music.load(); }
   }
   // The beat glow listens to the music (only when that effect is on).
+  let beatZero = false;
   function beat() {
-    if (!document.body.classList.contains('lx-beat') || music.paused) { layer.style.setProperty('--beat', 0); return; }
+    if (!document.body.classList.contains('lx-beat') || music.paused) { if (!beatZero) { beatZero = true; layer.style.setProperty('--beat', 0); } return; }
+    beatZero = false;
     try {
       if (!ctx) {
         ctx = new AudioContext();

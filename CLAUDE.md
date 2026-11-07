@@ -39,3 +39,12 @@ uses, and the user's setup seems to "reset" or "come back wrong" after every reb
 - Build with `build-and-run.cmd`, started from File Explorer (double-click), not from a Claude shell.
 - Don't copy, export or upload the user's settings. Don't edit them with Claude's file tools either (those only reach
   the virtual copy). If a settings change is really needed, ask the user first.
+
+## Page sleep
+
+A while after the window goes to the tray the WebView2 is closed for real (`MainForm.Sleep.cs`) and reloads when the launcher is shown.
+Work that must carry on while you play belongs in the shell, not the page. A message from the shell that needs the page even while hidden has to be listed in `NeedsPage`.
+
+## Controller and hover
+
+While a controller is in use, `body[data-input=pad]` hides the pointer and turns pointer events off. In `css/ui.css`, animate only transform and opacity.

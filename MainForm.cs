@@ -122,11 +122,7 @@ public sealed partial class MainForm : Form
 
 	private static readonly string CacheDir = Path.Combine(DataSafety.Local, "webview");
 
-	private readonly WebView2 web = new WebView2
-	{
-		Dock = DockStyle.Fill,
-		DefaultBackgroundColor = Color.FromArgb(7, 5, 5)
-	};
+	private WebView2 web = NewPageView();
 
 	private readonly NotifyIcon tray = new NotifyIcon();
 
@@ -1339,6 +1335,7 @@ public sealed partial class MainForm : Form
 	private void MapClipHosts()
 	{
 		CoreWebView2 core = web.CoreWebView2;
+		if (core == null) return; // the page is asleep; the folders are mapped when it loads again
 		for (int i = 0; i < Math.Max(mappedRoots.Count, clips.Roots.Count); i++)
 		{
 			if (i < mappedRoots.Count)
@@ -1622,7 +1619,8 @@ public sealed partial class MainForm : Form
 	/// restart in safe graphics.</summary>
 	private void WatchStart()
 	{
-		var watch = new System.Windows.Forms.Timer { Interval = 25000 };
+		// Right after signing in the PC is busy, so a start from there gets longer.
+		var watch = new System.Windows.Forms.Timer { Interval = background ? 90000 : 25000 };
 		watch.Tick += (_, _) =>
 		{
 			watch.Stop();
@@ -1650,7 +1648,6 @@ public sealed partial class MainForm : Form
 
 	private async Task InitWebView()
 	{
-		_ = 1;
 		// No WebView2 runtime: nothing could be drawn, so offer Microsoft's download page instead of a cryptic error.
 		if (!EnsureWebView2(this, Text))
 		{
@@ -1661,10 +1658,7 @@ public sealed partial class MainForm : Form
 		StartupGuard.BeginStart();
 		try
 		{
-			CoreWebView2EnvironmentOptions options = ((DebugPort > 0) ? new CoreWebView2EnvironmentOptions(BrowserArgs() + $" --remote-debugging-port={DebugPort}") : WebOptions());
-			CoreWebView2Environment env = await CoreWebView2Environment.CreateAsync(null, CacheDir, options);
-			await web.EnsureCoreWebView2Async(env);
-		mainEnv = env;
+			await StartPage("");
 		}
 		catch (Exception ex)
 		{
@@ -1674,9 +1668,26 @@ public sealed partial class MainForm : Form
 			Close();
 			return;
 		}
+		StartMemoryCare();
+		WatchStart();
+		shellStarted = true;
+		EnsureDock();
+		RegisterHotkeys();
+		poll.Start();
+		RefreshAutostart();
+	}
+
+	private bool shellStarted;
+
+	/// <summary>Makes the WebView2 and loads the page into it: at start, and again after a page sleep.</summary>
+	private async Task StartPage(string query)
+	{
+		CoreWebView2EnvironmentOptions options = ((DebugPort > 0) ? new CoreWebView2EnvironmentOptions(BrowserArgs() + $" --remote-debugging-port={DebugPort}") : WebOptions());
+		CoreWebView2Environment env = await CoreWebView2Environment.CreateAsync(null, CacheDir, options);
+		await web.EnsureCoreWebView2Async(env);
+		mainEnv = env;
 		CoreWebView2 coreWebView = web.CoreWebView2;
 		WatchPageCrashes(coreWebView);
-		StartMemoryCare();
 		CoreWebView2Settings settings = coreWebView.Settings;
 		settings.AreDefaultContextMenusEnabled = dev;
 		settings.AreDevToolsEnabled = dev;
@@ -1708,11 +1719,7 @@ public sealed partial class MainForm : Form
 			e.Handled = true;
 		};
 		PrepareClips();
-		coreWebView.Navigate("https://skyvaint.example/index.html");
-		WatchStart();
-		EnsureDock();
-		RegisterHotkeys();
-		poll.Start();
+		coreWebView.Navigate("https://skyvaint.example/index.html" + query);
 	}
 
 	// Pictures and videos the page shows (art, icons, clips, your own files). Reading them happens off the window's
@@ -1973,6 +1980,11 @@ public sealed partial class MainForm : Form
 		{
 			web.CoreWebView2.PostWebMessageAsJson(msg.ToJsonString());
 		}
+		else if (pageAsleep && NeedsPage.Contains(msg["type"]?.ToString() ?? ""))
+		{
+			wakeQueue.Enqueue(msg);
+			_ = WakePage();
+		}
 	}
 
 	private void OnMessage(JsonObject m)
@@ -1980,6 +1992,8 @@ public sealed partial class MainForm : Form
 		switch (Str("type"))
 		{
 		case "ready":
+		{
+			bool woke = pageAsleep;
 			pageReady = true;
 			StartupGuard.Reached();
 			// Each part is fetched on its own: one failing (a scan, a store that isn't installed the way we expect on
@@ -1990,6 +2004,7 @@ public sealed partial class MainForm : Form
 				["type"] = "init",
 				["config"] = config?.DeepClone(),
 				["fresh"] = startedFresh,
+				["wake"] = woke,
 				["stats"] = Guarded("stats", () => Stats().DeepClone(), new JsonObject()),
 				["scan"] = Guarded<JsonNode?>("game scan", () => ScanGames(), new JsonArray()),
 				["mode"] = mode,
@@ -1999,11 +2014,18 @@ public sealed partial class MainForm : Form
 				["robloxImport"] = Guarded<JsonNode?>("Roblox import", () => RobloxImport(), null),
 				["safeGraphics"] = StartupGuard.SafeGraphics
 			});
+			if (woke)
+			{
+				PageAwake();
+				Guarded("update checks", () => { OnPageReadyUpdates(); return true; }, false);
+				break;
+			}
 			Guarded("show HOME", () => { SetMode(mode, notify: false); return true; }, false);
 			base.Opacity = 1.0;
 			Guarded("first game poll", () => { PollGames(); return true; }, false);
 			Guarded("update checks", () => { OnPageReadyUpdates(); return true; }, false);
 			break;
+		}
 		case "clientError":
 			StartupGuard.Log("Page error: " + Str("text"));
 			break;
@@ -2048,7 +2070,7 @@ public sealed partial class MainForm : Form
 			PickFile(m["kind"]?.ToString() ?? "image", Str("token"));
 			break;
 		case "setAutostart":
-			SetAutostart(m["on"]?.GetValue<bool>() ?? false);
+			{ bool on = m["on"]?.GetValue<bool>() ?? false; _ = Task.Run(() => SetAutostart(on)); }
 			break;
 		case "rescan":
 			Send(new JsonObject
@@ -2096,6 +2118,7 @@ public sealed partial class MainForm : Form
 	private void SetMode(string m, bool notify = true)
 	{
 		mode = m;
+		if (pageAsleep && m != "hidden") _ = WakePage();
 		SideForMode();
 		if (notify)
 		{
@@ -2664,7 +2687,19 @@ public sealed partial class MainForm : Form
 		}
 	}
 
-	private void PollGames()
+	private bool polling;
+
+	// Listing every process takes long enough to be felt, so it happens off the window's thread.
+	private async void PollGames()
+	{
+		if (polling) return;
+		polling = true;
+		try { await PollGamesNow(); }
+		catch (Exception ex) { StartupGuard.Log("Game poll", ex); }
+		finally { polling = false; }
+	}
+
+	private async Task PollGamesNow()
 	{
 		if (stateDirty && (DateTime.Now - lastStateSave).TotalSeconds > 5.0)
 		{
@@ -2684,24 +2719,8 @@ public sealed partial class MainForm : Form
 		{
 			return;
 		}
-		HashSet<string> live = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		int roblox = 0;
-		Process[] processes = Process.GetProcesses();
-		foreach (Process p in processes)
-		{
-			try
-			{
-				live.Add(p.ProcessName);
-				if (p.ProcessName.Equals("RobloxPlayerBeta", StringComparison.OrdinalIgnoreCase))
-				{
-					roblox++;
-				}
-			}
-			catch
-			{
-			}
-			p.Dispose();
-		}
+		HashSet<string> live = await Task.Run(LiveProcessNames);
+		lastLive = live;
 		PublishRoblox();
 		HashSet<string> now = (from w in wanted
 			where w.Item2.Any(live.Contains)
@@ -2943,28 +2962,6 @@ public sealed partial class MainForm : Form
 		catch
 		{
 			return fallback;
-		}
-	}
-
-	private static bool IsAutostart()
-	{
-		using RegistryKey key = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
-		return key?.GetValue("SkyvaintGameLauncher") != null;
-	}
-
-	private static void SetAutostart(bool on)
-	{
-		using RegistryKey key = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", writable: true);
-		if (key != null)
-		{
-			if (on)
-			{
-				key.SetValue("SkyvaintGameLauncher", "\"" + Environment.ProcessPath + "\" --background");
-			}
-			else
-			{
-				key.DeleteValue("SkyvaintGameLauncher", throwOnMissingValue: false);
-			}
 		}
 	}
 

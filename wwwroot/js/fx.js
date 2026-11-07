@@ -55,7 +55,7 @@ SV.fx = (() => {
 
     for (const r of rings) {
       r.life -= dt * 2.1;
-      const rad = (1 - r.life) * r.size;
+      const rad = Math.max(0, 1 - r.life) * r.size; // life can start above 1, and a negative radius throws
       ctx.strokeStyle = rgba(opt.accent, Math.max(0, r.life) * 0.9);
       ctx.lineWidth = 1 + r.life * 3;
       ctx.beginPath(); ctx.arc(r.x, r.y, rad, 0, 6.283); ctx.stroke();

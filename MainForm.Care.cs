@@ -148,6 +148,8 @@ public sealed partial class MainForm
         try { if (sidePanel?.Core != null) sidePanel.Core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal; } catch { }
     }
 
+    bool trimmedAway;
+
     void StartMemoryCare()
     {
         VisibleChanged += (_, _) => { if (Visible) WakePages(); };
@@ -155,16 +157,22 @@ public sealed partial class MainForm
         Resize += (_, _) => { if (WindowState != FormWindowState.Minimized) WakePages(); };
         memoryTimer.Tick += async (_, _) =>
         {
+            CheckPageSleep();
+            // Nobody to tell and nothing to measure until the page is back.
+            if (pageAsleep) return;
             var saver = MemorySaver();
             int limit = MemoryLimit();
-            var (mb, pids) = await MemoryNow();
             bool away = OutOfSight();
+            var (mb, pids) = await MemoryNow();
             // Off: nothing. Balanced and Max: lean only while out of sight (a page on screen is never shrunk,
             // that is what could turn it black). Max also trims harder.
             var level = saver != "off" && away ? CoreWebView2MemoryUsageTargetLevel.Low : CoreWebView2MemoryUsageTargetLevel.Normal;
             try { if (web?.CoreWebView2 != null && saver != "off") web.CoreWebView2.MemoryUsageTargetLevel = level; } catch { }
+            // Trimming is a one-time thing on the way out. Doing it every 10 seconds stopped the whole launcher for a
+            // full garbage collection each time and pushed everything to disk, only for it to come straight back.
             if (limit > 0 && mb > limit && away) { await Trim(pids, hard: true); (mb, _) = await MemoryNow(); }
-            else if (saver != "off" && away) await Trim(pids, hard: saver == "max");
+            else if (saver != "off" && away && !trimmedAway) { trimmedAway = true; await Trim(pids, hard: saver == "max"); }
+            if (!away) trimmedAway = false;
             if (pageReady) Send(new JsonObject { ["type"] = "memory", ["mb"] = mb, ["limit"] = limit });
         };
         memoryTimer.Start();

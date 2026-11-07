@@ -195,6 +195,7 @@
       R.choice('Memory saver', 'Balanced lets go of memory while the launcher is out of sight. Max keeps it lean all the time (a little slower to redraw).', A.at('perf.memorySaver'),
         [['off', 'Off'], ['balanced', 'Balanced'], ['max', 'Max']]),
       R.slider('Memory limit', 'Above this, the launcher frees memory straight away (caches, unused pages). 0 is no limit. It is a target, not a hard wall, so nothing crashes.', A.at('perf.memoryLimit'), 0, 2000, 50, (v) => (v ? v + ' MB' : 'NO LIMIT')),
+      R.toggle('Unload the page in the tray', 'A little while after the launcher goes to the tray it closes its page, which takes it to about 50 MB. Opening it takes a second or two. Stays off while music plays in the background.', A.at('perf.sleepHidden')),
       R.button('Free memory now', '', 'FREE', () => { host.send('trimMemory'); toast('Freeing memory…'); }),
       heading('SHORTCUTS'),
       R.text('Show / hide the launcher', 'Works anywhere, even in a game. Like Ctrl+Alt+Home or Ctrl+Shift+F1.', A.at('behavior.hotkeyShow'), 'Ctrl+Alt+Home'),

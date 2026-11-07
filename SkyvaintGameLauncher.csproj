@@ -15,11 +15,12 @@
     <RootNamespace>Skyvaint</RootNamespace>
     <AssemblyName>SkyvaintGameLauncher</AssemblyName>
     <Product>skyvaint game launcher</Product>
-    <Version>2.7.0</Version>
+    <Version>2.8.0</Version>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <TieredPGO>true</TieredPGO>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <NoWarn>$(NoWarn);MSB3277;CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8619;CS8620;CS8625;CS8629;CS0162</NoWarn>
   </PropertyGroup>
 
@@ -32,6 +33,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+  </ItemGroup>
+
+  <!-- The shell's .NET side is small: ask the GC to hand memory back rather than hold on to it. -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+    <RuntimeHostConfigurationOption Include="System.GC.RetainVM" Value="false" />
   </ItemGroup>
 
   <ItemGroup>

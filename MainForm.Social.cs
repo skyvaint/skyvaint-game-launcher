@@ -66,11 +66,29 @@ public sealed partial class MainForm
     SidePanel? Side()
     {
         if (sidePanel != null || mainEnv == null) return sidePanel;
-        sidePanel = new SidePanel(this, () => mainEnv);
+        sidePanel = new SidePanel(this, BrowserEnv);
         Controls.Add(sidePanel);
         web.BringToFront(); // the page fills whatever the panel leaves
         return sidePanel;
     }
+    // The browser has a WebView2 of its own, separate from the launcher's page: plain video-friendly settings (vsync
+    // on, no forced NVIDIA card, none of the page's frame-rate tricks), its own processes so the page's effects and
+    // the memory saver don't slow its videos down. Its sign-ins are kept in localrowser-webview.
+    CoreWebView2Environment? browserEnv;
+    Task<CoreWebView2Environment?>? browserEnvTask;
+    Task<CoreWebView2Environment?> BrowserEnv() => browserEnvTask ??= MakeBrowserEnv();
+    async Task<CoreWebView2Environment?> MakeBrowserEnv()
+    {
+        try
+        {
+            var args = "--autoplay-policy=no-user-gesture-required " + (StartupGuard.SafeGraphics ? "--disable-gpu" : "--ignore-gpu-blocklist --enable-gpu-rasterization");
+            if (DebugPort > 0) args += $" --remote-debugging-port={DebugPort + 1}";
+            browserEnv = await CoreWebView2Environment.CreateAsync(null, Path.Combine(DataSafety.Local, "browser-webview"), new CoreWebView2EnvironmentOptions(args));
+        }
+        catch (Exception ex) { StartupGuard.Log("Browser engine (using the page's instead)", ex); }
+        return browserEnv ?? mainEnv;
+    }
+
     void SendSideState() => Send(new JsonObject { ["type"] = "sideState", ["open"] = sidePanel?.Visible == true });
     // The panel belongs to HOME: it steps out of the way in mini mode and comes back with HOME.
     void SideForMode()
@@ -187,7 +205,9 @@ public sealed partial class MainForm
                 var loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 friendsView.CoreWebView2.LaunchingExternalUriScheme += (_, e) => e.Cancel = true;
                 friendsView.CoreWebView2.DOMContentLoaded += (_, _) => loaded.TrySetResult();
-                friendsView.CoreWebView2.Navigate("https://www.roblox.com/home");
+                // Only roblox.com's address is needed for the calls below. The real home page held 250 MB for nothing;
+                // this plain text file has no scripts or pictures, and a signed-out account is caught by the calls.
+                friendsView.CoreWebView2.Navigate("https://www.roblox.com/robots.txt");
                 await Task.WhenAny(loaded.Task, Task.Delay(25000));
                 if (!loaded.Task.IsCompleted) throw new Exception("Roblox's site didn't load. Check your connection.");
             }
@@ -210,6 +230,7 @@ public sealed partial class MainForm
             var info = result.Task.IsCompleted ? result.Task.Result : null;
             if (info == null) throw new Exception("Roblox didn't answer. Try again in a moment.");
             if (info["ok"]?.GetValue<bool>() != true) throw new Exception(info["error"]?.ToString() ?? "failed");
+            TouchRobloxPage();
             return info;
         }
         catch

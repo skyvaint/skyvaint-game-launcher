@@ -87,6 +87,9 @@ public sealed partial class MainForm
             case "loadData":
                 LoadDataFile(Str("file"));
                 return true;
+            case "dataRead":
+                ReadDataFile(Str("file"));
+                return true;
         }
         return false;
     }
@@ -437,6 +440,7 @@ public sealed partial class MainForm
                 ["accounts"] = (j["roblox"]?["accounts"] as JsonArray)?.Count ?? 0,
                 ["bars"] = 1 + ((j["nexus"]?["bars"] as JsonArray)?.Count ?? 0),
                 ["sounds"] = (j["sound"]?["library"] as JsonArray)?.Count ?? 0,
+                ["size"] = new FileInfo(file).Length,
             };
         }
         catch { return null; }
@@ -463,6 +467,25 @@ public sealed partial class MainForm
         return list;
     }
 
+    static bool DataFileAllowed(string full) => full.StartsWith(Path.GetFullPath(DataDir), StringComparison.OrdinalIgnoreCase) || full.StartsWith(Path.GetFullPath(DataSafety.BackupDir), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Hands a settings file to the page so the data frame can show what's in it. Nothing is loaded.</summary>
+    async void ReadDataFile(string file)
+    {
+        var reply = new JsonObject { ["type"] = "dataRead", ["file"] = file, ["ok"] = false };
+        try
+        {
+            var full = Path.GetFullPath(file);
+            if (DataFileAllowed(full) && await Task.Run(() => JsonNode.Parse(File.ReadAllText(full))) is JsonObject j)
+            {
+                reply["config"] = j;
+                reply["ok"] = true;
+            }
+        }
+        catch { }
+        Send(reply);
+    }
+
     /// <summary>Loads a chosen settings file: what is there now is backed up first, then the launcher restarts on
     /// the chosen one (without asking again).</summary>
     void LoadDataFile(string file)
@@ -470,8 +493,7 @@ public sealed partial class MainForm
         try
         {
             var full = Path.GetFullPath(file);
-            bool allowed = full.StartsWith(Path.GetFullPath(DataDir), StringComparison.OrdinalIgnoreCase) || full.StartsWith(Path.GetFullPath(DataSafety.BackupDir), StringComparison.OrdinalIgnoreCase);
-            if (!allowed || JsonNode.Parse(File.ReadAllText(full)) is not JsonObject chosen) throw new Exception("not a settings file");
+            if (!DataFileAllowed(full) || JsonNode.Parse(File.ReadAllText(full)) is not JsonObject chosen) throw new Exception("not a settings file");
             if (full.Equals(Path.GetFullPath(ConfigPath), StringComparison.OrdinalIgnoreCase)) return; // already loaded
             restoring = true; // the page's current settings must not be saved over the chosen ones
             DataSafety.Snapshot(ConfigPath, force: true);

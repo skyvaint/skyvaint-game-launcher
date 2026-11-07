@@ -286,7 +286,7 @@ public sealed partial class MainForm
     /// <summary>Opens a window for every bar that is switched on and closes the rest.</summary>
     async void EnsureDock()
     {
-        if (mainEnv == null) return;
+        if (!shellStarted) return;
         var wanted = Bars().Where(b => BarOn(b.bar)).Select(b => b.id).ToHashSet();
         foreach (var id in docks.Keys.Where(id => !wanted.Contains(id)).ToList())
         {
@@ -405,7 +405,7 @@ public sealed partial class MainForm
                 else if (kind == "home") on = Visible && mode == "home";
                 else if (i["process"]?.ToString() is { Length: > 0 } proc)
                 {
-                    live ??= LiveProcessNames();
+                    live ??= lastLive ?? LiveProcessNames();
                     on = live.Contains(proc);
                 }
                 var icon = i["icon"]?.ToString() ?? "";
@@ -444,6 +444,9 @@ public sealed partial class MainForm
         autoIcons[target] = url;
         return url;
     }
+
+    // The names from the last game poll (a few seconds old at most); the bars use these instead of listing again.
+    HashSet<string>? lastLive;
 
     static HashSet<string> LiveProcessNames()
     {

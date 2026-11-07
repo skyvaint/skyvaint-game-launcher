@@ -1,6 +1,6 @@
-// Rows under HOME: scroll down (or press down past the buttons) and the launcher slides up to show rows of cards —
-// your Roblox games, Roblox Studio projects, games coming soon, Roblox Studio news, and commission requests read
-// from a Discord channel. Each row scrolls sideways like the shelf.
+// The page under HOME: scroll down (or press down past the buttons) and it slides up. It is split into sections
+// (FOR YOU, ROBLOX, STORES, STUDIO) instead of one long stack of rows; only the section on screen is built. Each row
+// scrolls sideways like the shelf.
 (() => {
   const A = SV.app, { host, audio } = SV;
   const { $, el, esc, clamp, toast, R, heading } = A;
@@ -8,11 +8,21 @@
   const feat = (k) => !SV.features || SV.features.on(k);
 
   let open = false, railIdx = 0, feeds = { upcoming: null, news: null }, commissions = { items: null, error: '', channelName: '' }, fetchedAt = 0, hasBot = false;
-  const cardIdx = {};
+  const cardIdx = {}; // row id -> the card selected in it
 
-  const root = el(`<section id="rails"><div class="rails-sweep"></div><div class="rails-head"><div class="rails-frame"><div class="tag">[ 02 — MORE ]</div><b class="rails-now"></b><span class="rails-dots"></span></div><div class="rails-hint"></div></div><div class="rails-body"></div></section>`);
+  const SECTIONS = [
+    ['you', 'FOR YOU', ['recent', 'friends', 'roblox', 'clips']],
+    ['roblox', 'ROBLOX', ['trending', 'topPlaying', 'rising']],
+    ['stores', 'STORES', ['steamTop', 'steamDeals', 'epicFree', 'steamNew', 'upcoming']],
+    ['studio', 'STUDIO', ['studio', 'news', 'commissions']],
+  ];
+  let section = 'you', sections = [];
+
+  const root = el(`<section id="rails"><div class="rails-head"><div class="rails-frame"><button class="rails-up"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>HOME</button><div class="rails-secs"></div></div><div class="rails-hint"></div></div><div class="rails-body"></div></section>`);
   document.body.append(root);
-  const body = $('.rails-body', root);
+  const body = $('.rails-body', root), secs = $('.rails-secs', root);
+  $('.rails-up', root).addEventListener('click', () => close());
+  secs.addEventListener('click', (e) => { const b = e.target.closest('.rails-sec'); if (b) setSection(b.dataset.k); });
 
   host.on('feeds', (m) => { feeds = { upcoming: m.upcoming || [], news: m.news || [] }; render(); });
   let disc = null;
@@ -204,36 +214,50 @@
   let current = [];
   function render() {
     if (!A.cfg || !open) return;
-    current = rails();
+    const all = rails();
+    sections = SECTIONS.map(([k, label, ids]) => [k, label, all.filter((r) => ids.includes(r.id))]).filter((s) => s[2].length);
+    if (!sections.some((s) => s[0] === section)) section = sections[0] ? sections[0][0] : 'you';
+    const on = sections.find((s) => s[0] === section);
+    current = on ? on[2] : [];
     railIdx = clamp(railIdx, 0, Math.max(0, current.length - 1));
-    body.innerHTML = current.map((r, ri) => `
+    secs.innerHTML = sections.map(([k, label, list]) => `<button class="rails-sec ${k === section ? 'on' : ''}" data-k="${k}">${esc(A.T(label))}<i>${list.length}</i></button>`).join('');
+    body.innerHTML = current.length ? current.map((r, ri) => `
       <div class="rail" data-r="${ri}" style="--ri:${ri}">
         <div class="rail-head"><b>${esc(A.T(r.title))}</b><span class="tag">${esc(r.note || '')}</span></div>
         <div class="rail-row">${r.cards.length ? r.cards.map((c, ci) => `
           <button class="rail-card ${esc(c.cls || '')}" data-c="${ci}">
-            ${c.html ? c.html : SV.media.animated(c.img) ? `<div class="rc-img">${SV.media.html(c.img, 'rc-media')}</div>` : `<div class="rc-img" ${c.img ? `style="background-image:url('${esc(c.img)}')"` : ''}>${!c.img && c.glyph ? `<span>${esc(c.glyph)}</span>` : ''}</div>
+            ${c.html ? c.html : SV.media.animated(c.img) ? `<div class="rc-img">${SV.media.html(c.img, 'rc-media')}</div>` : `<div class="rc-img">${c.img ? `<img src="${esc(c.img)}" alt="" loading="lazy" decoding="async">` : c.glyph ? `<span>${esc(c.glyph)}</span>` : ''}</div>
             <div class="rc-meta"><b>${esc(c.title)}</b><small>${esc(c.sub || '')}</small></div>`}
           </button>`).join('') : '<div class="rail-empty tag">LOADING…</div>'}</div>
-      </div>`).join('');
+      </div>`).join('') : `<div class="rails-empty">${esc(A.T('Nothing here yet. Turn rows on in Settings → FEEDS.'))}</div>`;
     paint(false);
   }
 
+  function setSection(k) {
+    if (k === section) return;
+    section = k;
+    railIdx = 0;
+    audio.play('nav');
+    render();
+    body.scrollTop = 0;
+  }
+
+  // Changes only what moved: going through every card on every step was felt on long rows.
+  let lastFocus = null;
   function paint(scroll = true) {
-    body.querySelectorAll('.rail').forEach((railEl, ri) => {
-      railEl.classList.toggle('on', ri === railIdx);
-      const n = current[ri] ? current[ri].cards.length : 0;
-      const ci = clamp(cardIdx[ri] || 0, 0, Math.max(0, n - 1));
-      railEl.querySelectorAll('.rail-card').forEach((c, k) => c.classList.toggle('focus', ri === railIdx && k === ci));
-      if (scroll && ri === railIdx) {
-        railEl.scrollIntoView({ block: ri === 0 ? 'start' : 'center', behavior: 'smooth' });
-        const f = railEl.querySelectorAll('.rail-card')[ci];
+    body.querySelectorAll('.rail').forEach((railEl, ri) => railEl.classList.toggle('on', ri === railIdx));
+    if (lastFocus) lastFocus.classList.remove('focus');
+    lastFocus = null;
+    const r = current[railIdx], railEl = body.querySelector(`.rail[data-r="${railIdx}"]`);
+    if (r && railEl) {
+      const ci = clamp(cardIdx[r.id] || 0, 0, Math.max(0, r.cards.length - 1)), f = railEl.querySelectorAll('.rail-card')[ci];
+      if (f) { f.classList.add('focus'); lastFocus = f; }
+      if (scroll) {
+        railEl.scrollIntoView({ block: railIdx === 0 ? 'start' : 'center', behavior: 'smooth' });
         f && f.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
       }
-    });
-    $('.rails-hint', root).innerHTML = A.hints([['confirm', 'Open'], ['move', 'Move'], ['options', 'Options'], ['back', 'Back up']]);
-    const now = $('.rails-now', root), title = current[railIdx] ? A.T(current[railIdx].title) : '';
-    if (now.textContent !== title) { now.textContent = title; now.classList.remove('swap'); void now.offsetWidth; now.classList.add('swap'); }
-    $('.rails-dots', root).innerHTML = current.map((r, i) => `<i class="${i === railIdx ? 'on' : ''}"></i>`).join('') + `<em>${String(railIdx + 1).padStart(2, '0')} / ${String(current.length).padStart(2, '0')}</em>`;
+    }
+    $('.rails-hint', root).innerHTML = A.hints([['confirm', 'Open'], ['tabs', 'Section'], ['options', 'Options'], ['back', 'Back to HOME']]);
   }
 
   function show() {
@@ -248,12 +272,13 @@
     enterTimer = setTimeout(() => b.classList.remove('rails-enter'), 1100);
     audio.play('open');
     railIdx = 0;
+    section = 'you';
     body.scrollTop = 0;
     SV.friends && SV.friends.refresh(false);
     fetchAll(false);
     host.send('discordBotState');
     render();
-    paint();
+    A.syncCover();
   }
   let enterTimer = 0;
   function close() {
@@ -262,6 +287,7 @@
     clearTimeout(enterTimer);
     document.body.classList.remove('rails-on', 'rails-enter');
     audio.play('back');
+    A.syncCover();
   }
 
   function action(a) {
@@ -269,9 +295,13 @@
     if (a === 'back') return close();
     if (a === 'up') { if (railIdx === 0) return close(); railIdx--; audio.play('nav'); return paint(); }
     if (a === 'down') { if (railIdx < current.length - 1) { railIdx++; audio.play('nav'); paint(); } return; }
+    if (a === 'tabPrev' || a === 'tabNext') {
+      const i = sections.findIndex((s) => s[0] === section), n = sections.length;
+      return n > 1 ? setSection(sections[(i + (a === 'tabPrev' ? -1 : 1) + n) % n][0]) : undefined;
+    }
     if (!r) return;
-    const ci = clamp(cardIdx[railIdx] || 0, 0, Math.max(0, r.cards.length - 1));
-    if (a === 'left' || a === 'right') { cardIdx[railIdx] = clamp(ci + (a === 'left' ? -1 : 1), 0, r.cards.length - 1); audio.play('nav'); return paint(); }
+    const ci = clamp(cardIdx[r.id] || 0, 0, Math.max(0, r.cards.length - 1));
+    if (a === 'left' || a === 'right') { cardIdx[r.id] = clamp(ci + (a === 'left' ? -1 : 1), 0, r.cards.length - 1); audio.play('nav'); return paint(); }
     if (a === 'confirm' && r.cards[ci]) r.cards[ci].run();
     if (a === 'options' && r.cards[ci] && r.cards[ci].options) r.cards[ci].options();
     if (a === 'random' || a === 'alt') fetchAll(true);
@@ -280,8 +310,10 @@
   body.addEventListener('click', (e) => {
     const c = e.target.closest('.rail-card'), railEl = e.target.closest('.rail');
     if (!c || !railEl || A.stack.length) return;
-    railIdx = +railEl.dataset.r; cardIdx[railIdx] = +c.dataset.c; paint(false);
-    const card = current[railIdx].cards[cardIdx[railIdx]];
+    railIdx = +railEl.dataset.r;
+    const r = current[railIdx];
+    cardIdx[r.id] = +c.dataset.c; paint(false);
+    const card = r.cards[cardIdx[r.id]];
     card && card.run();
   });
   body.addEventListener('contextmenu', (e) => {
@@ -294,14 +326,21 @@
   body.addEventListener('mousemove', (e) => {
     const c = e.target.closest('.rail-card'), railEl = e.target.closest('.rail');
     if (!c || !railEl) return;
-    const ri = +railEl.dataset.r, ci = +c.dataset.c;
-    if (ri !== railIdx || ci !== cardIdx[ri]) { railIdx = ri; cardIdx[ri] = ci; paint(false); }
+    const ri = +railEl.dataset.r, ci = +c.dataset.c, id = current[ri].id;
+    if (ri !== railIdx || ci !== cardIdx[id]) { railIdx = ri; cardIdx[id] = ci; paint(false); }
   });
-  // Sideways wheel inside a row scrolls it; at the top, wheeling up returns to HOME.
+  // Sideways wheel inside a row scrolls it. At the top, a second notch up returns to HOME, so stopping at the top
+  // of the list doesn't throw you out of it.
+  let upNotches = 0, upAt = 0;
   root.addEventListener('wheel', (e) => {
     if (A.stack.length) return;
-    if (e.deltaY < 0 && body.scrollTop <= 0) { e.preventDefault(); close(); }
-    else { const row = e.target.closest('.rail-row'); if (row && e.shiftKey) { row.scrollLeft += e.deltaY; e.preventDefault(); } }
+    if (e.deltaY < 0 && body.scrollTop <= 0) {
+      e.preventDefault();
+      const now = performance.now();
+      upNotches = now - upAt > 600 ? 1 : upNotches + 1;
+      upAt = now;
+      if (upNotches >= 2) close();
+    } else { const row = e.target.closest('.rail-row'); if (row && e.shiftKey) { row.scrollLeft += e.deltaY; e.preventDefault(); } }
   }, { passive: false });
 
   // ---------------------------------------------------------------- settings (FEEDS tab)

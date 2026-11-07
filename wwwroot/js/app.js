@@ -129,7 +129,7 @@
   };
 
   const defaults = () => ({
-    v: 6,
+    v: 8,
     profile: { name: 'Player', avatar: '' },
     theme: { preset: 'predator', ...PRESETS.predator, tileShape: 'cut', font: 'anton', uiScale: 1, vignette: true, hero: true, ticker: true, meshStyle: 'mixed',
       tileSize: 1, heroSide: 'right', glow: 1, cut: 1.1, tickerSpeed: 1, tickerText: '', texture: 'grain', textureOpacity: 0.6,
@@ -140,7 +140,7 @@
     music: { enabled: true },
     widgets: { items: [], locked: true },
     social: { enabled: true, side: 'right', width: 420, sites: [], mobile: true },
-    layout: { heroNum: true, stats: true, tags: true, hints: true, shelfLabel: true, filters: true, profileName: true, clock: true, hero: true },
+    layout: { heroNum: true, stats: true, tags: true, hints: true, shelfLabel: true, filters: true, profileName: true, clock: true, hero: true, settingsScale: 1 },
     nexus: { enabled: false, seeded: false, position: 'bottom', size: 52, backing: 'none', names: true, autohide: false, magnify: true, hideFullscreen: true, items: [],
       align: 'center', gap: 12, radius: 22, offset: 0, idleOpacity: 100, opacity: 47, magnifyAmount: 145, glow: 100, indicator: 'dot', bounce: true, alwaysNames: false, tagStyle: 'dark',
       name: 'Main bar', visibility: 'always', fadeStyle: 'fade', fadeMs: 220, length: 0, hoverStyle: 'magnify', clickMode: 'single', launchMode: 'normal', bars: [] },
@@ -154,9 +154,9 @@
       meshStyle: 'poly', meshDensity: 13, meshMotion: 1, meshLines: 1, meshFill: 1, meshColor: 'duo', image: '', imageDim: 0.55,
       intensity: 0.8, speed: 1, quality: 'auto', fps: 0, slowFps: 60, motion: true, calmWhilePlaying: true, video: '', videoMix: 0.45, videoSpeed: 1, photo: '',
       videoBlend: 'screen', videoDim: 0.2, videoBlur: 0, videoSaturate: 1 },
-    perf: { smooth: true, meter: false, uncapped: false, dgpu: false, memorySaver: 'balanced', memoryLimit: 0 },
+    perf: { smooth: true, meter: false, uncapped: false, dgpu: false, memorySaver: 'balanced', memoryLimit: 0, sleepHidden: true },
     fx: { trail: true, ripple: true, tilt: true, glitch: true, scramble: true, rgb: true, chroma: false, scan: false, shake: true, confetti: true, warp: true, pulse: true,
-      launchStyle: 'slabs', sparks: 1, space: true, focusFx: true, bootStyle: 'space', fadeWindow: true, wipe: true,
+      launchStyle: 'slabs', sparks: 1, space: true, focusFx: true, bootStyle: 'flow', fadeWindow: true, wipe: true,
       spotlight: true, rays: false, dust: true, breathe: false, bloom: true, sweep: true, flare: false, light: 1, transition: 'slash',
       introVideo: '', introMuted: false, introMax: 30, rotateText: '', rotateEvery: 6, cursorGlow: false,
       rim: false, bars: false, barsSize: 7, parallax: false, parallaxAmount: 1, reflect: false, beat: false, grainAnim: false, chromaHover: false, glowColor: '',
@@ -414,6 +414,7 @@
     fit();
 
     $('#profileName').textContent = cfg.profile.name;
+    document.body.classList.toggle('no-profilename', cfg.layout.profileName === false);
     const av = $('#avatar');
     av.textContent = cfg.profile.avatar ? '' : (cfg.profile.name[0] || 'S').toUpperCase();
     av.style.backgroundImage = cfg.profile.avatar ? `url("${cfg.profile.avatar}")` : '';
@@ -493,6 +494,19 @@
     shop: '<path d="M4 8h16l-1.4 11.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8z"/><path d="M8.5 8V6.5a3.5 3.5 0 0 1 7 0V8"/>',
     dev: '<path d="M5.2 3.6l15.2 4.1-4.1 15.2L1.1 18.8z"/><path d="M10.2 10.1l3.9 1-1 3.9-3.9-1z"/>',
     nexus: '<rect x="3" y="15" width="18" height="5" rx="1.5"/><rect x="5.5" y="9" width="4" height="4" rx="1"/><rect x="10.5" y="9" width="4" height="4" rx="1"/><rect x="15.5" y="9" width="3" height="4" rx="1"/>',
+    more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+    data: '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.700 3.600 3 8 3s8-1.300 8-3V6M4 12c0 1.700 3.600 3 8 3s8-1.300 8-3"/>',
+    backdrop: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.500"/>',
+    effects: '<path d="M12 3l1.800 5.200L19 10l-5.200 1.800L12 17l-1.800-5.200L5 10l5.200-1.800zM19 16l.8 2.200L22 19l-2.200.8L19 22l-.8-2.200L16 19l2.200-.8z"/>',
+    texts: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>',
+    feeds: '<path d="M4 6h16M4 12h16M4 18h10"/>',
+    games: '<rect x="2.500" y="7" width="19" height="11" rx="4"/><path d="M7.500 11v3M6 12.500h3"/><circle cx="16" cy="11.500" r=".9"/><circle cx="18" cy="14" r=".9"/>',
+    widgets: '<rect x="3" y="3" width="8" height="8" rx="1.500"/><rect x="13" y="3" width="8" height="8" rx="1.500"/><rect x="3" y="13" width="8" height="8" rx="1.500"/><rect x="13" y="13" width="8" height="8" rx="1.500"/>',
+    discord: '<path d="M5 18l1-2c-1.500-.5-2.500-1.500-3-2 .3-3.500 1.500-7 3-9 1.500-.8 3-1 4-1l.6 1.300h2.800L14 4c1 0 2.500.2 4 1 1.500 2 2.700 5.500 3 9-.5.5-1.500 1.500-3 2l1 2c-2-.3-3.500-1-4.500-2h-5C8.500 17 7 17.700 5 18z"/>',
+    performance: '<path d="M4 18a8 8 0 1 1 16 0M12 18l4-6"/>',
+    system: '<rect x="3" y="4" width="18" height="12" rx="1.500"/><path d="M8 20h8M12 16v4"/>',
+    updates: '<path d="M4 12a8 8 0 0 1 14-5.300L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.300L4 15M4 20v-5h5"/>',
+    developer: '<path d="M8 8l-5 4 5 4M16 8l5 4-5 4M14 5l-4 14"/>',
   };
   const FUNCS = [
     { id: 'search', label: 'Search', desc: 'Find a game by typing its name', run: () => openSearch() },
@@ -516,7 +530,26 @@
   // Each top bar button can have its own click sound (Settings → Sound → Button sounds).
   const funcSound = (f) => { const u = (cfg.sound.funcs || {})[f.id]; if (u) audio.preview(u); else audio.play('confirm'); };
   // The Developer button only shows in developer mode.
-  const funcs = () => FUNCS.filter((f) => !f.dev || cfg.dev.enabled);
+  const FUNC_BY_ID = Object.fromEntries(FUNCS.map((f) => [f.id, f]));
+  // The top bar keeps what you reach for most, with names; everything else is one press away under MORE.
+  const BAR_LABELLED = ['search', 'discover', 'clips', 'quests', 'shop'];
+  const BAR_ICONS = ['social', 'settings', 'power'];
+  const MORE = { id: 'more', label: 'More', desc: 'Everything else', run: (node) => openMore(node) };
+  const PROFILE = { id: 'profile', label: 'Profile', desc: 'Switch or manage profiles', run: (node) => SV.features.quick(node) };
+  const moreFuncs = () => FUNCS.filter((f) => !BAR_LABELLED.includes(f.id) && !BAR_ICONS.includes(f.id) && (!f.dev || cfg.dev.enabled));
+  const funcs = () => [...BAR_LABELLED.map((k) => FUNC_BY_ID[k]), MORE, ...BAR_ICONS.map((k) => FUNC_BY_ID[k]), PROFILE];
+  const funcNode = (i) => document.querySelector(`#funcs .func[data-i="${i}"]`);
+  function funcHtml(f, i) {
+    if (f === PROFILE) {
+      const a = cfg.profile.avatar;
+      return `<button class="func pill" data-i="${i}" data-id="profile" aria-label="${esc(T(f.label))}"><span class="pp-av" ${a ? `style="background-image:url('${esc(a)}')"` : ''}>${a ? '' : esc((cfg.profile.name[0] || 'S').toUpperCase())}</span><span class="pp-name">${esc(cfg.profile.name)}</span><svg class="pp-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>`;
+    }
+    const labelled = BAR_LABELLED.includes(f.id);
+    return `${f === MORE ? '<i class="func-gap"></i>' : ''}<button class="func ${labelled ? 'lab' : ''}" data-i="${i}" data-id="${f.id}" aria-label="${esc(T(f.label))}"><svg viewBox="0 0 24 24">${ICON[f.id]}</svg>${labelled ? `<span class="func-name">${esc(T(f.label))}</span>` : ''}<span class="func-tip"><b>${esc(T(f.label))}</b><small>${esc(T(f.desc))}</small></span></button>`;
+  }
+  function openMore(node) {
+    popover(node, 'MORE', moreFuncs().map((f) => ({ icon: `<svg viewBox="0 0 24 24">${ICON[f.id]}</svg>`, label: f.label, sub: f.desc, run: () => { funcSound(f); f.run(); } })));
+  }
   const PLATFORM = { epic: 'EPIC GAMES', steam: 'STEAM', roblox: 'ROBLOX', emu: 'EMULATOR', pc: 'PC' };
   // RECENT is not a platform: the games you played, newest first.
   const FILTERS = [['all', 'ALL'], ['recent', 'RECENT'], ['steam', 'STEAM'], ['epic', 'EPIC'], ['roblox', 'ROBLOX'], ['pc', 'PC']];
@@ -611,8 +644,7 @@
     document.body.classList.toggle('in-list', !!sub);
     sel = clamp(sel, 0, Math.max(0, shown.length - (addTile ? 0 : 1)));
 
-    $('#funcs').innerHTML = funcs().map((f, i) =>
-      `<button class="func" data-i="${i}" data-id="${f.id}" aria-label="${esc(T(f.label))}"><svg viewBox="0 0 24 24">${ICON[f.id]}</svg><span class="func-tip"><b>${esc(T(f.label))}</b><small>${esc(T(f.desc))}</small></span></button>`).join('');
+    $('#funcs').innerHTML = funcs().map(funcHtml).join('');
     $('#filters').innerHTML = sub ? `<button class="chip on crumb" data-k="__back">‹ ALL GAMES</button><span class="crumb-now">${esc(sub.p.title)} <i>${shown.length}</i></span>`
       : used.length > 2 ? used.map(([k, label]) =>
       `<button class="chip ${k === filter ? 'on' : ''}" data-k="${k}">${label}<i>${inFilter(k).length}</i></button>`).join('') : '';
@@ -861,7 +893,7 @@
     } else if (zone === 'top') {
       if (a === 'left' || a === 'right') { topIdx = clamp(topIdx + (a === 'left' ? -1 : 1), 0, funcs().length - 1); audio.play('nav'); focusHome(); }
       else if (a === 'down') setZone('shelf');
-      else if (a === 'confirm') { funcSound(funcs()[topIdx]); funcs()[topIdx].run(); }
+      else if (a === 'confirm') { funcSound(funcs()[topIdx]); funcs()[topIdx].run(funcNode(topIdx)); }
     } else if (zone === 'hclips') {
       const n = document.querySelectorAll('#homeClips .hc').length;
       if (a === 'left' || a === 'right') { clipIdx = clamp(clipIdx + (a === 'left' ? -1 : 1), 0, n - 1); audio.play('nav'); focusHome(); }
@@ -942,7 +974,7 @@
   }, { passive: true });
   $('#funcs').addEventListener('click', (e) => {
     const b = e.target.closest('.func');
-    if (b) { topIdx = +b.dataset.i; zone = 'top'; focusHome(); funcSound(funcs()[topIdx]); funcs()[topIdx].run(); }
+    if (b) { const f = funcs()[+b.dataset.i]; funcSound(f); f.run(b); }
   });
   $('#filters').addEventListener('click', (e) => { const c = e.target.closest('.chip'); if (!c) return; if (c.dataset.k === '__back') exitList(); else setFilter(c.dataset.k); });
   $('#actions').addEventListener('click', (e) => {
@@ -972,8 +1004,11 @@
   // Every hint is also a button: clicking it does what the key does, so the controls are always one click away.
   const HINT_ACT = { confirm: 'confirm', back: 'back', options: 'options', settings: 'settings', mini: 'mini', tasks: 'tasks', tabs: 'tabNext', clips: 'clips',
     alt: 'alt', search: 'search', random: 'random', stats: 'stats' };
+  // Xbox-style pads get their own letters; PlayStation shapes are the default set above.
+  const XBOX = { confirm: 'A', back: 'B', options: 'MENU', settings: 'Y', mini: 'GUIDE', tabs: 'LB / RB', clips: 'X', alt: 'X', search: 'R3', random: 'VIEW', stats: 'L3' };
+  const padGlyph = (key) => `<span class="g-ps">${GLYPH.pad[key]}</span><span class="g-xb">${XBOX[key] || GLYPH.pad[key]}</span>`;
   const hints = (list) => list.map(([key, label]) =>
-    `<span class="hint" ${HINT_ACT[key] ? `data-act="${HINT_ACT[key]}" role="button"` : ''}><kbd class="kb">${GLYPH.kb[key]}</kbd><kbd class="pad">${GLYPH.pad[key]}</kbd>${esc(T(label))}</span>`).join('');
+    `<span class="hint" ${HINT_ACT[key] ? `data-act="${HINT_ACT[key]}" role="button"` : ''}><kbd class="kb">${GLYPH.kb[key]}</kbd><kbd class="pad">${padGlyph(key)}</kbd>${esc(T(label))}</span>`).join('');
   document.addEventListener('click', (e) => {
     const h = e.target.closest('.hint[data-act]');
     if (h && input.onAction) input.onAction(h.dataset.act);
@@ -1147,12 +1182,24 @@
 
   const stack = [];
 
+  // A screen with cover: true fills the window: HOME under it stops drawing, and so does the backdrop unless the
+  // screen wants it live (settings on the look tabs). Those were the biggest cost of having a menu open.
+  let backdropPaused = false, away = false;
+  function syncCover() {
+    const covered = stack.some((s) => s.cover && !s.liveBackdrop); // a live preview keeps HOME showing through the window
+    document.body.classList.toggle('covered', covered);
+    backdropPaused = stack.some((s) => s.cover && !s.liveBackdrop) || !!(SV.rails && SV.rails.isOpen);
+    syncBackdrop();
+  }
+  function syncBackdrop() { bg.setActive(mode === 'home' && !away && !backdropPaused); }
+
   function push(screen) {
     stack.push(screen);
     $('#overlays').append(screen.el);
     requestAnimationFrame(() => screen.el.classList.add('in'));
     audio.play('open');
     document.body.classList.add('overlaid');
+    syncCover();
   }
 
   function pop() {
@@ -1163,12 +1210,37 @@
     setTimeout(() => screen.el.remove(), 220);
     screen.onClose && screen.onClose();
     if (!stack.length) document.body.classList.remove('overlaid');
+    syncCover();
+  }
+
+  // A small menu under a button (MORE, the profile button). Items: { icon, label, sub, run, on, danger, round, tag },
+  // or 'sep' for a line between them.
+  function popover(anchor, title, items) {
+    const root = el(`<div class="overlay pop-wrap"><div class="pop"><div class="tag">[ ${esc(T(title))} ]</div><div class="pop-list"></div></div></div>`);
+    const box = $('.pop', root), list = $('.pop-list', root);
+    const r = anchor.getBoundingClientRect();
+    box.style.top = (r.bottom + 8) + 'px';
+    box.style.right = Math.max(12, innerWidth - r.right) + 'px';
+    for (const it of items) {
+      if (it === 'sep') { list.append(el('<div class="pop-sep"></div>')); continue; }
+      const b = el(`<button class="pop-item ${it.on ? 'on' : ''} ${it.danger ? 'danger' : ''}" data-row>
+        <span class="pop-ico ${it.round ? 'round' : ''}" ${it.bg ? `style="background:${esc(it.bg)}"` : ''}>${it.icon || ''}</span>
+        <span class="pop-txt"><b>${esc(T(it.label))}</b>${it.sub ? `<small>${esc(T(it.sub))}</small>` : ''}</span>${it.tag ? `<em>${esc(T(it.tag))}</em>` : ''}</button>`);
+      const run = () => { pop(); audio.play('confirm'); it.run && it.run(); };
+      b._activate = run;
+      b.addEventListener('click', run);
+      list.append(b);
+    }
+    const p = panel(list);
+    root.addEventListener('mousedown', (e) => { if (e.target === root) pop(); });
+    push({ el: root, action: (a) => p.action(a) });
+    p.focus(0);
   }
 
   const isTop = (root) => stack.length > 0 && stack[stack.length - 1].el === root;
 
   // Vertical list of [data-row] elements. Each row may carry _adjust(dir) and _activate().
-  function panel(root, { onTab } = {}) {
+  function panel(root, { onTab, onFocus } = {}) {
     let idx = 0;
     const rows = () => [...root.querySelectorAll('[data-row]')];
     const focus = (i, scroll = true) => {
@@ -1177,6 +1249,7 @@
       idx = clamp(i, 0, list.length - 1);
       list.forEach((r, k) => r.classList.toggle('focus', k === idx));
       if (scroll) list[idx].scrollIntoView({ block: 'nearest' });
+      onFocus && onFocus(list[idx]);
     };
     root.addEventListener('mousemove', (e) => {
       const r = e.target.closest('[data-row]'), i = r ? rows().indexOf(r) : -1;
@@ -1350,7 +1423,19 @@
 
   // ------------------------------------------------------------------ settings
 
-  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['widgets', 'WIDGETS'], ['social', 'SOCIAL'], ['discord', 'DISCORD'], ['developer', 'DEVELOPER'], ['performance', 'PERFORMANCE'], ['system', 'SYSTEM'], ['updates', 'UPDATES']];
+  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['widgets', 'WIDGETS'], ['social', 'SOCIAL'], ['discord', 'DISCORD'], ['developer', 'DEVELOPER'], ['performance', 'PERFORMANCE'], ['system', 'SYSTEM'], ['updates', 'UPDATES'], ['data', 'DATA']];
+  const TAB_GROUPS = [['LOOK', ['theme', 'backdrop', 'effects', 'texts', 'sound']], ['LIBRARY', ['games', 'accounts', 'feeds']], ['DESKTOP', ['nexus', 'widgets', 'social', 'discord']],
+    ['SYSTEM', ['performance', 'system', 'updates', 'data', 'developer']]];
+  const TAB_INFO = {
+    theme: ['Theme', 'Colours, fonts, shapes and what shows on HOME.'], backdrop: ['Backdrop', 'The animated scene behind everything.'], effects: ['Effects', 'Motion, lights and transitions.'],
+    texts: ['Texts', 'Every piece of wording on screen.'], sound: ['Sound', 'Sound packs, music and button sounds.'], games: ['Games', 'What is on your shelf.'],
+    accounts: ['Accounts', 'Steam, Epic and Roblox sign-ins.'], feeds: ['Feeds', 'The rows under HOME.'], nexus: ['Nexus', 'Your desktop app bars.'], widgets: ['Widgets', 'Little windows on your desktop.'],
+    social: ['Social', 'Sites beside HOME.'], discord: ['Discord', 'What your Discord profile shows.'], performance: ['Performance', 'Profiles, memory and shortcuts.'], system: ['System', 'Add-ons, behaviour and language.'],
+    updates: ['Updates', 'New versions and your backups.'], data: ['Data', 'See what is inside your settings before loading them.'], developer: ['Developer', 'Roblox Studio and dev tools.'],
+  };
+  const TAB_ICON = (k) => ICON[k] || ICON.settings;
+  // Changing these is easiest with the real thing behind it, so the backdrop keeps running on these tabs.
+  const LIVE_TABS = new Set(['theme', 'backdrop', 'effects']);
   const pct = (v) => Math.round(v * 100) + '%';
 
   function settingsRows(tab, rerender) {
@@ -1595,7 +1680,7 @@
       R.toggle('High-performance GPU', 'Draws the launcher on your dedicated graphics card (NVIDIA) instead of the integrated one. Smoother, uses more battery. Needs a restart.', at('perf.dgpu')),
       R.toggle('Unlock frame rate', 'Lets the launcher draw faster than your monitor (no v-sync). Needs a restart. Can tear.', at('perf.uncapped')),
       heading('SPACE'),
-      R.choice('Opening', 'What plays when the launcher opens.', at('fx.bootStyle'), [['space', 'Warp to a planet'], ['bolt', 'Lightning bolt']]),
+      R.choice('Opening', 'What plays when the launcher opens.', at('fx.bootStyle'), [['flow', 'Neon lines, then a fade'], ['space', 'Warp to a planet'], ['bolt', 'Lightning bolt']]),
       R.toggle('Slash wipe', 'Slabs sweep across when minimizing, hiding to the tray and coming back.', at('fx.wipe')),
       R.toggle('Fade the window', 'Hiding to the tray, minimizing and coming back fade the whole window in and out of transparency.', at('fx.fadeWindow')),
       R.toggle('Warp in and out', 'Warps out when hiding to the tray or mini, and back in when HOME returns.', at('fx.space')),
@@ -1694,6 +1779,11 @@
     if (tab === 'accounts') return [...SV.steam.rows(rerender), ...SV.epic.rows(rerender), ...SV.roblox.rows(rerender)];
     if (tab === 'nexus') return SV.nexus.rows(rerender);
     if (tab === 'updates') return SV.updates.rows(rerender);
+    if (tab === 'data') return [
+      R.button('Open my data', 'See the main profile, main menu, videos, NEXUS bars and more, for your settings and every backup.', 'OPEN', () => SV.data.open()),
+      R.button('Switch profile', 'Choose another profile or make a new one.', 'OPEN', () => { while (stack.length) pop(); SV.features.pick(); }),
+      R.button('Backups', 'Back up now, or put an older one back.', 'UPDATES', () => { while (stack.length) pop(); openSettings('updates'); }),
+    ];
     if (tab === 'developer') return SV.dev.rows(rerender);
     if (tab === 'widgets') return SV.widgets.rows(rerender);
     if (tab === 'social') return SV.social.rows(rerender);
@@ -1725,7 +1815,7 @@
       R.choice('When the game closes', 'Only applies to games started from here.', at('behavior.onGameExit'), [['home', 'Return to HOME'], ['none', 'Do nothing']]),
       R.toggle('Ask which account', 'Prompt for an Epic account each time when more than one is saved. Off uses the last one per game.', at('behavior.promptAccount')),
       R.choice('Closing the window', 'Alt + F4 never quits; the launcher keeps running.', at('behavior.closeAction'), [['hidden', 'Hide to tray'], ['mini', 'Shrink to mini']]),
-      R.choice('Start with Windows', 'Runs in the background at sign-in.', startChoice, [['off', 'Off'], ['hidden', 'On — in tray'], ['mini', 'On — as mini']]),
+      R.choice('Start with Windows', 'Starts first thing when you sign in, ahead of your other start-up apps.', startChoice, [['off', 'Off'], ['home', 'On — HOME on screen'], ['hidden', 'On — in tray'], ['mini', 'On — as mini']]),
       R.toggle('Opening animation', 'Bolt intro when HOME first appears.', at('behavior.bootAnim')),
       R.toggle('Mini stays on top', 'Keep the mini widget above other windows.', at('behavior.miniOnTop')),
       R.choice('Mini size', 'Size of the game tiles in the mini widget.', at('behavior.miniSize'), [['s', 'Small'], ['m', 'Medium'], ['l', 'Large']], renderMini),
@@ -1741,14 +1831,83 @@
 
   function openSettings(first = 'theme') {
     const root = el(`
-      <div class="overlay"><div class="sheet">
-        <div class="sheet-head"><div><div class="tag">[ CUSTOMIZE ]</div><h2>SETTINGS</h2></div><div class="tabs"></div></div>
-        <input class="text set-search" type="search" spellcheck="false" placeholder="${esc(T('Search every setting…'))}">
-        <div class="sheet-body"></div>
-        <div class="hints">${hints([['confirm', 'Change'], ['adjust', 'Adjust'], ['tabs', 'Switch tab'], ['search', 'Search'], ['back', 'Close']])}</div>
+      <div class="overlay st-screen"><div class="st">
+        <nav class="st-nav">
+          <div class="tag">[ CUSTOMIZE ]</div><h2>${esc(T('SETTINGS'))}</h2>
+          <input class="st-search" type="search" spellcheck="false" placeholder="${esc(T('Search every setting…'))}">
+          <div class="st-tabs"></div>
+        </nav>
+        <main class="st-main"><header class="st-head"><div><h3></h3><p></p></div>
+          <div class="st-scale" role="group" aria-label="${esc(T('Settings size'))}"><span>${esc(T('SCALE'))}</span><button data-d="-1" aria-label="${esc(T('Smaller'))}">−</button><button class="st-scale-now" data-d="0" title="${esc(T('Back to 100%'))}"></button><button data-d="1" aria-label="${esc(T('Bigger'))}">+</button></div>
+        </header><div class="st-body"></div></main>
+        <aside class="st-aside">
+          <button class="st-card st-me"><span class="pp-av"></span><span><b></b><small></small></span></button>
+          <div class="st-card st-help"><span class="tag"></span><b></b><p></p></div>
+          <div class="st-live"></div>
+        </aside>
+        <footer class="st-foot"><div class="hints">${hints([['confirm', 'Change'], ['adjust', 'Adjust'], ['tabs', 'Switch page'], ['search', 'Search'], ['random', 'Scale'], ['back', 'Close']])}</div></footer>
       </div></div>`);
-    const body = $('.sheet-body', root), tabs = $('.tabs', root), search = $('.set-search', root);
-    let tab = first, query = '';
+    const body = $('.st-body', root), tabs = $('.st-tabs', root), search = $('.st-search', root);
+    const headT = $('.st-head h3', root), headP = $('.st-head p', root), helpTag = $('.st-help .tag', root), helpB = $('.st-help b', root), helpP = $('.st-help p', root), live = $('.st-live', root);
+    let tab = first, query = '', inNav = false;
+
+    // The size of this screen, on its own: HOME's size setting doesn't touch it.
+    const SCALE_MIN = 0.7, SCALE_MAX = 1.5, SCALE_STEP = 0.1;
+    const scaleNow = $('.st-scale-now', root), st = $('.st', root);
+    function paintScale() {
+      const v = cfg.layout.settingsScale || 1;
+      st.style.zoom = v;
+      scaleNow.textContent = Math.round(v * 100) + '%';
+      $('.st-scale [data-d="-1"]', root).disabled = v <= SCALE_MIN + 0.001;
+      $('.st-scale [data-d="1"]', root).disabled = v >= SCALE_MAX - 0.001;
+    }
+    function setScale(v) {
+      cfg.layout.settingsScale = Math.round(clamp(v, SCALE_MIN, SCALE_MAX) * 10) / 10;
+      paintScale();
+      audio.play('toggle');
+      save();
+    }
+    $('.st-scale', root).addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (b) setScale(+b.dataset.d ? (cfg.layout.settingsScale || 1) + SCALE_STEP * +b.dataset.d : 1);
+    });
+    paintScale();
+    const order = TAB_GROUPS.flatMap(([, list]) => list).filter((k) => TABS.some((t) => t[0] === k));
+
+    // The profile card: pressing it goes to the profile frame.
+    const me = $('.st-me', root);
+    function paintMe() {
+      const a = cfg.profile.avatar, av = $('.pp-av', me), now = SV.features && SV.features.current();
+      av.textContent = a ? '' : (cfg.profile.name[0] || 'S').toUpperCase();
+      av.style.backgroundImage = a ? `url("${a}")` : '';
+      $('b', me).textContent = cfg.profile.name;
+      $('small', me).textContent = (cfg.theme.preset || 'custom') + (now ? ' · ' + T('SWITCH PROFILE') : '');
+    }
+    me.addEventListener('click', () => { while (stack.length) pop(); SV.features.pick(); });
+
+    // The right side repeats what you're on, in full, so a long description never gets cut off.
+    function help(rowEl) {
+      helpTag.textContent = query ? T('SEARCH') : (TAB_INFO[tab] ? T(TAB_INFO[tab][0]) : '');
+      const b = rowEl && rowEl.querySelector('.row-l b'), s = rowEl && rowEl.querySelector('.row-l small');
+      helpB.textContent = b ? b.textContent : (TAB_INFO[tab] ? T(TAB_INFO[tab][0]) : '');
+      helpP.textContent = s && s.textContent ? s.textContent : (TAB_INFO[tab] ? T(TAB_INFO[tab][1]) : '');
+    }
+    function setLive() {
+      const on = LIVE_TABS.has(tab) && !query;
+      const me2 = stack.find((s) => s.el === root);
+      if (me2) { me2.liveBackdrop = on; syncCover(); }
+      root.classList.toggle('solid', !on);
+      live.textContent = on ? T('LIVE PREVIEW') : '';
+    }
+    function paintNav() {
+      root.classList.toggle('in-nav', inNav);
+      tabs.querySelectorAll('.st-tab').forEach((t) => t.classList.toggle('on', !query && t.dataset.k === tab));
+      const on = $('.st-tab.on', tabs);
+      if (on) on.scrollIntoView({ block: 'nearest' });
+    }
+    tabs.innerHTML = TAB_GROUPS.map(([group, list]) => `<div class="st-group">${esc(T(group))}</div>` + list.filter((k) => TABS.some((t) => t[0] === k)).map((k) =>
+      `<button class="st-tab" data-k="${k}"><svg viewBox="0 0 24 24">${TAB_ICON(k)}</svg><span>${esc(T((TAB_INFO[k] || [k])[0]))}</span></button>`).join('')).join('');
+
     // Search: the matching rows from every tab, each under the name of its tab.
     function showSearch(focusIdx = 0) {
       const q = query.toLowerCase(), out = [];
@@ -1759,7 +1918,10 @@
         if (hits.length) out.push(heading(T(label) + ' · ' + hits.length), ...hits);
       }
       if (!out.length) out.push(el(`<div class="row-note">${esc(T('Nothing matches'))} “${esc(query)}”.</div>`));
-      tabs.querySelectorAll('.tab').forEach((t) => t.classList.remove('on'));
+      headT.textContent = T('Search');
+      headP.textContent = `“${query}”`;
+      paintNav();
+      setLive();
       body.replaceChildren(...out);
       p.focus(focusIdx);
     }
@@ -1769,20 +1931,44 @@
       if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); if (search.value) { search.value = ''; query = ''; show(tab); } else search.blur(); }
       else if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); search.blur(); }
     });
-    const p = panel(body, { onTab: (d) => show(TABS[(TABS.findIndex((t) => t[0] === tab) + d + TABS.length) % TABS.length][0]) });
+    const step = (d) => order[(order.indexOf(tab) + d + order.length) % order.length];
+    const p = panel(body, { onTab: (d) => show(step(d)), onFocus: help });
 
     function show(next, focusIdx = 0) {
       if (next !== tab) audio.play('nav');
+      const changedTab = next !== tab;
       tab = next;
       if (query) { query = ''; search.value = ''; }
-      tabs.innerHTML = TABS.map(([k, label]) => `<button class="tab ${k === tab ? 'on' : ''}" data-k="${k}">${esc(T(label))}</button>`).join('');
+      const info = TAB_INFO[tab] || [tab, ''];
+      headT.textContent = T(info[0]);
+      headP.textContent = T(info[1]);
+      paintNav();
+      setLive();
       body.replaceChildren(...settingsRows(tab, (i) => { if (root.isConnected) show(tab, i ?? p.idx); }));
+      if (changedTab) { body.scrollTop = 0; body.style.animation = 'none'; void body.offsetWidth; body.style.animation = ''; }
+      paintMe();
       p.focus(focusIdx);
     }
-    tabs.addEventListener('click', (e) => { const b = e.target.closest('.tab'); if (b) show(b.dataset.k); });
-    root.addEventListener('mousedown', (e) => { if (e.target === root) pop(); });
+    tabs.addEventListener('click', (e) => { const b = e.target.closest('.st-tab'); if (b) { inNav = false; show(b.dataset.k); } });
+    push({
+      el: root, cover: true, liveBackdrop: LIVE_TABS.has(tab),
+      action(a) {
+        if (a === 'search') return search.focus();
+        // One button for controllers: goes up a step at a time, then round to the smallest.
+        if (a === 'random') { const v = cfg.layout.settingsScale || 1; return setScale(v >= SCALE_MAX - 0.001 ? SCALE_MIN : v + SCALE_STEP); }
+        // Left from a row that has nothing to adjust steps out to the page list, for controllers.
+        if (inNav) {
+          if (a === 'up' || a === 'down') return show(step(a === 'up' ? -1 : 1));
+          if (a === 'right' || a === 'confirm') { inNav = false; audio.play('nav'); return paintNav(); }
+          if (a === 'back') { inNav = false; return paintNav(); }
+        } else if (a === 'left') {
+          const rows = [...body.querySelectorAll('[data-row]')], r = rows[p.idx];
+          if (!r || !r._adjust) { inNav = true; audio.play('nav'); return paintNav(); }
+        }
+        return p.action(a);
+      },
+    });
     show(tab);
-    push({ el: root, action: (a) => (a === 'search' ? search.focus() : p.action(a)) });
   }
 
   // ------------------------------------------------------------------ menus, editor, scan
@@ -2223,21 +2409,26 @@
 
   // ------------------------------------------------------------------ boot + mode
 
-  let introPlayed = false;
+  let introPlayed = false, wokeUp = false;
   function boot() {
     const body = document.body;
     body.classList.remove('preinit');
     // Your own intro video plays first, then the normal opening (or straight to HOME if that is off).
-    if (mode === 'home' && cfg.fx.introVideo && !introPlayed && SV.effects) {
+    if (mode === 'home' && cfg.fx.introVideo && !introPlayed && !wokeUp && SV.effects) {
       introPlayed = true;
       // Your video is the opening: straight to HOME after it, unless you want the built-in one as well.
       return SV.effects.intro(cfg.fx.introVideo, cfg.fx.introThenOpening ? boot : () => { body.classList.remove('preinit'); body.classList.add('entered'); });
     }
-    if (mode !== 'home' || !cfg.behavior.bootAnim) { body.classList.add('entered'); return; }
+    if (mode !== 'home' || !cfg.behavior.bootAnim || wokeUp) { body.classList.add('entered'); return; }
     $('#bootName').innerHTML = [...cfg.texts.brand].map((c, i) => `<span style="--i:${i}">${c === ' ' ? '&nbsp;' : esc(c)}</span>`).join('');
     $('#bootWelcome').textContent = cfg.texts.welcome ? `${cfg.texts.welcome}, ${cfg.profile.name}`.toUpperCase() : '';
+    // Neon lines, then a fade straight into HOME.
+    if (cfg.fx.bootStyle === 'flow' && cfg.backdrop.motion && SV.intro && SV.intro.play({
+      accent: cfg.theme.accent, accent2: cfg.theme.accent2, bg: cfg.theme.bg, sound: (name) => audio.play(name),
+      onEnter: () => body.classList.add('entered'),
+    })) return;
     // Space opening: a warp through the stars to a planet rising over the horizon, then the name.
-    if (cfg.fx.bootStyle === 'space' && cfg.backdrop.motion) {
+    if (cfg.fx.bootStyle !== 'bolt' && cfg.backdrop.motion) {
       body.classList.add('booting', 'boot-space');
       audio.play('boot');
       SV.space.play('boot');
@@ -2259,7 +2450,7 @@
     const was = mode;
     mode = m;
     document.body.dataset.mode = m === 'home' ? 'home' : 'mini';
-    bg.setActive(m === 'home');
+    syncBackdrop();
     audio.setAmbientActive(m === 'home');
     input.setEnabled(m === 'home');
     fit();
@@ -2298,7 +2489,11 @@
       });
       if (cfg.games.some((g) => g.platform === 'epic')) cfg.imported.epic = true;
     }
-    cfg.v = 6;
+    // 2.8: starts first thing after signing in, with HOME on screen. The setting can still be changed in SYSTEM.
+    if (saved && from < 7) { autostart = true; cfg.behavior.autostartMode = 'home'; host.send('setAutostart', { on: true }); }
+    // 2.8: the neon opening is the one you see, and it follows your own intro video if you have one.
+    if (saved && from < 8) { cfg.fx.bootStyle = 'flow'; cfg.behavior.bootAnim = true; if (cfg.fx.introVideo) cfg.fx.introThenOpening = true; }
+    cfg.v = 8;
     // Configs from before per-account import: whichever Steam accounts already have games on the shelf count as done.
     if (!cfg.imported.steamAccounts)
       cfg.imported.steamAccounts = [...new Set(scan.filter((s) => s.platform === 'steam' && known(s)).flatMap((s) => s.owners || []))];
@@ -2316,6 +2511,7 @@
     // logged, and the launcher still opens, instead of staying on a black screen.
     let added = 0, imported = false;
     try {
+      wokeUp = !!m.wake; // back from page sleep: straight to HOME, no opening
       scan = m.scan || [];
       stats = m.stats || {};
       autostart = !!m.autostart;
@@ -2330,7 +2526,7 @@
       applyConfig();
       renderHome();
       renderMini();
-      bg.setActive(mode === 'home');
+      syncBackdrop();
       audio.setAmbientActive(mode === 'home');
       input.setEnabled(mode === 'home');
       save();
@@ -2361,7 +2557,8 @@
     if (m.on && setupShown()) rescanStores(true);
     if (!cfg.fx.focusFx || mode !== 'home') return;
     document.body.classList.toggle('away', !m.on);
-    bg.setActive(m.on);
+    away = !m.on;
+    syncBackdrop();
     if (m.on && cfg.backdrop.motion) SV.space.play('refocus');
   });
   host.on('soundLibrary', (m) => { cfg.sound.library = m.sounds || []; save(); });
@@ -2449,7 +2646,7 @@
     get mode() { return mode; },
     get launching() { return launching; },
     $, el, esc, clamp, hash, shiftHue, meshSVG, toast, hints, at, prop, lastPlayed, T,
-    stack, push, pop, isTop, panel, row, heading, R, pick, ask, openMenu, confirmMenu, changed, save, openSettings, leaveTo, openTasks, refreshList, launchDirect, exitList,
+    stack, push, pop, isTop, panel, popover, syncCover, row, heading, R, pick, ask, openMenu, confirmMenu, changed, save, openSettings, leaveTo, openTasks, refreshList, launchDirect, exitList,
     get inList() { return !!sub; },
     launchFx, endLaunch, armLaunchTimeout, renderStats, renderActions, artSrc, scanOf, isInstalled, launch, jumpTo, playtime,
     get running() { return running; },

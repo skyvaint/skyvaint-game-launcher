@@ -993,7 +993,7 @@ onmessage = (e) => {
       const ready = waiting.filter(([u]) => u === m.url);
       waiting = waiting.filter(([u]) => u !== m.url);
       if (m.bitmap) ready.forEach(([, f]) => f(m.bitmap));
-      if (images.size > 40) for (const [k, v] of images) { if (k !== art.url && k !== pictureUrl && v && v.close) { v.close(); images.delete(k); } if (images.size <= 30) break; }
+      if (images.size > 8) for (const [k, v] of images) { if (k !== art.url && k !== pictureUrl && v && v.close) { v.close(); images.delete(k); } if (images.size <= 6) break; }
       slowDirty = true;
       if (!raf) paintOnce();
       break;

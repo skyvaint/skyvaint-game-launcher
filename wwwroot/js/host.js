@@ -83,6 +83,16 @@ SV.host = (() => {
       emit({ type: 'init', config, stats, scan: mockScan(), mode: mockMode, autostart: false, epic: { installed: true, active: epicActive }, steam, robloxImport: null });
     } else if (type === 'saveConfig') {
       try { localStorage.setItem(KEY, JSON.stringify(d.config)); } catch {}
+    } else if (type === 'dataFiles') {
+      const now = Date.now();
+      emit({ type: 'dataFiles', prompt: !!d.prompt, skip: false, files: [
+        { file: 'current', label: 'Current settings', current: true, at: now, size: 182000, games: 9, accounts: 2, bars: 2, sounds: 4 },
+        { file: 'b1', label: 'Backup', current: false, at: now - 864e5, size: 171000, games: 8, accounts: 2, bars: 1, sounds: 0 },
+        { file: 'b2', label: 'config.json.bak', current: false, at: now - 9 * 864e5, size: 90000, games: 3, accounts: 1, bars: 1, sounds: 0 }] });
+    } else if (type === 'dataRead') {
+      setTimeout(() => emit({ type: 'dataRead', file: d.file, ok: true, config: { profile: { name: 'Older me' }, theme: { preset: 'ocean', accent: '#00b3ff', accent2: '#00ffd0', bg: '#02070b', font: 'bebas', texture: 'hex' },
+        games: [{ name: 'Rocket League', platform: 'epic' }, { name: 'Roblox', platform: 'roblox' }], nexus: { name: 'Main bar', enabled: true, items: [1, 2, 3], position: 'left' }, roblox: { accounts: [1] },
+        backdrop: { style: 'cosmos', levels: { stars: 1, aurora: 1 } }, fx: { introVideo: 'C:\\Videos\\intro.mp4' }, sound: { pack: 'pulse' } } }), 150);
     } else if (type === 'setMode') {
       mockMode = d.mode === 'hidden' ? 'mini' : d.mode;
       emit({ type: 'mode', mode: mockMode });

@@ -128,25 +128,60 @@
     return `linear-gradient(135deg, ${t.accent || '#ff1f1f'}, ${t.accent2 || t.accent || '#ff4d3d'} 55%, ${t.bg || '#070505'})`;
   };
 
-  // WHAT PROFILE TO LOAD: the main frame at start.
+  const whenUsed = (x) => {
+    if (!x.used) return '';
+    const d = Math.floor((Date.now() - x.used) / 864e5);
+    return d <= 0 ? 'USED TODAY' : d === 1 ? 'USED YESTERDAY' : `USED ${d} DAYS AGO`;
+  };
+  const presetOf = (x) => ((x.look && x.look.theme && x.look.theme.preset) || 'own look').toUpperCase();
+  const accentOf = (x) => (x.look && x.look.theme && x.look.theme.accent) || '';
+  const picOf = (x, cls) => (x.avatar ? SV.media.html(x.avatar, cls) : `<b>${esc((x.name || '?').slice(0, 1).toUpperCase())}</b>`);
+
+  // WHAT PROFILE TO LOAD: the main frame at start, and "all profiles" from the profile button.
   function pick() {
     const p = P();
     let idx = Math.max(0, p.list.findIndex((x) => x.id === p.current));
-    const root = el(`<div class="overlay center prof-overlay"><div class="picker wide prof-picker">
-      <div class="picker-head"><div><div class="tag">[ SKYVAINT ]</div><h2>WHAT PROFILE TO LOAD?</h2></div><div class="picker-note">EACH ONE KEEPS ITS OWN LOOK</div></div>
-      <div class="prof-cards"></div>
-      <div class="hints">${A.hints([['confirm', 'Load'], ['move', 'Move'], ['options', 'Options'], ['back', 'Keep the current one']])}</div>
-    </div></div>`);
-    const box = root.querySelector('.prof-cards');
+    const root = el(`<div class="overlay prof-screen">
+      <div class="prof-glow"></div><div class="prof-glow b"></div>
+      <div class="prof-head"><div class="tag">[ SKYVAINT ]</div><h2>${esc(A.T('WHAT PROFILE TO LOAD?'))}</h2></div>
+      <div class="prof-row"></div>
+      <div class="prof-info"></div>
+      <div class="hints">${A.hints([['confirm', 'Load'], ['move', 'Move'], ['options', 'Options'], ['alt', 'My data'], ['back', 'Keep the current one']])}</div>
+    </div>`);
+    const box = root.querySelector('.prof-row'), info = root.querySelector('.prof-info');
+    const glows = [...root.querySelectorAll('.prof-glow')];
+    let glowOn = 0;
     const items = () => [...P().list, { add: true }];
+    function glow(color) {
+      // Two layers crossfading: animating the gradient itself would repaint the whole screen every frame.
+      const next = glows[1 - glowOn];
+      next.style.setProperty('--p1', color || 'var(--accent)');
+      next.style.opacity = '.5';
+      glows[glowOn].style.opacity = '0';
+      glowOn = 1 - glowOn;
+    }
+    // Moving only changes classes, so the cards glide instead of being rebuilt.
+    function focus() {
+      const list = items(), x = list[idx];
+      box.querySelectorAll('.pf').forEach((c, i) => c.classList.toggle('focus', i === idx));
+      info.textContent = !x ? '' : x.add ? 'A NEW PROFILE STARTS WITH THE LOOK YOU HAVE NOW' : [presetOf(x), whenUsed(x), x.id === P().current ? 'IN USE' : ''].filter(Boolean).join(' · ');
+      glow(x && !x.add ? accentOf(x) : '');
+      // More cards than fit: the row slides to keep the chosen one in the middle.
+      const c = box.children[idx];
+      if (c) {
+        const over = box.scrollWidth - root.clientWidth + 80;
+        const shift = over > 0 ? Math.max(-over / 2, Math.min(over / 2, root.clientWidth / 2 - (c.offsetLeft + c.offsetWidth / 2))) : 0;
+        box.style.transform = shift ? `translateX(${shift}px)` : '';
+      }
+    }
     function build() {
       const list = items();
       idx = Math.min(idx, list.length - 1);
       box.innerHTML = list.map((x, i) => x.add
-        ? `<button class="prof-card add ${i === idx ? 'focus' : ''}" data-i="${i}"><div class="prof-art"><b>+</b></div><span>NEW PROFILE</span><small>FROM THE LOOK YOU HAVE NOW</small></button>`
-        : `<button class="prof-card ${i === idx ? 'focus' : ''} ${x.id === P().current ? 'now' : ''}" data-i="${i}">
-            <div class="prof-art" style="background:${swatch(x.look)}">${x.avatar ? SV.media.html(x.avatar, 'prof-pic') : `<b>${esc((x.name || '?').slice(0, 1).toUpperCase())}</b>`}</div>
-            <span>${esc(x.name.toUpperCase())}</span><small>${x.id === P().current ? 'LAST USED' : esc(((x.look && x.look.theme && x.look.theme.preset) || 'OWN LOOK').toUpperCase())}</small></button>`).join('');
+        ? `<button class="pf add" style="--i:${i}" data-i="${i}"><div class="pf-art"></div><div class="pf-pic"><b>+</b></div><div class="pf-meta"><b>${esc(A.T('NEW PROFILE'))}</b><small>${esc(A.T('ADD ONE'))}</small></div><i class="pf-ring"></i></button>`
+        : `<button class="pf" style="--i:${i};--pf:${swatch(x.look)}" data-i="${i}"><div class="pf-art"></div>${x.id === P().current ? `<span class="pf-now">${esc(A.T('NOW'))}</span>` : ''}
+            <div class="pf-pic">${picOf(x, 'prof-pic')}</div><div class="pf-meta"><b>${esc(x.name)}</b><small>${esc(presetOf(x))}</small></div><i class="pf-ring"></i></button>`).join('');
+      focus();
     }
     const choose = (i) => {
       const x = items()[i];
@@ -157,24 +192,39 @@
       load(x);
     };
     box.addEventListener('click', (e) => { const b = e.target.closest('[data-i]'); if (b) choose(+b.dataset.i); });
+    box.addEventListener('mousemove', (e) => { const b = e.target.closest('[data-i]'); if (b && +b.dataset.i !== idx) { idx = +b.dataset.i; focus(); } });
     box.addEventListener('contextmenu', (e) => { const b = e.target.closest('[data-i]'); if (!b) return; e.preventDefault(); const x = items()[+b.dataset.i]; if (x && !x.add) profileMenu(x, build); });
-    build();
     A.push({
-      el: root,
+      el: root, cover: true,
       action(a) {
         const n = items().length;
-        if (a === 'left' || a === 'up') { idx = (idx - 1 + n) % n; audio.play('nav'); build(); }
-        else if (a === 'right' || a === 'down') { idx = (idx + 1) % n; audio.play('nav'); build(); }
+        if (a === 'left' || a === 'up') { idx = (idx - 1 + n) % n; audio.play('nav'); focus(); }
+        else if (a === 'right' || a === 'down') { idx = (idx + 1) % n; audio.play('nav'); focus(); }
         else if (a === 'confirm') choose(idx);
         else if (a === 'options') { const x = items()[idx]; if (x && !x.add) profileMenu(x, build); }
+        else if (a === 'alt' || a === 'clips') SV.data.open();
         else if (a === 'back') A.pop();
       },
     });
+    build();
+    setTimeout(() => root.classList.add('settled'), 600);
+  }
+
+  // The profile button in the top bar: switch in one press, or go to the full frame.
+  function quick(node) {
+    const p = P();
+    A.popover(node, 'PROFILES', [
+      ...p.list.map((x) => ({ icon: picOf(x, 'pop-pic'), bg: swatch(x.look), round: true, label: x.name, sub: presetOf(x), on: x.id === p.current, tag: x.id === p.current ? 'NOW' : '', run: () => { if (x.id !== p.current) load(x); } })),
+      'sep',
+      { icon: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>', label: 'New profile', sub: 'Starts with the look you have now', run: () => newProfile(() => {}) },
+      { icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="18" rx="1.500"/><rect x="14" y="3" width="7" height="18" rx="1.500"/></svg>', label: 'All profiles', sub: 'Pictures, names and looks', run: pick },
+      { icon: '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.700 3.600 3 8 3s8-1.300 8-3V6M4 12c0 1.700 3.600 3 8 3s8-1.300 8-3"/></svg>', label: 'My data', sub: 'What is inside your settings', run: () => SV.data.open() },
+    ]);
   }
 
   // At start: once the opening is over and nothing else is open (the setup wizard on a fresh install goes first).
   SV.host.on('init', (m) => {
-    if (!m.config) return;
+    if (!m.config || m.wake) return; // coming back from the tray isn't a new start
     let tries = 0;
     const t = setInterval(() => {
       const c = A.cfg, b = document.body.classList;
@@ -187,5 +237,5 @@
     }, 500);
   });
 
-  SV.features = { on, rows, pick, F, current };
+  SV.features = { on, rows, pick, quick, F, current };
 })();
