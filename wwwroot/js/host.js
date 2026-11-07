@@ -83,6 +83,8 @@ SV.host = (() => {
       emit({ type: 'init', config, stats, scan: mockScan(), mode: mockMode, autostart: false, epic: { installed: true, active: epicActive }, steam, robloxImport: null });
     } else if (type === 'saveConfig') {
       try { localStorage.setItem(KEY, JSON.stringify(d.config)); } catch {}
+    } else if (type === 'saveDrop') {
+      emit({ type: 'dropSaved', token: d.token, url: d.data });
     } else if (type === 'dataFiles') {
       const now = Date.now();
       emit({ type: 'dataFiles', prompt: !!d.prompt, skip: false, files: [

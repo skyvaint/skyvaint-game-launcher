@@ -90,6 +90,9 @@ public sealed partial class MainForm
             case "dataRead":
                 ReadDataFile(Str("file"));
                 return true;
+            case "saveDrop":
+                SaveDrop(Str("token"), Str("name"), Str("data"));
+                return true;
         }
         return false;
     }
@@ -465,6 +468,28 @@ public sealed partial class MainForm
         catch { }
         foreach (var f in DataSafety.List("config").Take(10)) Add(f, "Backup", false);
         return list;
+    }
+
+    static readonly HashSet<string> DropKinds = new(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".bmp", ".ico", ".mp4", ".m4v", ".webm", ".mov" };
+
+    /// <summary>A picture dragged onto the page: it goes into the media folder like a picked one, so the backups
+    /// mirror it too (the media_ prefix).</summary>
+    async void SaveDrop(string token, string name, string data)
+    {
+        var reply = new JsonObject { ["type"] = "dropSaved", ["token"] = token };
+        try
+        {
+            var ext = Path.GetExtension(name);
+            int comma = data.IndexOf(',');
+            if (DropKinds.Contains(ext) && comma > 0)
+            {
+                var dest = $"media_{Guid.NewGuid():N}{ext.ToLowerInvariant()}";
+                await Task.Run(() => File.WriteAllBytes(Path.Combine(MediaDir, dest), Convert.FromBase64String(data[(comma + 1)..])));
+                reply["url"] = "https://media.skyvaint.example/" + dest;
+            }
+        }
+        catch (Exception ex) { StartupGuard.Log("Saving a dropped picture", ex); }
+        Send(reply);
     }
 
     static bool DataFileAllowed(string full) => full.StartsWith(Path.GetFullPath(DataDir), StringComparison.OrdinalIgnoreCase) || full.StartsWith(Path.GetFullPath(DataSafety.BackupDir), StringComparison.OrdinalIgnoreCase);

@@ -168,6 +168,7 @@
     behavior: { bootAnim: true, afterLaunch: 'hidden', onGameExit: 'home', closeAction: 'hidden', autostartMode: 'hidden', miniOnTop: true, miniSize: 'm', clock24: true,
       promptAccount: true, hideUninstalled: false, waitForGame: true, launchWait: 120, launchSettle: 2, hotkeyShow: 'Ctrl+Alt+Home', hotkeyMenu: 'Ctrl+Alt+M', holdFront: true },
     games: [],
+    art: {}, // game id -> { cover, hero, icon }: pictures this look uses instead of the game's own
     imported: { steam: false, epic: false, roblox: false, robloxManager: false },
     epic: { accounts: [], last: {} },
     roblox: { accounts: [], selected: [], places: [], placeIdx: 0, multiInstance: true, launchDelay: 5 },
@@ -305,7 +306,15 @@
 
   // A game's picture: one you chose wins, otherwise whatever the scan found (Steam's library art, Epic's store
   // art, the program's own icon), otherwise a generated mesh.
-  const artSrc = (g, key) => g[key] || (scanOf(g) || {})[key] || '';
+  // The look's own picture for this game comes first, then the game's, then what the scan found.
+  const artSrc = (g, key) => ((cfg.art || {})[g.id] || {})[key] || g[key] || (scanOf(g) || {})[key] || '';
+  function setThemeArt(g, key, url) {
+    const all = cfg.art = cfg.art || {}, mine = all[g.id] = all[g.id] || {};
+    if (url) mine[key] = url; else delete mine[key];
+    if (!Object.keys(mine).length) delete all[g.id];
+    changed('games');
+    SV.nexus && SV.nexus.syncIcons();
+  }
 
   function art(g, kind) {
     const src = kind === 'hero' ? artSrc(g, 'hero') || artSrc(g, 'cover') : artSrc(g, 'cover') || artSrc(g, 'hero');
@@ -1467,6 +1476,8 @@
         R.choice('Cover mesh', 'Generated artwork for games without a picture.', at('theme.meshStyle'),
           [['mixed', 'Mixed'], ['tri', 'Triangles'], ['wire', 'Wireframe'], ['shard', 'Shards'], ['hex', 'Honeycomb'], ['facet', 'Facets'], ['rings', 'Rings']], () => changed('games')),
         R.choice('Tile shape', 'Corner style for tiles, buttons and panels.', at('theme.tileShape'), [['cut', 'Cut corner'], ['round', 'Rounded'], ['sharp', 'Sharp']]),
+        heading('ARTWORK FOR THIS THEME'),
+        R.button('Pictures for this theme', `${Object.keys(cfg.art || {}).length} games have their own pictures here. Drag a picture onto a game on HOME to add one: it stays with this profile.`, 'RESET', () => confirmMenu('Remove this theme\'s pictures?', 'REMOVE THEM', () => { cfg.art = {}; changed('games'); SV.nexus && SV.nexus.syncIcons(); rerender(); }), true),
         heading('LOOK PRESETS'),
         R.buttons('One-click looks', 'Clean turns off the busier effects for a calm, tidy HOME. Loud turns them back on.', [
           ['CLEAN', () => lookPreset('clean', rerender)], ['BALANCED', () => lookPreset('balanced', rerender)], ['LOUD', () => lookPreset('loud', rerender)],
@@ -2077,6 +2088,7 @@
       { label: 'CLIPS', sub: 'Your clips of ' + g.name, run: () => SV.clips.open(g.name) },
       { label: 'EDIT', sub: 'Name, artwork, colours, launch target', run: () => openEditor(g) },
       { label: 'DETAILS', sub: 'Playtime, store info, screenshots', run: () => SV.details.game(g) },
+      { label: 'ARTWORK FOR THIS THEME', sub: 'Pictures only this profile uses. You can also drag one onto the game', run: () => themeArtMenu(g) },
       { label: 'CHANGE ICON', sub: 'A picture, GIF or MP4 for this game\'s icon', run: () => pick('media').then((f) => { if (f.url) { g.icon = f.url; changed('games'); toast('Icon changed'); } }) },
       { label: 'CHANGE BANNER', sub: 'A picture, GIF or MP4 for the big panel', run: () => pick('media').then((f) => { if (f.url) { g.hero = f.url; changed('games'); toast('Banner changed'); } }) },
       { label: 'ICON FROM A PROGRAM', sub: 'Use the icon of any .exe', run: () => pick('exe').then((f) => { if (f.icon) { g.icon = f.icon; changed('games'); toast('Icon changed'); } }) },
@@ -2093,6 +2105,74 @@
       { label: 'REMOVE', danger: true, run: () => removeGame(g) },
     ]);
   }
+
+  function themeArtMenu(g) {
+    const has = (cfg.art || {})[g.id] || {};
+    const row = (key, label) => ({ label: `${label}${has[key] ? '   ✓' : ''}`, sub: 'A picture, GIF or MP4', run: () => pick('media').then((f) => { if (f.url) { setThemeArt(g, key, f.url); toast(label + ' saved with this theme'); } }) });
+    openMenu(g.name, [row('cover', 'COVER'), row('hero', 'BANNER'), row('icon', 'ICON'),
+      ...(Object.keys(has).length ? [{ label: 'BACK TO THE NORMAL ARTWORK', danger: true, run: () => { for (const k of Object.keys(has)) setThemeArt(g, k, ''); toast('Normal artwork is back'); } }] : []),
+    ], 'These stay with the profile you are on now, and change when you switch.');
+  }
+
+  // Drag a picture from File Explorer onto a game: the tile sets its cover, the big panel its banner, the small
+  // icon beside the name its icon. It is copied into your data and saved with the look you are on.
+  const DROP_MAX = 48 * 1024 * 1024;
+  const dropTip = el('<div id="dropTip"></div>');
+  document.body.append(dropTip);
+  const drops = {};
+  host.on('dropSaved', (m) => { const done = drops[m.token]; delete drops[m.token]; done && done(m); });
+  function dropTarget(node) {
+    if (mode !== 'home' || stack.length || !node || !node.closest || (SV.rails && SV.rails.isOpen)) return null;
+    const tile = node.closest('.tile[data-i]');
+    if (tile) { const g = shown[+tile.dataset.i]; return g && !g.setup ? { g, key: 'cover', label: 'COVER', node: tile } : null; }
+    const g = current();
+    if (!g || g.setup) return null;
+    const icon = node.closest('#gIcon');
+    if (icon) return { g, key: 'icon', label: 'ICON', node: icon };
+    const hero = node.closest('#hero');
+    return hero ? { g, key: 'hero', label: 'BANNER', node: hero } : null;
+  }
+  let dropOn = null;
+  function markDrop(t) {
+    if ((dropOn && dropOn.node) === (t && t.node)) return;
+    if (dropOn) dropOn.node.classList.remove('drop-on');
+    dropOn = t;
+    if (t) t.node.classList.add('drop-on');
+    dropTip.textContent = t ? `${t.label} OF ${t.g.name} · SAVED WITH ${cfg.profile.name}`.toUpperCase() : 'DROP IT ON A GAME';
+  }
+  const endDrag = () => { markDrop(null); document.body.classList.remove('dragging'); };
+  const hasFiles = (e) => [...(e.dataTransfer ? e.dataTransfer.types : [])].includes('Files');
+  // Always handled, even where nothing can land: a file let go on the page would otherwise replace the launcher.
+  addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (!hasFiles(e)) return;
+    document.body.classList.add('dragging');
+    const t = dropTarget(e.target);
+    e.dataTransfer.dropEffect = t ? 'copy' : 'none';
+    markDrop(t);
+  });
+  addEventListener('dragleave', (e) => { if (!e.relatedTarget) endDrag(); });
+  addEventListener('drop', (e) => {
+    e.preventDefault();
+    const t = dropTarget(e.target), file = e.dataTransfer && e.dataTransfer.files[0];
+    endDrag();
+    if (!t || !file) return;
+    if (!/^(image|video)\//.test(file.type)) return toast('That isn\'t a picture or a video.', 'bad');
+    if (file.size > DROP_MAX) return toast('That file is too big (48 MB at most).', 'bad');
+    const read = new FileReader();
+    read.onerror = () => toast('That file couldn\'t be read.', 'bad');
+    read.onload = () => {
+      const token = Math.random().toString(36).slice(2);
+      drops[token] = (m) => {
+        if (!m.url) return toast('That picture couldn\'t be saved.', 'bad');
+        setThemeArt(t.g, t.key, m.url);
+        audio.play('pick');
+        toast(`${t.label} saved with ${cfg.profile.name}`);
+      };
+      host.send('saveDrop', { token, name: file.name, data: read.result });
+    };
+    read.readAsDataURL(file);
+  });
 
   function openEditor(g, after) {
     const root = el(`

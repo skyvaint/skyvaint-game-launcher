@@ -1482,6 +1482,7 @@ public sealed partial class MainForm : Form
 								MapClipHosts();
 								clipCache = t.Result;
 								pageReady = false;
+								quietReload = true;
 								web.CoreWebView2.Reload();
 							}
 						}
@@ -1994,6 +1995,8 @@ public sealed partial class MainForm : Form
 		case "ready":
 		{
 			bool woke = pageAsleep;
+			bool quiet = quietReload;
+			quietReload = false;
 			pageReady = true;
 			StartupGuard.Reached();
 			// Each part is fetched on its own: one failing (a scan, a store that isn't installed the way we expect on
@@ -2004,7 +2007,7 @@ public sealed partial class MainForm : Form
 				["type"] = "init",
 				["config"] = config?.DeepClone(),
 				["fresh"] = startedFresh,
-				["wake"] = woke,
+				["wake"] = woke || quiet, // no opening or profile question: this isn't a new start
 				["stats"] = Guarded("stats", () => Stats().DeepClone(), new JsonObject()),
 				["scan"] = Guarded<JsonNode?>("game scan", () => ScanGames(), new JsonArray()),
 				["mode"] = mode,
@@ -2686,6 +2689,9 @@ public sealed partial class MainForm : Form
 		{
 		}
 	}
+
+	/// <summary>The page is reloading only to pick up a new clips folder.</summary>
+	private bool quietReload;
 
 	private bool polling;
 

@@ -89,7 +89,8 @@
     if (p.current !== x.id) {
       keep();
       p.current = x.id;
-      SV.themes.apply({ id: '', name: x.name, data: x.look });
+      // A profile with no artwork of its own shows the normal pictures, not the last profile's.
+      SV.themes.apply({ id: '', name: x.name, data: { art: {}, ...x.look } });
     }
     A.cfg.profile.name = x.name;
     A.cfg.profile.avatar = x.avatar || '';

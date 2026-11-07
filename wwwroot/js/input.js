@@ -65,7 +65,7 @@ SV.input = (() => {
     moved += Math.abs(e.movementX) + Math.abs(e.movementY);
     if (moved >= MOUSE_TAKEOVER) setDevice('kb');
   }, { passive: true });
-  for (const type of ['mousedown', 'wheel']) addEventListener(type, () => { if (device === 'pad') setDevice('kb'); }, { passive: true, capture: true });
+  for (const type of ['mousedown', 'wheel', 'dragenter']) addEventListener(type, () => { if (device === 'pad') setDevice('kb'); }, { passive: true, capture: true });
 
   // What the right stick scrolls: the top screen's long list, or the rows under HOME.
   function scroller() {
