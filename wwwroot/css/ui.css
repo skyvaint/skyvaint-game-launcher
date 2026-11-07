@@ -300,3 +300,9 @@ body[data-pad=xbox] .g-ps, body[data-pad=nintendo] .g-ps { display: none; }
 #flow canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .9s ease-out; }
 #flow.fl-on canvas { opacity: 1; }
 #flow.fl-leave { opacity: 0; pointer-events: none; }
+
+/* ------------------------------------------------------------ dragging a picture onto a game */
+#dropTip { position: fixed; left: 50%; top: 1.2rem; z-index: 80; padding: .6rem 1.1rem; border-radius: .55rem; background: var(--accent); color: var(--on-accent); font: 700 .72rem/1 var(--mono); letter-spacing: .12em;
+  white-space: nowrap; pointer-events: none; opacity: 0; transform: translate(-50%, -.6rem); transition: opacity .14s, transform .2s var(--spring); }
+body.dragging #dropTip { opacity: 1; transform: translate(-50%, 0); }
+.drop-on { outline: .2rem solid var(--accent2); outline-offset: .15rem; }

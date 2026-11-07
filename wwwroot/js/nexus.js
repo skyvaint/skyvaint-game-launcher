@@ -61,7 +61,11 @@
 
   host.on('init', () => {
     if (!nx().seeded) askSeed(false);
-    // Game logos follow the game's artwork unless you picked one for the bar.
+    syncIcons();
+  });
+
+  // Game logos follow the game's artwork unless you picked one for the bar.
+  function syncIcons() {
     let fixed = false;
     for (const it of allBars().flatMap((b) => b.items || [])) {
       if (it.kind !== 'game' || it.customIcon) continue;
@@ -70,7 +74,7 @@
       if (icon && icon !== it.icon) { it.icon = icon; fixed = true; }
     }
     if (fixed) A.changed();
-  });
+  }
 
   function addApp() {
     A.pick('exe').then((f) => {
@@ -277,5 +281,5 @@
     A.push({ el: root, action: p.action, onClose: () => { refresh = null; } });
   }
 
-  SV.nexus = { open, rows, addGame };
+  SV.nexus = { open, rows, addGame, syncIcons };
 })();

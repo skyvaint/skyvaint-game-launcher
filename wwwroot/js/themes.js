@@ -5,7 +5,7 @@
 (() => {
   const A = SV.app, { host, audio } = SV;
   const { $, el, esc, clamp, toast, hints, meshSVG, R, heading } = A;
-  const KEYS = ['theme', 'backdrop', 'fx', 'sound', 'layout', 'home'];
+  const KEYS = ['theme', 'backdrop', 'fx', 'sound', 'layout', 'home', 'art'];
   const CATALOG = 'https://raw.githubusercontent.com/skyvaint/skyvaint-game-launcher/main/themes/catalog.json';
   const T = () => { const c = A.cfg; c.themes = c.themes || {}; c.themes.library = c.themes.library || []; return c.themes; };
   const newId = () => Math.random().toString(36).slice(2, 10);
@@ -24,6 +24,8 @@
   function put(look) {
     for (const k of KEYS) {
       if (!look[k]) continue;
+      // Artwork belongs to the look as a whole: nothing from the one you left carries over.
+      if (k === 'art') { A.cfg.art = clone(look.art); continue; }
       A.cfg[k] = A.cfg[k] || {};
       // A backdrop with its own layer mix starts from all layers off, so the old mix doesn't leak in.
       if (k === 'backdrop' && look.backdrop.levels && A.cfg.backdrop.levels) for (const l of Object.keys(A.cfg.backdrop.levels)) A.cfg.backdrop.levels[l] = 0;
@@ -75,6 +77,8 @@
   const unb64 = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
   async function pipe(bytes, stream) { return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer()); }
   async function toCode(th) {
+    // Your pictures are files on this PC, so a code sent to someone else leaves them out.
+    th = { ...th, data: { ...th.data, art: undefined } };
     const json = JSON.stringify({ n: th.name, b: th.by || '', d: portable(th.data) });
     const packed = await pipe(new TextEncoder().encode(json), new CompressionStream('deflate-raw'));
     let s = ''; for (let i = 0; i < packed.length; i += 0x8000) s += String.fromCharCode(...packed.subarray(i, i + 0x8000));

@@ -33,7 +33,7 @@
     return {
       name: (c.profile && c.profile.name) || 'Player', avatar: (c.profile && c.profile.avatar) || '', theme, prof, cur, games, platforms, bars, layers, videos, bd, fx, snd, hm, lay, sec, hasStats: !!stats,
       accounts: { roblox: n(c.roblox && c.roblox.accounts), epic: n(c.epic && c.epic.accounts), steam: n(c.imported && c.imported.steamAccounts) },
-      places: n(c.roblox && c.roblox.places), widgets: n(c.widgets && c.widgets.items), sites: n(c.social && c.social.sites), xp: (c.quests && c.quests.xp) || 0,
+      places: n(c.roblox && c.roblox.places), art: Object.keys(c.art || {}).length, widgets: n(c.widgets && c.widgets.items), sites: n(c.social && c.social.sites), xp: (c.quests && c.quests.xp) || 0,
       discord: !!(c.discord && c.discord.enabled), dev: !!(c.dev && c.dev.enabled), lang: c.language || 'en', themes: n(c.themes && c.themes.mine) || n(c.themes && c.themes.library),
     };
   }
@@ -77,7 +77,7 @@
         ${card('', 'SOUND', d.snd.pack || 'default', [
           line('Sound pack', d.snd.pack || 'default'), line('Your own sounds', Object.values(d.snd.custom || {}).filter(Boolean).length), line('Sound library', n(d.snd.library)), line('Music tracks', n(d.snd.bgmTracks)),
         ].join(''))}
-        ${card('', 'EXTRAS', d.lang.toUpperCase(), [line('Widgets', d.widgets), line('Social sites', d.sites), line('Quest XP', d.xp), line('Developer mode', yes(d.dev))].join(''))}
+        ${card('', 'EXTRAS', d.lang.toUpperCase(), [line('Theme artwork', count(d.art, 'game')), line('Widgets', d.widgets), line('Social sites', d.sites), line('Quest XP', d.xp), line('Developer mode', yes(d.dev))].join(''))}
         ${card('dv-wide', 'GAMES', Object.entries(d.platforms).map(([k, v]) => `${v} ${k}`).join(' · ') || 'none', `<div class="dv-chips">${shown}${more}</div>`)}
       </div>`;
     wrap.scrollTop = 0;
