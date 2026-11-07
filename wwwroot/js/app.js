@@ -90,6 +90,32 @@
     start: ['Start button', 'START'], launching: ['Launch screen heading', 'NOW STARTING'], ready: ['Banner label', 'READY'],
     welcome: ['Welcome line (opening)', 'WELCOME BACK'], ticker: ['Ticker filler', 'PRESS START'], status: ['Idle status', 'READY'],
   };
+  // More typefaces, fetched from Google Fonts the first time they are used.
+  const GFONTS = ['Teko', 'Oswald', 'Exo 2', 'Audiowide', 'Bungee', 'Chakra Petch', 'Saira Condensed', 'Barlow Condensed', 'Archivo Black', 'Michroma', 'Kanit', 'Righteous',
+    'Space Grotesk', 'Poppins', 'Montserrat', 'Inter', 'Sora', 'Outfit', 'Lexend', 'Permanent Marker', 'Rubik', 'Unbounded'];
+  const loaded = new Set();
+  function fontCss(key, fallback) {
+    if (key === 'custom') return `'SvCustomFont', ${fallback}`;
+    if (key && key.startsWith('g:')) {
+      const name = key.slice(2);
+      if (!loaded.has(name)) {
+        loaded.add(name);
+        const l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name).replace(/%20/g, '+')}:wght@400;600;700;800&display=swap`;
+        document.head.append(l);
+      }
+      return `'${name}', ${fallback}`;
+    }
+    return (FONTS[key] || [0, fallback])[1];
+  }
+  let customFontUrl = '';
+  function loadFontFile(url) {
+    if (!url || url === customFontUrl) return;
+    customFontUrl = url;
+    new FontFace('SvCustomFont', `url("${url}")`).load().then((f) => { document.fonts.add(f); }).catch(() => toast('That font file could not be loaded.', 'bad'));
+  }
+  const fontChoices = (base) => [...base, ...GFONTS.map((n) => ['g:' + n, n + ' (web)']), ['custom', 'My font file']];
   const FONTS = {
     anton: ['Anton', "'Anton','Impact',sans-serif"],
     bebas: ['Bebas Neue', "'Bebas Neue','Impact',sans-serif"],
@@ -103,17 +129,22 @@
   };
 
   const defaults = () => ({
-    v: 6,
+    v: 8,
     profile: { name: 'Player', avatar: '' },
     theme: { preset: 'predator', ...PRESETS.predator, tileShape: 'cut', font: 'anton', uiScale: 1, vignette: true, hero: true, ticker: true, meshStyle: 'mixed',
-      tileSize: 1, heroSide: 'right', glow: 1, cut: 1.1, tickerSpeed: 1, tickerText: '', texture: 'grain', textureOpacity: 0.6 },
+      tileSize: 1, heroSide: 'right', glow: 1, cut: 1.1, tickerSpeed: 1, tickerText: '', texture: 'grain', textureOpacity: 0.6,
+      bodyFont: 'manrope', monoFont: 'mono', fontFile: '', titleScale: 1, titleSpacing: 0, titleCase: 'upper', titleStyle: 'gradient', textScale: 1, tagCase: 'upper' },
     appIcon: { style: 'bolt', shape: 'rounded', useTheme: true, letter: 'S', image: '', markColor: '#ffffff', fit: 'cover', zoom: 100, offsetX: 0, offsetY: 0, bare: false, logo: 'auto' },
     texts: Object.fromEntries(Object.entries(TEXTS).map(([k, v]) => [k, v[1]])),
-    home: { clips: true },
+    home: { clips: true, strip: 'continue', stripSpeed: 1, stripClick: 'start', stripRoblox: true, stripSize: 1 },
+    music: { enabled: true },
+    widgets: { items: [], locked: true },
+    social: { enabled: true, side: 'right', width: 420, sites: [], mobile: true },
+    layout: { heroNum: true, stats: true, tags: true, hints: true, shelfLabel: true, filters: true, profileName: true, clock: true, hero: true, settingsScale: 1 },
     nexus: { enabled: false, seeded: false, position: 'bottom', size: 52, backing: 'none', names: true, autohide: false, magnify: true, hideFullscreen: true, items: [],
       align: 'center', gap: 12, radius: 22, offset: 0, idleOpacity: 100, opacity: 47, magnifyAmount: 145, glow: 100, indicator: 'dot', bounce: true, alwaysNames: false, tagStyle: 'dark',
       name: 'Main bar', visibility: 'always', fadeStyle: 'fade', fadeMs: 220, length: 0, hoverStyle: 'magnify', clickMode: 'single', launchMode: 'normal', bars: [] },
-    discord: { enabled: false, clientId: '', details: 'Playing {game}', state: 'on {platform}', idle: true, idleDetails: 'In the launcher', idleState: '{count} games ready',
+    discord: { activityType: 0, partySize: 0, partyMax: 0, rotateEvery: 15, perGame: {}, profiles: [], enabled: false, clientId: '', details: 'Playing {game}', state: 'on {platform}', idle: true, idleDetails: 'In the launcher', idleState: '{count} games ready',
       elapsed: true, largeImage: '', largeText: '', smallImage: '', smallText: '', button1Label: '', button1Url: '', button2Label: '', button2Url: '' },
     quests: { day: '', week: '', base: {}, weekBase: {}, claimed: [], xp: 0, custom: [] },
     // Each backdrop layer has a level: 0 is off, 1 the designed look, more is more.
@@ -121,23 +152,28 @@
       nebula: 0, planet: 0, city: 0, ocean: 0, sunset: 0, fog: 0, snow: 0, fireflies: 0, bokeh: 0, matrix: 0 }, photoMotion: 1,
       pictures: [], slide: 9, artOpacity: 0.18,
       meshStyle: 'poly', meshDensity: 13, meshMotion: 1, meshLines: 1, meshFill: 1, meshColor: 'duo', image: '', imageDim: 0.55,
-      intensity: 0.8, speed: 1, quality: 'auto', fps: 0, slowFps: 60, motion: true, calmWhilePlaying: true, video: '', videoMix: 0.45, videoSpeed: 1, photo: '' },
-    perf: { smooth: true, meter: false, uncapped: false, dgpu: false },
+      intensity: 0.8, speed: 1, quality: 'auto', fps: 0, slowFps: 60, motion: true, calmWhilePlaying: true, video: '', videoMix: 0.45, videoSpeed: 1, photo: '',
+      videoBlend: 'screen', videoDim: 0.2, videoBlur: 0, videoSaturate: 1 },
+    perf: { smooth: true, meter: false, uncapped: false, dgpu: false, memorySaver: 'balanced', memoryLimit: 0, sleepHidden: true },
     fx: { trail: true, ripple: true, tilt: true, glitch: true, scramble: true, rgb: true, chroma: false, scan: false, shake: true, confetti: true, warp: true, pulse: true,
-      launchStyle: 'slabs', sparks: 1, space: true, focusFx: true, bootStyle: 'space', fadeWindow: true, wipe: true,
+      launchStyle: 'slabs', sparks: 1, space: true, focusFx: true, bootStyle: 'flow', fadeWindow: true, wipe: true,
       spotlight: true, rays: false, dust: true, breathe: false, bloom: true, sweep: true, flare: false, light: 1, transition: 'slash',
-      introVideo: '', introMuted: false, introMax: 30, rotateText: '', rotateEvery: 6, cursorGlow: false },
-    sound: { master: 0.6, pack: 'pulse', events: { nav: true, confirm: true, back: true, boot: true, launch: true }, custom: { boot: '', launch: '', nav: '', confirm: '', back: '', toggle: '', open: '', pick: '', star: '', error: '', slam: '' }, ambient: 0, haptics: true, hover: true, hoverGap: 220, hoverVolume: 0.6, hoverDwell: 70, library: [],
+      introVideo: '', introMuted: false, introMax: 30, rotateText: '', rotateEvery: 6, cursorGlow: false,
+      rim: false, bars: false, barsSize: 7, parallax: false, parallaxAmount: 1, reflect: false, beat: false, grainAnim: false, chromaHover: false, glowColor: '',
+      transitionVideo: '', transitionCover: 0.4, transitionMax: 3, transitionSound: false,
+      transitionSpeed: 1, transitionTint: 'none', transitionTintColor: '#ff1f1f', transitionTintAmount: 0.6, transitionHue: 0, transitionSaturate: 1, transitionBright: 1, transitionContrast: 1, transitionOpacity: 1, launchVideo: '', launchVideoSound: true, launchVideoOnly: false, videos: {}, introThenOpening: false,
+      launchVideoSpeed: 1, launchVideoTint: 'none', launchVideoTintColor: '#ff1f1f', launchVideoTintAmount: 0.6, launchVideoHue: 0, launchVideoSaturate: 1, launchVideoBright: 1, launchVideoContrast: 1, launchVideoOpacity: 1 },
+    sound: { master: 0.6, pack: 'pulse', events: { nav: true, confirm: true, back: true, boot: true, launch: true }, custom: { boot: '', launch: '', nav: '', confirm: '', back: '', toggle: '', open: '', pick: '', star: '', error: '', slam: '' }, ambient: 0, bgmTracks: [], bgmVolume: 0.4, bgmShuffle: false, bgmLoop: true, bgmPauseInGame: true, bgmInBackground: false, funcs: {}, haptics: true, hover: true, hoverGap: 220, hoverVolume: 0.6, hoverDwell: 70, library: [],
       pitch: 0, echo: 0 },
     behavior: { bootAnim: true, afterLaunch: 'hidden', onGameExit: 'home', closeAction: 'hidden', autostartMode: 'hidden', miniOnTop: true, miniSize: 'm', clock24: true,
-      promptAccount: true, hideUninstalled: false, waitForGame: true, launchWait: 120, launchSettle: 2 },
+      promptAccount: true, hideUninstalled: false, waitForGame: true, launchWait: 120, launchSettle: 2, hotkeyShow: 'Ctrl+Alt+Home', hotkeyMenu: 'Ctrl+Alt+M', holdFront: true },
     games: [],
     imported: { steam: false, epic: false, roblox: false, robloxManager: false },
     epic: { accounts: [], last: {} },
     roblox: { accounts: [], selected: [], places: [], placeIdx: 0, multiInstance: true, launchDelay: 5 },
     lists: { roblox: true, studio: true },
     rails: { enabled: true, show: { recent: true, friends: true, roblox: true, trending: true, topPlaying: true, rising: true, steamTop: true, steamDeals: true, epicFree: true, steamNew: true, clips: true, studio: true, upcoming: true, news: true, commissions: true } },
-    clips: { favorites: [], categories: [], tagged: {}, folders: [], videos: true, medal: '', autoplay: true },
+    clips: { favorites: [], categories: [], tagged: {}, folders: [], videos: true, medal: '', autoplay: true, recorder: 'gamebar', recordKeys: '' },
     dev: { enabled: false, commissions: [], showStudioHome: true, promptData: false },
     // UPDATES tab: the launcher's GitHub releases, keeping Roblox up to date.
     updates: { auto: true, notify: true, beta: false, skipped: '', lastSeen: '', roblox: true },
@@ -288,6 +324,24 @@
     ['tt-carbon-fibre-v2', 'Carbon weave (web)'], ['tt-cubes', 'Cubes (web)'], ['tt-diagonal-striped-brick', 'Striped brick (web)'], ['tt-dark-mosaic', 'Dark mosaic (web)'], ['tt-black-linen', 'Black linen (web)'], ['tt-asfalt-dark', 'Asphalt (web)'], ['tt-brushed-alum-dark', 'Brushed metal (web)'], ['tt-dark-matter', 'Dark matter (web)'], ['tt-hexellence', 'Hexellence (web)'], ['tt-wood-pattern', 'Wood (web)'], ['tt-stardust', 'Stardust (web)'], ['tt-skulls', 'Skulls (web)'], ['tt-inspiration-geometry', 'Geometry (web)'], ['tt-45-degree-fabric-dark', 'Dark fabric (web)'], ['tt-dark-wood', 'Dark wood (web)'], ['tt-concrete-wall-3', 'Concrete (web)'], ['tt-escheresque-dark', 'Escher (web)'], ['tt-broken-noise', 'Broken noise (web)'], ['tt-crissxcross', 'Criss-cross (web)'],
     ['custom', 'My own picture']];
 
+  // One-click looks. Clean switches off the busy effects; Loud brings the full show back.
+  const LOOKS = {
+    clean: { fx: { glitch: false, rgb: false, scramble: false, chroma: false, scan: false, trail: false, ripple: false, dust: false, rays: false, sweep: false, flare: false, shake: false, confetti: false, chromaHover: false, grainAnim: false },
+      theme: { texture: 'none', glow: 0.5, cut: 0.6, vignette: true, tileShape: 'round' }, home: { strip: 'continue' }, layout: { heroNum: false, shelfLabel: false } },
+    balanced: { fx: { glitch: false, rgb: true, scramble: true, chroma: false, scan: false, trail: true, ripple: true, dust: true, rays: false, sweep: true, flare: false, shake: true, confetti: true },
+      theme: { texture: 'grain', textureOpacity: 0.4, glow: 1, cut: 1.1 }, home: { strip: 'continue' }, layout: { heroNum: true, shelfLabel: true } },
+    loud: { fx: { glitch: true, rgb: true, scramble: true, chroma: true, trail: true, ripple: true, dust: true, rays: true, sweep: true, flare: true, shake: true, confetti: true, rim: true, beat: true },
+      theme: { texture: 'grain', textureOpacity: 0.8, glow: 1.6, cut: 1.4 }, home: { strip: 'both' }, layout: { heroNum: true, shelfLabel: true } },
+  };
+  function lookPreset(name, after) {
+    const p = LOOKS[name];
+    for (const k of Object.keys(p)) Object.assign(cfg[k], p[k]);
+    audio.play('pick');
+    changed('games');
+    toast(name.toUpperCase() + ' look applied');
+    after && after();
+  }
+
   function applyBackdrop(style) {
     const preset = BACKDROPS[style];
     if (!preset) return;
@@ -304,7 +358,21 @@
     root.setProperty('--a', a.join(','));
     root.setProperty('--a2', a2.join(','));
     root.setProperty('--on-accent', lum(a) > 0.6 ? '#0b0808' : '#ffffff');
-    root.setProperty('--display', (FONTS[t.font] || FONTS.anton)[1]);
+    if (t.fontFile) loadFontFile(t.fontFile);
+    root.setProperty('--display', fontCss(t.font, "'Anton','Impact',sans-serif"));
+    root.setProperty('--body', fontCss(t.bodyFont, "'Manrope','Segoe UI',system-ui,sans-serif"));
+    root.setProperty('--mono', fontCss(t.monoFont, "'JetBrains Mono',Consolas,monospace"));
+    root.setProperty('--titlescale', t.titleScale ?? 1);
+    root.setProperty('--titlespace', (t.titleSpacing ?? 0) + 'em');
+    root.setProperty('--textscale', t.textScale ?? 1);
+    document.body.dataset.titlestyle = t.titleStyle || 'gradient';
+    document.body.dataset.titlecase = t.titleCase || 'upper';
+    document.body.dataset.tagcase = t.tagCase || 'upper';
+    // Layout switches: hide the parts of HOME you don't want.
+    const L = cfg.layout || {};
+    for (const [k, cls] of [['heroNum', 'no-heronum'], ['stats', 'no-stats'], ['tags', 'no-tags'], ['hints', 'no-hints'], ['shelfLabel', 'no-shelflabel'], ['filters', 'no-filters'], ['profileName', 'no-profilename'], ['clock', 'no-clock']])
+      document.body.classList.toggle(cls, L[k] === false);
+    document.body.dataset.strip = cfg.home.strip || 'continue';
     root.setProperty('--ts', t.tileSize);
     root.setProperty('--glow', t.glow);
     root.setProperty('--cut', t.cut + 'rem');
@@ -334,7 +402,7 @@
     meter(cfg.perf.meter);
 
     bg.configure({
-      levels: d.levels, image: d.image, imageDim: d.imageDim, photoMotion: d.photoMotion ?? 1, pictures: d.pictures, slide: d.slide, artOpacity: d.artOpacity,
+      levels: d.levels, image: SV.media.isVideo(d.image) ? '' : d.image, imageDim: d.imageDim, photoMotion: d.photoMotion ?? 1, pictures: d.pictures, slide: d.slide, artOpacity: d.artOpacity,
       mesh: { style: d.meshStyle, density: d.meshDensity, motion: d.meshMotion, lines: d.meshLines, fill: d.meshFill, color: d.meshColor },
       intensity: d.intensity, speed: d.motion ? d.speed : 0.15, quality: d.quality, fps: +d.fps || 0, slowFps: +d.slowFps || 60, accent: a, accent2: a2, bg: b,
     });
@@ -346,6 +414,7 @@
     fit();
 
     $('#profileName').textContent = cfg.profile.name;
+    document.body.classList.toggle('no-profilename', cfg.layout.profileName === false);
     const av = $('#avatar');
     av.textContent = cfg.profile.avatar ? '' : (cfg.profile.name[0] || 'S').toUpperCase();
     av.style.backgroundImage = cfg.profile.avatar ? `url("${cfg.profile.avatar}")` : '';
@@ -357,6 +426,7 @@
     bg.setThrottled(calm);
     fx.setEnabled(mode === 'home' && cfg.backdrop.motion && !calm);
     document.body.classList.toggle('calm', calm);
+    SV.effects && SV.effects.sync && SV.effects.sync();
   }
 
   // FPS counter: the interface's own frame rate (this thread) next to the backdrop worker's.
@@ -420,8 +490,23 @@
     stats: '<path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/>',
     discover: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
     quests: '<path d="M6 3h12v5a6 6 0 0 1-12 0zM9 20h6M12 14v6M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3"/>',
+    social: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.3" cy="6.7" r=".9"/>',
+    shop: '<path d="M4 8h16l-1.4 11.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8z"/><path d="M8.5 8V6.5a3.5 3.5 0 0 1 7 0V8"/>',
     dev: '<path d="M5.2 3.6l15.2 4.1-4.1 15.2L1.1 18.8z"/><path d="M10.2 10.1l3.9 1-1 3.9-3.9-1z"/>',
     nexus: '<rect x="3" y="15" width="18" height="5" rx="1.5"/><rect x="5.5" y="9" width="4" height="4" rx="1"/><rect x="10.5" y="9" width="4" height="4" rx="1"/><rect x="15.5" y="9" width="3" height="4" rx="1"/>',
+    more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+    data: '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.700 3.600 3 8 3s8-1.300 8-3V6M4 12c0 1.700 3.600 3 8 3s8-1.300 8-3"/>',
+    backdrop: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.500"/>',
+    effects: '<path d="M12 3l1.800 5.200L19 10l-5.200 1.800L12 17l-1.800-5.200L5 10l5.200-1.800zM19 16l.8 2.200L22 19l-2.200.8L19 22l-.8-2.200L16 19l2.200-.8z"/>',
+    texts: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>',
+    feeds: '<path d="M4 6h16M4 12h16M4 18h10"/>',
+    games: '<rect x="2.500" y="7" width="19" height="11" rx="4"/><path d="M7.500 11v3M6 12.500h3"/><circle cx="16" cy="11.500" r=".9"/><circle cx="18" cy="14" r=".9"/>',
+    widgets: '<rect x="3" y="3" width="8" height="8" rx="1.500"/><rect x="13" y="3" width="8" height="8" rx="1.500"/><rect x="3" y="13" width="8" height="8" rx="1.500"/><rect x="13" y="13" width="8" height="8" rx="1.500"/>',
+    discord: '<path d="M5 18l1-2c-1.500-.5-2.500-1.500-3-2 .3-3.500 1.500-7 3-9 1.500-.8 3-1 4-1l.6 1.300h2.800L14 4c1 0 2.500.2 4 1 1.500 2 2.700 5.500 3 9-.5.5-1.500 1.500-3 2l1 2c-2-.3-3.500-1-4.500-2h-5C8.500 17 7 17.700 5 18z"/>',
+    performance: '<path d="M4 18a8 8 0 1 1 16 0M12 18l4-6"/>',
+    system: '<rect x="3" y="4" width="18" height="12" rx="1.500"/><path d="M8 20h8M12 16v4"/>',
+    updates: '<path d="M4 12a8 8 0 0 1 14-5.300L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.300L4 15M4 20v-5h5"/>',
+    developer: '<path d="M8 8l-5 4 5 4M16 8l5 4-5 4M14 5l-4 14"/>',
   };
   const FUNCS = [
     { id: 'search', label: 'Search', desc: 'Find a game by typing its name', run: () => openSearch() },
@@ -431,6 +516,8 @@
     { id: 'quests', label: 'Quests', desc: 'Daily goals that earn XP', run: () => SV.quests.open() },
     { id: 'clips', label: 'Clips', desc: 'Your recorded clips', run: () => SV.clips.open() },
     { id: 'dev', label: 'Developer', desc: 'Roblox Studio, commissions and dev tools', dev: true, run: () => SV.dev.open() },
+    { id: 'social', label: 'Social', desc: 'TikTok, Instagram, YouTube and a browser, beside HOME', run: () => SV.social.toggle() },
+    { id: 'shop', label: 'Shop', desc: 'Themes: get them, swap between them, share a code', run: () => SV.themes.open() },
     { id: 'nexus', label: 'Nexus', desc: 'Your desktop app bar', run: () => SV.nexus.open() },
     { id: 'accounts', label: 'Accounts', desc: 'Steam, Epic and Roblox accounts', run: () => openSettings('accounts') },
     { id: 'tasks', label: 'Stop', desc: 'Close running games and apps', run: () => openTasks() },
@@ -440,9 +527,30 @@
     { id: 'settings', label: 'Settings', desc: 'Games, behaviour, language and more', run: () => openSettings('games') },
     { id: 'power', label: 'Power', desc: 'Quit, sleep or switch to mini', run: () => openPower() },
   ];
+  // Each top bar button can have its own click sound (Settings → Sound → Button sounds).
+  const funcSound = (f) => { const u = (cfg.sound.funcs || {})[f.id]; if (u) audio.preview(u); else audio.play('confirm'); };
   // The Developer button only shows in developer mode.
-  const funcs = () => FUNCS.filter((f) => !f.dev || cfg.dev.enabled);
-  const PLATFORM = { epic: 'EPIC GAMES', steam: 'STEAM', roblox: 'ROBLOX', pc: 'PC' };
+  const FUNC_BY_ID = Object.fromEntries(FUNCS.map((f) => [f.id, f]));
+  // The top bar keeps what you reach for most, with names; everything else is one press away under MORE.
+  const BAR_LABELLED = ['search', 'discover', 'clips', 'quests', 'shop'];
+  const BAR_ICONS = ['social', 'settings', 'power'];
+  const MORE = { id: 'more', label: 'More', desc: 'Everything else', run: (node) => openMore(node) };
+  const PROFILE = { id: 'profile', label: 'Profile', desc: 'Switch or manage profiles', run: (node) => SV.features.quick(node) };
+  const moreFuncs = () => FUNCS.filter((f) => !BAR_LABELLED.includes(f.id) && !BAR_ICONS.includes(f.id) && (!f.dev || cfg.dev.enabled));
+  const funcs = () => [...BAR_LABELLED.map((k) => FUNC_BY_ID[k]), MORE, ...BAR_ICONS.map((k) => FUNC_BY_ID[k]), PROFILE];
+  const funcNode = (i) => document.querySelector(`#funcs .func[data-i="${i}"]`);
+  function funcHtml(f, i) {
+    if (f === PROFILE) {
+      const a = cfg.profile.avatar;
+      return `<button class="func pill" data-i="${i}" data-id="profile" aria-label="${esc(T(f.label))}"><span class="pp-av" ${a ? `style="background-image:url('${esc(a)}')"` : ''}>${a ? '' : esc((cfg.profile.name[0] || 'S').toUpperCase())}</span><span class="pp-name">${esc(cfg.profile.name)}</span><svg class="pp-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>`;
+    }
+    const labelled = BAR_LABELLED.includes(f.id);
+    return `${f === MORE ? '<i class="func-gap"></i>' : ''}<button class="func ${labelled ? 'lab' : ''}" data-i="${i}" data-id="${f.id}" aria-label="${esc(T(f.label))}"><svg viewBox="0 0 24 24">${ICON[f.id]}</svg>${labelled ? `<span class="func-name">${esc(T(f.label))}</span>` : ''}<span class="func-tip"><b>${esc(T(f.label))}</b><small>${esc(T(f.desc))}</small></span></button>`;
+  }
+  function openMore(node) {
+    popover(node, 'MORE', moreFuncs().map((f) => ({ icon: `<svg viewBox="0 0 24 24">${ICON[f.id]}</svg>`, label: f.label, sub: f.desc, run: () => { funcSound(f); f.run(); } })));
+  }
+  const PLATFORM = { epic: 'EPIC GAMES', steam: 'STEAM', roblox: 'ROBLOX', emu: 'EMULATOR', pc: 'PC' };
   // RECENT is not a platform: the games you played, newest first.
   const FILTERS = [['all', 'ALL'], ['recent', 'RECENT'], ['steam', 'STEAM'], ['epic', 'EPIC'], ['roblox', 'ROBLOX'], ['pc', 'PC']];
   const TILE = 13, GAP = 1.2, GROW = 1.4;
@@ -462,7 +570,7 @@
     sub = { kind, p, parent, back: sel };
     sel = 0; zone = 'shelf';
     audio.play('confirm');
-    SV.title.slash(renderHome, 30);
+    SV.title.slash(renderHome, 30, 'list');
     return true;
   }
   function exitList() {
@@ -471,7 +579,7 @@
     sub = null;
     sel = back; zone = 'shelf';
     audio.play('back');
-    SV.title.slash(renderHome, 30);
+    SV.title.slash(renderHome, 30, 'back');
   }
   function refreshList() { if (sub && mode === 'home') { const keep = sel; renderHome(); select(keep, true); } }
   // Starts the game itself, skipping its list (Studio's "Open Studio").
@@ -480,9 +588,11 @@
   const playedAt = (g) => (stats[g.id] || {}).lastPlayed || 0;
   const recentGames = () => cfg.games.filter((g) => playedAt(g) > 0).sort((a, b) => playedAt(b) - playedAt(a));
   const inFilter = (k) => (k === 'all' ? cfg.games : k === 'recent' ? recentGames() : cfg.games.filter((g) => platformOf(g) === k));
+  // An add-on that is switched off in Settings → SYSTEM takes its card off the shelf too.
+  const addonOff = (g) => SV.features && ((g.target === 'sv:roblox' && !SV.features.on('roblox.card')) || (g.target === 'sv:budokai' && !SV.features.on('budokai')));
   function visibleGames() {
     if (sub) return sub.p.items(sub.parent);
-    const games = inFilter(filter).filter((g) => !(cfg.behavior.hideUninstalled && !isInstalled(g)));
+    const games = inFilter(filter).filter((g) => !(cfg.behavior.hideUninstalled && !isInstalled(g)) && !addonOff(g));
     return filter === 'all' ? [...games, ...setupCards()] : games;
   }
 
@@ -534,8 +644,7 @@
     document.body.classList.toggle('in-list', !!sub);
     sel = clamp(sel, 0, Math.max(0, shown.length - (addTile ? 0 : 1)));
 
-    $('#funcs').innerHTML = funcs().map((f, i) =>
-      `<button class="func" data-i="${i}" data-id="${f.id}" aria-label="${esc(T(f.label))}"><svg viewBox="0 0 24 24">${ICON[f.id]}</svg><span class="func-tip"><b>${esc(T(f.label))}</b><small>${esc(T(f.desc))}</small></span></button>`).join('');
+    $('#funcs').innerHTML = funcs().map(funcHtml).join('');
     $('#filters').innerHTML = sub ? `<button class="chip on crumb" data-k="__back">‹ ALL GAMES</button><span class="crumb-now">${esc(sub.p.title)} <i>${shown.length}</i></span>`
       : used.length > 2 ? used.map(([k, label]) =>
       `<button class="chip ${k === filter ? 'on' : ''}" data-k="${k}">${label}<i>${inFilter(k).length}</i></button>`).join('') : '';
@@ -559,7 +668,54 @@
 
     select(sel, true);
     updateRunning();
+    renderContinue();
   }
+
+  // ---------------------------------------------------------------- CONTINUE PLAYING strip
+  // What you played last (games and Roblox places, not Roblox Studio), scrolling along under the banner.
+  // Hover or move onto it to stop it; Enter / click starts the game.
+  let contItems = [], contIdx = 0;
+  const isStudio = (g) => g.id === 'roblox_studio' || /roblox studio/i.test(g.name || '');
+  function continueItems() {
+    const list = cfg.games.filter((g) => !isStudio(g) && ((stats[g.id] || {}).lastPlayed || running.has(g.id)))
+      .map((g) => ({ g, at: running.has(g.id) ? Date.now() + 1 : stats[g.id].lastPlayed }));
+    if (cfg.home.stripRoblox !== false && SV.roblox) SV.roblox.places().forEach((p, i) => { if (p.lastPlayed) list.push({ p, i, at: p.lastPlayed }); });
+    return list.sort((a, b) => b.at - a.at).slice(0, 16);
+  }
+  function renderContinue() {
+    const box = $('#continue'), mode = cfg.home.strip || 'continue';
+    contItems = mode === 'continue' || mode === 'both' ? continueItems() : [];
+    box.classList.toggle('on', contItems.length > 0);
+    if (!contItems.length) { $('.cs-run', box).innerHTML = ''; if (zone === 'strip') zone = 'detail'; return; }
+    $('.cs-label', box).textContent = `[ ${T('CONTINUE PLAYING')} ]`;
+    const card = (x, i) => {
+      const g = x.g, name = g ? g.name : x.p.name, img = g ? artSrc(g, 'hero') || artSrc(g, 'cover') : x.p.thumb || x.p.icon;
+      const sub = g ? (running.has(g.id) ? T('RUNNING') : T(lastPlayed(x.at))) + ` · ${playtime((stats[g.id] || {}).seconds)}` : 'ROBLOX · ' + T(lastPlayed(x.at));
+      return `<button class="cs-card ${g && running.has(g.id) ? 'live' : ''}" data-i="${i}"><span class="cs-art">${img ? SV.media.html(img, 'cs-img') : meshSVG((g ? g.id : 'p' + x.p.placeId) + 'cs', cfg.theme.accent, cfg.theme.bg, 5)}</span>
+        <span class="cs-meta"><b>${esc(name)}</b><small>${esc(sub)}</small></span></button>`;
+    };
+    const one = contItems.map(card).join('');
+    // Doubled so the scroll can loop seamlessly; only when there are enough to fill the width.
+    const run = $('.cs-run', box);
+    run.innerHTML = one + (contItems.length > 4 ? one.replace(/data-i="/g, 'data-dup="1" data-i="') : '');
+    run.classList.toggle('loop', contItems.length > 4);
+    run.style.setProperty('--dur', (contItems.length * 6 / (cfg.home.stripSpeed || 1)).toFixed(1) + 's');
+    box.style.setProperty('--css', cfg.home.stripSize || 1);
+    focusHome();
+  }
+  function openContinue(i) {
+    const x = contItems[i];
+    if (!x) return;
+    audio.play('confirm');
+    if (x.p) return SV.roblox.openAt(null, x.i);
+    if (cfg.home.stripClick === 'select') jumpTo(x.g); else launch(x.g);
+  }
+  $('#continue').addEventListener('click', (e) => {
+    const c = e.target.closest('.cs-card');
+    if (!c || stack.length) return;
+    contIdx = +c.dataset.i;
+    openContinue(contIdx);
+  });
 
   function setFilter(next) {
     if (next === filter) return;
@@ -704,6 +860,9 @@
     document.querySelectorAll('#funcs .func').forEach((f, i) => f.classList.toggle('focus', zone === 'top' && i === topIdx));
     document.querySelectorAll('#actions .btn').forEach((b, i) => b.classList.toggle('focus', zone === 'detail' && i === actIdx));
     document.querySelectorAll('#homeClips .hc').forEach((b, i) => b.classList.toggle('focus', zone === 'hclips' && i === clipIdx));
+    document.querySelectorAll('#continue .cs-card').forEach((b) => b.classList.toggle('focus', zone === 'strip' && +b.dataset.i === contIdx && !b.dataset.dup));
+    $('#continue').classList.toggle('held', zone === 'strip');
+    if (zone === 'strip') { const f = $('#continue .cs-card.focus'); if (f) f.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }
   }
 
   function setZone(z) {
@@ -734,18 +893,23 @@
     } else if (zone === 'top') {
       if (a === 'left' || a === 'right') { topIdx = clamp(topIdx + (a === 'left' ? -1 : 1), 0, funcs().length - 1); audio.play('nav'); focusHome(); }
       else if (a === 'down') setZone('shelf');
-      else if (a === 'confirm') { audio.play('confirm'); funcs()[topIdx].run(); }
+      else if (a === 'confirm') { funcSound(funcs()[topIdx]); funcs()[topIdx].run(funcNode(topIdx)); }
     } else if (zone === 'hclips') {
       const n = document.querySelectorAll('#homeClips .hc').length;
       if (a === 'left' || a === 'right') { clipIdx = clamp(clipIdx + (a === 'left' ? -1 : 1), 0, n - 1); audio.play('nav'); focusHome(); }
       else if (a === 'up') setZone('detail');
-      else if (a === 'down') SV.rails.show();
+      else if (a === 'down') { if (contItems.length) setZone('strip'); else SV.rails.show(); }
       else if (a === 'confirm') openHomeClip(clipIdx);
+    } else if (zone === 'strip') {
+      if (a === 'left' || a === 'right') { contIdx = clamp(contIdx + (a === 'left' ? -1 : 1), 0, contItems.length - 1); audio.play('nav'); focusHome(); }
+      else if (a === 'up') setZone(homeClips.length ? 'hclips' : 'detail');
+      else if (a === 'down') SV.rails.show();
+      else if (a === 'confirm') openContinue(contIdx);
     } else {
       const list = actions();
       if (a === 'left' || a === 'right') { actIdx = clamp(actIdx + (a === 'left' ? -1 : 1), 0, list.length - 1); audio.play('nav'); focusHome(); }
       else if (a === 'up') setZone('shelf');
-      else if (a === 'down') { if (homeClips.length) setZone('hclips'); else SV.rails.show(); }
+      else if (a === 'down') { if (homeClips.length) setZone('hclips'); else if (contItems.length) setZone('strip'); else SV.rails.show(); }
       else if (a === 'confirm') list[actIdx].run();
     }
   }
@@ -771,7 +935,7 @@
     SV.title.slash(() => {
       if (cfg.fx.space) softLeave();
       host.send('setMode', { mode: m });
-    }, 60);
+    }, 60, m === 'hidden' ? 'hide' : 'mini');
   }
   let leaveTimer = 0;
   function softLeave() {
@@ -810,7 +974,7 @@
   }, { passive: true });
   $('#funcs').addEventListener('click', (e) => {
     const b = e.target.closest('.func');
-    if (b) { topIdx = +b.dataset.i; zone = 'top'; focusHome(); audio.play('confirm'); funcs()[topIdx].run(); }
+    if (b) { const f = funcs()[+b.dataset.i]; funcSound(f); f.run(b); }
   });
   $('#filters').addEventListener('click', (e) => { const c = e.target.closest('.chip'); if (!c) return; if (c.dataset.k === '__back') exitList(); else setFilter(c.dataset.k); });
   $('#actions').addEventListener('click', (e) => {
@@ -840,8 +1004,11 @@
   // Every hint is also a button: clicking it does what the key does, so the controls are always one click away.
   const HINT_ACT = { confirm: 'confirm', back: 'back', options: 'options', settings: 'settings', mini: 'mini', tasks: 'tasks', tabs: 'tabNext', clips: 'clips',
     alt: 'alt', search: 'search', random: 'random', stats: 'stats' };
+  // Xbox-style pads get their own letters; PlayStation shapes are the default set above.
+  const XBOX = { confirm: 'A', back: 'B', options: 'MENU', settings: 'Y', mini: 'GUIDE', tabs: 'LB / RB', clips: 'X', alt: 'X', search: 'R3', random: 'VIEW', stats: 'L3' };
+  const padGlyph = (key) => `<span class="g-ps">${GLYPH.pad[key]}</span><span class="g-xb">${XBOX[key] || GLYPH.pad[key]}</span>`;
   const hints = (list) => list.map(([key, label]) =>
-    `<span class="hint" ${HINT_ACT[key] ? `data-act="${HINT_ACT[key]}" role="button"` : ''}><kbd class="kb">${GLYPH.kb[key]}</kbd><kbd class="pad">${GLYPH.pad[key]}</kbd>${esc(T(label))}</span>`).join('');
+    `<span class="hint" ${HINT_ACT[key] ? `data-act="${HINT_ACT[key]}" role="button"` : ''}><kbd class="kb">${GLYPH.kb[key]}</kbd><kbd class="pad">${padGlyph(key)}</kbd>${esc(T(label))}</span>`).join('');
   document.addEventListener('click', (e) => {
     const h = e.target.closest('.hint[data-act]');
     if (h && input.onAction) input.onAction(h.dataset.act);
@@ -871,7 +1038,7 @@
   // `g` the game, whose banner takes over the screen once it has loaded.
   function launchFx(title, sub = '', list = '', g = null) {
     launching = true;
-    audio.play('launch');
+    if (g && g.startSound) audio.preview(g.startSound); else audio.play('launch');
     input.rumble(0.8, 260);
     bg.strike();
     $('#lfTitle').textContent = title;
@@ -882,6 +1049,7 @@
     $('#lfBanner').innerHTML = (g ? art(g, 'hero') : '') + `<span class="tag">[ ${esc(cfg.texts.ready)} ]</span><b>${esc(g ? g.name : title)}</b>`;
     const node = $('#launchfx');
     node.classList.remove('out', 'waiting', 'ready');
+    SV.effects && SV.effects.launch((g && g.launchVideo) || cfg.fx.launchVideo || '');
     node.classList.add('on');
     fx.warp(true);
     if (cfg.fx.shake && cfg.backdrop.motion) {
@@ -904,6 +1072,7 @@
       if (kind && cfg.lists[kind] !== false && enterList(kind, g)) return;
     }
     if (g.target === 'sv:roblox') return SV.roblox.open(g);
+    if (g.target === 'sv:budokai') return SV.budokai.open(g);
     if (!g.target) { audio.play('error'); toast('No launch target set — open Options to add one.', 'bad'); return; }
 
     // Epic games ask which account when there is a choice; the answer comes back through opts.account.
@@ -934,6 +1103,7 @@
     clearTimeout(launchTimer);
     fx.warp(false);
     $('#launchfx').classList.remove('on', 'out', 'waiting', 'ready');
+    SV.effects && SV.effects.launchEnd();
   }
 
   // The shell reports what it is doing; each report becomes a row, and the one before it is ticked off.
@@ -992,7 +1162,7 @@
   }
 
   // Launching from the widget skips the big animation, unless an account has to be chosen first.
-  const needsPrompt = (g) => g.target === 'sv:roblox' || (g.platform === 'epic' && cfg.epic.accounts.length > 1 && cfg.behavior.promptAccount);
+  const needsPrompt = (g) => g.target === 'sv:roblox' || g.target === 'sv:budokai' || (g.platform === 'epic' && cfg.epic.accounts.length > 1 && cfg.behavior.promptAccount);
   let pendingLaunch = null;
 
   $('#miniHome').addEventListener('click', () => host.send('setMode', { mode: 'home' }));
@@ -1012,12 +1182,24 @@
 
   const stack = [];
 
+  // A screen with cover: true fills the window: HOME under it stops drawing, and so does the backdrop unless the
+  // screen wants it live (settings on the look tabs). Those were the biggest cost of having a menu open.
+  let backdropPaused = false, away = false;
+  function syncCover() {
+    const covered = stack.some((s) => s.cover && !s.liveBackdrop); // a live preview keeps HOME showing through the window
+    document.body.classList.toggle('covered', covered);
+    backdropPaused = stack.some((s) => s.cover && !s.liveBackdrop) || !!(SV.rails && SV.rails.isOpen);
+    syncBackdrop();
+  }
+  function syncBackdrop() { bg.setActive(mode === 'home' && !away && !backdropPaused); }
+
   function push(screen) {
     stack.push(screen);
     $('#overlays').append(screen.el);
     requestAnimationFrame(() => screen.el.classList.add('in'));
     audio.play('open');
     document.body.classList.add('overlaid');
+    syncCover();
   }
 
   function pop() {
@@ -1028,12 +1210,37 @@
     setTimeout(() => screen.el.remove(), 220);
     screen.onClose && screen.onClose();
     if (!stack.length) document.body.classList.remove('overlaid');
+    syncCover();
+  }
+
+  // A small menu under a button (MORE, the profile button). Items: { icon, label, sub, run, on, danger, round, tag },
+  // or 'sep' for a line between them.
+  function popover(anchor, title, items) {
+    const root = el(`<div class="overlay pop-wrap"><div class="pop"><div class="tag">[ ${esc(T(title))} ]</div><div class="pop-list"></div></div></div>`);
+    const box = $('.pop', root), list = $('.pop-list', root);
+    const r = anchor.getBoundingClientRect();
+    box.style.top = (r.bottom + 8) + 'px';
+    box.style.right = Math.max(12, innerWidth - r.right) + 'px';
+    for (const it of items) {
+      if (it === 'sep') { list.append(el('<div class="pop-sep"></div>')); continue; }
+      const b = el(`<button class="pop-item ${it.on ? 'on' : ''} ${it.danger ? 'danger' : ''}" data-row>
+        <span class="pop-ico ${it.round ? 'round' : ''}" ${it.bg ? `style="background:${esc(it.bg)}"` : ''}>${it.icon || ''}</span>
+        <span class="pop-txt"><b>${esc(T(it.label))}</b>${it.sub ? `<small>${esc(T(it.sub))}</small>` : ''}</span>${it.tag ? `<em>${esc(T(it.tag))}</em>` : ''}</button>`);
+      const run = () => { pop(); audio.play('confirm'); it.run && it.run(); };
+      b._activate = run;
+      b.addEventListener('click', run);
+      list.append(b);
+    }
+    const p = panel(list);
+    root.addEventListener('mousedown', (e) => { if (e.target === root) pop(); });
+    push({ el: root, action: (a) => p.action(a) });
+    p.focus(0);
   }
 
   const isTop = (root) => stack.length > 0 && stack[stack.length - 1].el === root;
 
   // Vertical list of [data-row] elements. Each row may carry _adjust(dir) and _activate().
-  function panel(root, { onTab } = {}) {
+  function panel(root, { onTab, onFocus } = {}) {
     let idx = 0;
     const rows = () => [...root.querySelectorAll('[data-row]')];
     const focus = (i, scroll = true) => {
@@ -1042,6 +1249,7 @@
       idx = clamp(i, 0, list.length - 1);
       list.forEach((r, k) => r.classList.toggle('focus', k === idx));
       if (scroll) list[idx].scrollIntoView({ block: 'nearest' });
+      onFocus && onFocus(list[idx]);
     };
     root.addEventListener('mousemove', (e) => {
       const r = e.target.closest('[data-row]'), i = r ? rows().indexOf(r) : -1;
@@ -1076,6 +1284,7 @@
   function changed(what) {
     applyConfig();
     save();
+    if (what !== 'games' && mode === 'home') renderContinue();
     if (what === 'games') { renderHome(); renderMini(); }
   }
 
@@ -1214,7 +1423,19 @@
 
   // ------------------------------------------------------------------ settings
 
-  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['discord', 'DISCORD'], ['developer', 'DEVELOPER'], ['system', 'SYSTEM'], ['updates', 'UPDATES']];
+  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['widgets', 'WIDGETS'], ['social', 'SOCIAL'], ['discord', 'DISCORD'], ['developer', 'DEVELOPER'], ['performance', 'PERFORMANCE'], ['system', 'SYSTEM'], ['updates', 'UPDATES'], ['data', 'DATA']];
+  const TAB_GROUPS = [['LOOK', ['theme', 'backdrop', 'effects', 'texts', 'sound']], ['LIBRARY', ['games', 'accounts', 'feeds']], ['DESKTOP', ['nexus', 'widgets', 'social', 'discord']],
+    ['SYSTEM', ['performance', 'system', 'updates', 'data', 'developer']]];
+  const TAB_INFO = {
+    theme: ['Theme', 'Colours, fonts, shapes and what shows on HOME.'], backdrop: ['Backdrop', 'The animated scene behind everything.'], effects: ['Effects', 'Motion, lights and transitions.'],
+    texts: ['Texts', 'Every piece of wording on screen.'], sound: ['Sound', 'Sound packs, music and button sounds.'], games: ['Games', 'What is on your shelf.'],
+    accounts: ['Accounts', 'Steam, Epic and Roblox sign-ins.'], feeds: ['Feeds', 'The rows under HOME.'], nexus: ['Nexus', 'Your desktop app bars.'], widgets: ['Widgets', 'Little windows on your desktop.'],
+    social: ['Social', 'Sites beside HOME.'], discord: ['Discord', 'What your Discord profile shows.'], performance: ['Performance', 'Profiles, memory and shortcuts.'], system: ['System', 'Add-ons, behaviour and language.'],
+    updates: ['Updates', 'New versions and your backups.'], data: ['Data', 'See what is inside your settings before loading them.'], developer: ['Developer', 'Roblox Studio and dev tools.'],
+  };
+  const TAB_ICON = (k) => ICON[k] || ICON.settings;
+  // Changing these is easiest with the real thing behind it, so the backdrop keeps running on these tabs.
+  const LIVE_TABS = new Set(['theme', 'backdrop', 'effects']);
   const pct = (v) => Math.round(v * 100) + '%';
 
   function settingsRows(tab, rerender) {
@@ -1246,7 +1467,37 @@
         R.choice('Cover mesh', 'Generated artwork for games without a picture.', at('theme.meshStyle'),
           [['mixed', 'Mixed'], ['tri', 'Triangles'], ['wire', 'Wireframe'], ['shard', 'Shards'], ['hex', 'Honeycomb'], ['facet', 'Facets'], ['rings', 'Rings']], () => changed('games')),
         R.choice('Tile shape', 'Corner style for tiles, buttons and panels.', at('theme.tileShape'), [['cut', 'Cut corner'], ['round', 'Rounded'], ['sharp', 'Sharp']]),
-        R.choice('Headline font', 'Typeface for titles.', at('theme.font'), Object.entries(FONTS).map(([k, f]) => [k, f[0]])),
+        heading('LOOK PRESETS'),
+        R.buttons('One-click looks', 'Clean turns off the busier effects for a calm, tidy HOME. Loud turns them back on.', [
+          ['CLEAN', () => lookPreset('clean', rerender)], ['BALANCED', () => lookPreset('balanced', rerender)], ['LOUD', () => lookPreset('loud', rerender)],
+        ]),
+        heading('FONTS'),
+        R.choice('Headline font', 'Typeface for titles. "(web)" ones download the first time.', at('theme.font'), fontChoices(Object.entries(FONTS).map(([k, f]) => [k, f[0]]))),
+        R.choice('Text font', 'Typeface for descriptions and buttons.', at('theme.bodyFont'), fontChoices([['manrope', 'Manrope'], ['rajdhani', 'Rajdhani'], ['mono', 'JetBrains Mono'], ['orbitron', 'Orbitron']])),
+        R.choice('Label font', 'The small tags like [ STEAM ].', at('theme.monoFont'), fontChoices([['mono', 'JetBrains Mono'], ['manrope', 'Manrope'], ['rajdhani', 'Rajdhani'], ['pixel', 'Press Start 2P']])),
+        R.file('Font file', 'Your own .ttf / .otf / .woff2 — then pick "My font file" above.  ← clears it.', at('theme.fontFile'), 'font'),
+        heading('TEXT'),
+        R.choice('Title style', 'How the big game name looks.', at('theme.titleStyle'), [['gradient', 'Gradient'], ['solid', 'Solid white'], ['accent', 'Accent colour'], ['outline', 'Outline'], ['glow', 'Neon glow'], ['split', 'Two-tone']]),
+        R.slider('Title size', '', at('theme.titleScale'), 0.5, 1.5, 0.05, pct),
+        R.slider('Title letter spacing', '', at('theme.titleSpacing'), -0.05, 0.3, 0.01, (v) => (v * 100).toFixed(0)),
+        R.choice('Title capitals', '', at('theme.titleCase'), [['upper', 'ALL CAPS'], ['none', 'As written']]),
+        R.choice('Label capitals', '', at('theme.tagCase'), [['upper', 'ALL CAPS'], ['none', 'As written']]),
+        R.slider('Text size', 'Descriptions, labels and buttons.', at('theme.textScale'), 0.8, 1.3, 0.05, pct),
+        heading('HOME LAYOUT'),
+        R.choice('Bottom strip', 'Under the banner: what you played last, the scrolling ticker, both, or nothing.', at('home.strip'), [['continue', 'Continue playing'], ['ticker', 'Ticker'], ['both', 'Both'], ['none', 'Nothing']], () => changed('games')),
+        R.choice('Clicking a continue card', '', at('home.stripClick'), [['start', 'Starts the game'], ['select', 'Selects it on the shelf']]),
+        R.toggle('Roblox places in continue', '', at('home.stripRoblox'), () => changed('games')),
+        R.slider('Continue scroll speed', '', at('home.stripSpeed'), 0.2, 3, 0.1, (v) => v.toFixed(1) + '×', () => changed('games')),
+        R.slider('Continue card size', '', at('home.stripSize'), 0.7, 1.4, 0.05, pct),
+        R.toggle('Big number on the banner', '', at('layout.heroNum')),
+        R.toggle('Stat boxes', 'Platform, last played, playtime…', at('layout.stats')),
+        R.toggle('Platform tags', 'The small [ STEAM ] labels.', at('layout.tags')),
+        R.toggle('Shelf heading', '[ 01 / 12 — CHOOSE YOUR GAME ]', at('layout.shelfLabel')),
+        R.toggle('Platform filters', 'ALL · STEAM · EPIC chips.', at('layout.filters')),
+        R.toggle('Control hints', 'The key hints at the bottom.', at('layout.hints')),
+        R.toggle('Profile name', '', at('layout.profileName')),
+        R.toggle('Clock', '', at('layout.clock')),
+        R.toggle('Now playing in the top bar', 'Shows the song playing on your PC (Spotify, browser…) with controls.', at('music.enabled')),
         R.choice('Texture', 'A surface laid over the whole screen.', at('theme.texture'), TEXTURES),
         R.slider('Texture strength', '', at('theme.textureOpacity'), 0, 2, 0.1, pct),
         R.file('Texture picture', 'For the My own picture texture: any image, tiled over the screen. Seamless patterns work best.  ← clears it.', { get: () => cfg.theme.textureImage || '', set: (v) => { cfg.theme.textureImage = v; if (v) cfg.theme.texture = 'custom'; } }, 'image'),
@@ -1274,6 +1525,7 @@
         R.toggle('Feature panel', 'Large artwork panel beside the game details.', at('theme.hero')),
         R.toggle('Ticker', 'Scrolling headline strip.', at('theme.ticker')),
         R.toggle('Vignette', 'Darkened screen edges.', at('theme.vignette')),
+        ...(SV.themes ? SV.themes.rows(rerender) : []),
       ];
     }
 
@@ -1330,13 +1582,18 @@
         R.level('Digital rain', 'Falling columns of code.', 'matrix'),
         heading('PHOTO'),
         R.choice('Photo backdrop', `${PHOTOS.length - 1} real photos. Combine with any style above.`, { get: () => (PHOTOS.find(([id]) => id && photoUrl(id) === cfg.backdrop.image) || [''])[0], set: (v) => { cfg.backdrop.image = photoUrl(v); } }, PHOTOS),
-        R.file('Your own picture', 'Any image behind the effects.  ← clears it.', at('backdrop.image'), 'image'),
+        R.file('Your own picture', 'Any image, GIF or video behind the effects (a video plays as a second layer).  ← clears it.', at('backdrop.image'), 'media'),
         R.slider('Picture dimming', 'How much the picture is darkened.', at('backdrop.imageDim'), 0, 0.95, 0.05, pct),
         R.slider('Photo motion', 'Slow pan and zoom over the picture. 0 keeps it still.', at('backdrop.photoMotion'), 0, 3, 0.1, pct),
         heading('VIDEO'),
         R.file('Video backdrop', 'An MP4 or WebM that loops behind everything.  ← clears it.', at('backdrop.video'), 'video'),
         R.slider('Effects over the video', 'How much of the animated backdrop is drawn on top of the video.', at('backdrop.videoMix'), 0, 1, 0.05, pct),
+        R.toggle('Pause when not in front', 'Saves a little power while another window has focus.', at('backdrop.videoPauseUnfocused')),
         R.slider('Video speed', '', at('backdrop.videoSpeed'), 0.25, 2, 0.05, (v) => v.toFixed(2) + '×'),
+        R.choice('Effects blend', 'How the animated effects mix with the video. Screen only adds light, so the video stays clear.', at('backdrop.videoBlend'), [['screen', 'Screen (adds light)'], ['lighten', 'Lighten'], ['soft', 'Soft light'], ['overlay', 'Overlay'], ['normal', 'Normal (covers it)']]),
+        R.slider('Video dimming', '', at('backdrop.videoDim'), 0, 0.9, 0.05, pct),
+        R.slider('Video blur', 'Softens the video so the menus stand out.', at('backdrop.videoBlur'), 0, 20, 1, (v) => v + ' px'),
+        R.slider('Video colour', '0 is black and white, 100% normal, more is punchier.', at('backdrop.videoSaturate'), 0, 2, 0.1, pct),
         heading('TUNING'),
         R.slider('Intensity', 'How bright the backdrop effects are.', at('backdrop.intensity'), 0.1, 1.5, 0.1, pct),
         R.slider('Speed', 'How fast everything moves.', at('backdrop.speed'), 0.2, 2.5, 0.1, (v) => v.toFixed(1) + '×'),
@@ -1362,14 +1619,44 @@
       R.toggle('Bloom', 'Headlines and the selection glow like neon.', at('fx.bloom')),
       R.toggle('Light sweeps', 'A streak of light passes over the selected tile and banner.', at('fx.sweep')),
       R.toggle('Lens flare', 'A flare that drifts with the pointer.', at('fx.flare')),
+      R.toggle('Rim light', 'A glowing line along the top that follows the pointer.', at('fx.rim')),
+      R.toggle('Beat glow', 'The screen edges pulse with your background music.', at('fx.beat')),
+      R.toggle('Parallax', 'The shelf and banner shift a little with the pointer, for depth.', at('fx.parallax')),
+      R.slider('Parallax amount', '', at('fx.parallaxAmount'), 0.2, 3, 0.1, pct),
+      R.toggle('Selection reflection', 'A soft glow under the selected tile.', at('fx.reflect')),
+      R.toggle('Colour fringe on focus', 'Red and cyan edges on the selected tile and button.', at('fx.chromaHover')),
+      R.toggle('Moving grain', 'The texture flickers like film.', at('fx.grainAnim')),
+      R.toggle('Cinematic bars', 'Black bars top and bottom, like a film.', at('fx.bars')),
+      R.slider('Bar height', '', at('fx.barsSize'), 2, 15, 1, (v) => v + '%'),
+      R.choice('Glow colour', 'Colour of the rim, beat and edge glows.', at('fx.glowColor'), [['', 'Accent'], ['var(--accent2)', 'Second accent'], ['#ffffff', 'White'], ['#00e5ff', 'Cyan'], ['#ff2bd6', 'Pink'], ['#ffd400', 'Gold']]),
       heading('TRANSITIONS'),
       R.choice('Transition style', 'How the screen changes: opening a list, going to mini, hiding and coming back.', at('fx.transition'),
-        [['slash', 'Slash'], ['shutter', 'Shutter'], ['fade', 'Fade to black'], ['iris', 'Iris'], ['zoom', 'Zoom blur'], ['glitch', 'Glitch'], ['bars', 'Light bars'], ['none', 'None']]),
+        [['slash', 'Slash'], ['shutter', 'Shutter'], ['fade', 'Fade to black'], ['iris', 'Iris'], ['zoom', 'Zoom blur'], ['glitch', 'Glitch'], ['bars', 'Light bars'],
+          ['curtain', 'Curtain'], ['diamond', 'Diamond'], ['blinds', 'Blinds'], ['spin', 'Spin'], ['pixel', 'Pixels'], ['flash', 'Flash'], ['video', 'Video (yours)'], ['none', 'None']]),
       R.button('Preview transition', '', 'PLAY', () => SV.title.slash(null, 160)),
+      R.file('Transition video', 'Your own MP4 / WebM played as the transition (pick "Video" as the style). Transparent WebM works too.  ← clears it.', at('fx.transitionVideo'), 'video'),
+      R.slider('Screen changes at', 'When in the video the screen behind it switches.', at('fx.transitionCover'), 0, 3, 0.1, (v) => v.toFixed(1) + ' s'),
+      R.slider('Longest transition', '', at('fx.transitionMax'), 0.5, 10, 0.5, (v) => v + ' s'),
+      R.toggle('Transition video sound', '', at('fx.transitionSound')),
+      ...SV.effects.lookRows('fx.transition', 'The two times above follow the video, so they stay in step.'),
+      R.button('Preview the video', 'Plays it with these settings.', 'PLAY', () => { if (!cfg.fx.transitionVideo) return toast('Pick a transition video first.', 'bad'); SV.effects && SV.effects.transition(null); }),
+      heading('A VIDEO FOR EVERY MOMENT'),
+      el('<div class="row-note">Give any moment its own video. It plays whatever the transition style is; moments left empty use the style above. They all share the speed, colour and timing settings above, and are loaded ahead of time so they start instantly.</div>'),
+      ...[['list', 'Opening a list', 'Going into RECENT, STEAM, a Roblox list…'], ['back', 'Going back', 'Leaving a list back to HOME.'], ['mini', 'Going to mini', ''],
+        ['hide', 'Hiding to the tray', ''], ['return', 'Coming back', 'When the launcher shows again (from the tray, mini or after a game).'], ['leave', 'Leaving HOME', 'When another window takes over.'], ['off', 'Turning off', '']]
+        .map(([k, label, desc]) => { cfg.fx.videos = cfg.fx.videos || {}; return R.file(label, (desc ? desc + '  ' : '') + '← clears it.', { get: () => cfg.fx.videos[k] || '', set: (v) => { cfg.fx.videos[k] = v; } }, 'video'); }),
+      el('<div class="row-note">The opening and game launch videos are set in their own sections below.</div>'),
+      heading('GAME LAUNCH VIDEO'),
+      R.file('Launch video', 'Plays full screen while a game starts. Each game can have its own (game Options → Launch video).  ← clears it.', at('fx.launchVideo'), 'video'),
+      R.toggle('Launch video sound', '', at('fx.launchVideoSound')),
+      R.toggle('Video only', 'Hide the launch screen text so only the video shows.', at('fx.launchVideoOnly')),
+      ...SV.effects.lookRows('fx.launchVideo', ''),
+      R.button('Preview launch', '', 'PLAY', () => { launchFx('PREVIEW', 'NOTHING IS STARTING'); setTimeout(endLaunch, 4000); }),
       heading('INTRO VIDEO'),
       R.file('Intro video', 'Your own MP4 or WebM, played full screen when the launcher opens. Any key skips it.  ← clears it.', at('fx.introVideo'), 'video'),
       R.toggle('Intro without sound', '', at('fx.introMuted')),
       R.slider('Longest intro', 'Skips ahead after this long, even if the video is longer.', at('fx.introMax'), 3, 120, 1, (v) => v + ' s'),
+      R.toggle('Then the built-in opening', 'Off: your video is the whole opening, straight to HOME after it.', at('fx.introThenOpening')),
       R.button('Preview intro', cfg.fx.introVideo ? '' : 'Pick a video first.', 'PLAY', () => { if (!cfg.fx.introVideo) return toast('Pick an intro video first.', 'bad'); while (stack.length) pop(); SV.effects.intro(cfg.fx.introVideo); }),
       heading('CHANGING TEXT'),
       R.text('Top bar lines', 'Lines that take turns under the logo, separated by | (e.g. NO MERCY | GG ONLY | SKYVAINT). Empty keeps the tag line.', at('fx.rotateText'), 'NO MERCY | GG ONLY'),
@@ -1393,7 +1680,7 @@
       R.toggle('High-performance GPU', 'Draws the launcher on your dedicated graphics card (NVIDIA) instead of the integrated one. Smoother, uses more battery. Needs a restart.', at('perf.dgpu')),
       R.toggle('Unlock frame rate', 'Lets the launcher draw faster than your monitor (no v-sync). Needs a restart. Can tear.', at('perf.uncapped')),
       heading('SPACE'),
-      R.choice('Opening', 'What plays when the launcher opens.', at('fx.bootStyle'), [['space', 'Warp to a planet'], ['bolt', 'Lightning bolt']]),
+      R.choice('Opening', 'What plays when the launcher opens.', at('fx.bootStyle'), [['flow', 'Neon lines, then a fade'], ['space', 'Warp to a planet'], ['bolt', 'Lightning bolt']]),
       R.toggle('Slash wipe', 'Slabs sweep across when minimizing, hiding to the tray and coming back.', at('fx.wipe')),
       R.toggle('Fade the window', 'Hiding to the tray, minimizing and coming back fade the whole window in and out of transparency.', at('fx.fadeWindow')),
       R.toggle('Warp in and out', 'Warps out when hiding to the tray or mini, and back in when HOME returns.', at('fx.space')),
@@ -1426,6 +1713,21 @@
         R.slider('Pitch', 'Shifts every interface sound up or down.', at('sound.pitch'), -12, 12, 1, (v) => (v > 0 ? '+' : '') + v + ' st'),
         R.slider('Echo', 'Adds a trailing echo to the sounds.', at('sound.echo'), 0, 1, 0.05, pct),
         R.slider('Ambient hum', 'Low drone under the HOME screen.', at('sound.ambient'), 0, 1, 0.05, pct),
+        heading('BACKGROUND MUSIC'),
+        R.button('Add a track', `${(cfg.sound.bgmTracks || []).length} track(s). Your own music plays behind HOME.`, 'ADD', () => pick('audio').then((f) => { if (f.url) { (cfg.sound.bgmTracks = cfg.sound.bgmTracks || []).push(f.url); changed(); rerender(); toast('Track added'); } })),
+        ...(cfg.sound.bgmTracks || []).map((u, i) => R.buttons(`Track ${i + 1}`, decodeURIComponent(u.split('/').pop()).slice(0, 60), [
+          ['PLAY NOW', () => { SV.effects.music.el.src = u; SV.effects.music.el.play().catch(() => {}); }],
+          ['REMOVE', () => { cfg.sound.bgmTracks.splice(i, 1); changed(); rerender(); }, 'danger'],
+        ])),
+        R.slider('Music volume', '', at('sound.bgmVolume'), 0, 1, 0.05, pct),
+        R.toggle('Shuffle', '', at('sound.bgmShuffle')),
+        R.toggle('Repeat one track', 'With a single track, loop it.', at('sound.bgmLoop')),
+        R.toggle('Pause while a game runs', '', at('sound.bgmPauseInGame')),
+        R.toggle('Keep playing in mini / tray', 'Quieter, when HOME is hidden.', at('sound.bgmInBackground')),
+        R.button('Next track', '', 'NEXT', () => SV.effects.music.next()),
+        heading('BUTTON SOUNDS'),
+        el('<div class="row-note">A sound of your own for each top bar button. Empty uses the normal click.</div>'),
+        ...FUNCS.map((f) => R.file(f.label, '', { get: () => (cfg.sound.funcs || {})[f.id] || '', set: (v) => { (cfg.sound.funcs = cfg.sound.funcs || {})[f.id] = v; } }, 'audio')),
         R.toggle('Controller rumble', 'Vibrate on launch.', at('sound.haptics')),
         R.toggle('Hover sounds', 'The cursor tick also plays when the mouse moves onto a button or tile.', at('sound.hover')),
         R.slider('Hover sound gap', 'Shortest time between two hover ticks, so sweeping the mouse across a row stays clean.', at('sound.hoverGap'), 60, 600, 20, (v) => Math.round(v) + 'ms'),
@@ -1477,44 +1779,33 @@
     if (tab === 'accounts') return [...SV.steam.rows(rerender), ...SV.epic.rows(rerender), ...SV.roblox.rows(rerender)];
     if (tab === 'nexus') return SV.nexus.rows(rerender);
     if (tab === 'updates') return SV.updates.rows(rerender);
+    if (tab === 'data') return [
+      R.button('Open my data', 'See the main profile, main menu, videos, NEXUS bars and more, for your settings and every backup.', 'OPEN', () => SV.data.open()),
+      R.button('Switch profile', 'Choose another profile or make a new one.', 'OPEN', () => { while (stack.length) pop(); SV.features.pick(); }),
+      R.button('Backups', 'Back up now, or put an older one back.', 'UPDATES', () => { while (stack.length) pop(); openSettings('updates'); }),
+    ];
     if (tab === 'developer') return SV.dev.rows(rerender);
+    if (tab === 'widgets') return SV.widgets.rows(rerender);
+    if (tab === 'social') return SV.social.rows(rerender);
+    if (tab === 'performance') return SV.care.rows(rerender);
     if (tab === 'texts') return [
       heading('WORDING'),
       ...Object.entries(TEXTS).map(([k, [label, fallback]]) => R.text(label, 'Default: ' + fallback, at('texts.' + k), fallback, 'games')),
       R.button('Default wording', 'Put every text back.', 'RESET', () => { cfg.texts = defaults().texts; changed('games'); rerender(); }),
     ];
-    if (tab === 'discord') {
-      const d = 'discord.';
-      return [
-        heading('DISCORD RICH PRESENCE'),
-        el(`<div class="row-note">Shows what you are playing on your Discord profile, worded your way. Needs the Discord app running and an Application ID: create an application at discord.com/developers (its name is what Discord shows as "Playing …"), then paste its ID here. Words in {braces} fill in: {game} {platform} {account} {count} {profile}.<br>Status: <b class="discord-status">${esc(discordStatus)}</b></div>`),
-        R.toggle('Rich Presence', '', at(d + 'enabled'), () => host.send('discordReconnect')),
-        R.text('Application ID', 'From discord.com/developers → your application → General Information.', at(d + 'clientId'), '123456789012345678'),
-        R.button('Connect now', 'Try again straight away.', 'CONNECT', () => host.send('discordReconnect')),
-        heading('WHILE PLAYING'),
-        R.text('Top line', '', at(d + 'details'), 'Playing {game}'),
-        R.text('Second line', '', at(d + 'state'), 'on {platform}'),
-        R.toggle('Show time elapsed', '', at(d + 'elapsed')),
-        heading('WHILE IN THE LAUNCHER'),
-        R.toggle('Show a status when no game is running', '', at(d + 'idle')),
-        R.text('Top line', '', at(d + 'idleDetails'), 'In the launcher'),
-        R.text('Second line', '', at(d + 'idleState'), '{count} games ready'),
-        heading('PICTURES AND BUTTONS'),
-        R.text('Large picture', 'An image link (https://…) or the name of an art asset uploaded to your Discord application.', at(d + 'largeImage'), 'https://…/logo.png'),
-        R.text('Large picture text', 'Shown when hovering the picture.', at(d + 'largeText'), '{profile}'),
-        R.text('Small picture', '', at(d + 'smallImage'), ''),
-        R.text('Small picture text', '', at(d + 'smallText'), ''),
-        R.text('Button 1 label', '', at(d + 'button1Label'), 'My website'),
-        R.text('Button 1 link', '', at(d + 'button1Url'), 'https://skyvaint.com'),
-        R.text('Button 2 label', '', at(d + 'button2Label'), ''),
-        R.text('Button 2 link', '', at(d + 'button2Url'), ''),
-      ];
-    }
+    if (tab === 'discord') return SV.rp.rows(rerender, () => discordStatus);
 
     const startChoice = { get: () => (autostart ? cfg.behavior.autostartMode : 'off'), set: (v) => { autostart = v !== 'off'; if (autostart) cfg.behavior.autostartMode = v; host.send('setAutostart', { on: autostart }); } };
     return [
+      ...(SV.features ? SV.features.rows(rerender) : []),
+      heading('GENERAL'),
       R.choice('Language', 'The language of the interface. Your game names and own wording stay as they are.', at('language'), SV.i18n.LANGS, () => { changed('games'); rerender(0); }),
       R.text('Profile name', 'Shown in the top bar.', at('profile.name'), 'your name', 'games'),
+      heading('CLIPS'),
+      R.choice('Clip recorder', 'What SAVE A CLIP presses for you.', at('clips.recorder'), [['gamebar', 'Xbox Game Bar — save last 30 s (Win+Alt+G)'], ['gamebarRec', 'Xbox Game Bar — start / stop (Win+Alt+R)'],
+        ['nvidia', 'NVIDIA ShadowPlay (Alt+F10)'], ['amd', 'AMD ReLive (Ctrl+Shift+S)'], ['medal', 'Medal (F8)'], ['obs', 'OBS replay (Ctrl+Alt+R)'], ['custom', 'My own shortcut']]),
+      R.text('My own shortcut', 'Like Ctrl+Shift+F9 — for the "My own shortcut" choice.', at('clips.recordKeys'), 'Ctrl+Shift+F9'),
+      R.button('Save a clip now', '', 'CLIP', () => SV.clips.record()),
       R.toggle('Clips on HOME', 'Shows your newest clips of the selected game under its buttons.', at('home.clips'), () => renderHomeClips()),
       R.file('Profile picture', 'Square images work best.  ← clears it.', at('profile.avatar'), 'image'),
       R.choice('After starting a game', 'What the launcher does once the game is launching.', at('behavior.afterLaunch'), [['hidden', 'Hide to tray'], ['mini', 'Shrink to mini'], ['stay', 'Stay open']]),
@@ -1524,7 +1815,7 @@
       R.choice('When the game closes', 'Only applies to games started from here.', at('behavior.onGameExit'), [['home', 'Return to HOME'], ['none', 'Do nothing']]),
       R.toggle('Ask which account', 'Prompt for an Epic account each time when more than one is saved. Off uses the last one per game.', at('behavior.promptAccount')),
       R.choice('Closing the window', 'Alt + F4 never quits; the launcher keeps running.', at('behavior.closeAction'), [['hidden', 'Hide to tray'], ['mini', 'Shrink to mini']]),
-      R.choice('Start with Windows', 'Runs in the background at sign-in.', startChoice, [['off', 'Off'], ['hidden', 'On — in tray'], ['mini', 'On — as mini']]),
+      R.choice('Start with Windows', 'Starts first thing when you sign in, ahead of your other start-up apps.', startChoice, [['off', 'Off'], ['home', 'On — HOME on screen'], ['hidden', 'On — in tray'], ['mini', 'On — as mini']]),
       R.toggle('Opening animation', 'Bolt intro when HOME first appears.', at('behavior.bootAnim')),
       R.toggle('Mini stays on top', 'Keep the mini widget above other windows.', at('behavior.miniOnTop')),
       R.choice('Mini size', 'Size of the game tiles in the mini widget.', at('behavior.miniSize'), [['s', 'Small'], ['m', 'Medium'], ['l', 'Large']], renderMini),
@@ -1540,26 +1831,144 @@
 
   function openSettings(first = 'theme') {
     const root = el(`
-      <div class="overlay"><div class="sheet">
-        <div class="sheet-head"><div><div class="tag">[ CUSTOMIZE ]</div><h2>SETTINGS</h2></div><div class="tabs"></div></div>
-        <div class="sheet-body"></div>
-        <div class="hints">${hints([['confirm', 'Change'], ['adjust', 'Adjust'], ['tabs', 'Switch tab'], ['back', 'Close']])}</div>
+      <div class="overlay st-screen"><div class="st">
+        <nav class="st-nav">
+          <div class="tag">[ CUSTOMIZE ]</div><h2>${esc(T('SETTINGS'))}</h2>
+          <input class="st-search" type="search" spellcheck="false" placeholder="${esc(T('Search every setting…'))}">
+          <div class="st-tabs"></div>
+        </nav>
+        <main class="st-main"><header class="st-head"><div><h3></h3><p></p></div>
+          <div class="st-scale" role="group" aria-label="${esc(T('Settings size'))}"><span>${esc(T('SCALE'))}</span><button data-d="-1" aria-label="${esc(T('Smaller'))}">−</button><button class="st-scale-now" data-d="0" title="${esc(T('Back to 100%'))}"></button><button data-d="1" aria-label="${esc(T('Bigger'))}">+</button></div>
+        </header><div class="st-body"></div></main>
+        <aside class="st-aside">
+          <button class="st-card st-me"><span class="pp-av"></span><span><b></b><small></small></span></button>
+          <div class="st-card st-help"><span class="tag"></span><b></b><p></p></div>
+          <div class="st-live"></div>
+        </aside>
+        <footer class="st-foot"><div class="hints">${hints([['confirm', 'Change'], ['adjust', 'Adjust'], ['tabs', 'Switch page'], ['search', 'Search'], ['random', 'Scale'], ['back', 'Close']])}</div></footer>
       </div></div>`);
-    const body = $('.sheet-body', root), tabs = $('.tabs', root);
-    let tab = first;
-    const p = panel(body, { onTab: (d) => show(TABS[(TABS.findIndex((t) => t[0] === tab) + d + TABS.length) % TABS.length][0]) });
+    const body = $('.st-body', root), tabs = $('.st-tabs', root), search = $('.st-search', root);
+    const headT = $('.st-head h3', root), headP = $('.st-head p', root), helpTag = $('.st-help .tag', root), helpB = $('.st-help b', root), helpP = $('.st-help p', root), live = $('.st-live', root);
+    let tab = first, query = '', inNav = false;
+
+    // The size of this screen, on its own: HOME's size setting doesn't touch it.
+    const SCALE_MIN = 0.7, SCALE_MAX = 1.5, SCALE_STEP = 0.1;
+    const scaleNow = $('.st-scale-now', root), st = $('.st', root);
+    function paintScale() {
+      const v = cfg.layout.settingsScale || 1;
+      st.style.zoom = v;
+      scaleNow.textContent = Math.round(v * 100) + '%';
+      $('.st-scale [data-d="-1"]', root).disabled = v <= SCALE_MIN + 0.001;
+      $('.st-scale [data-d="1"]', root).disabled = v >= SCALE_MAX - 0.001;
+    }
+    function setScale(v) {
+      cfg.layout.settingsScale = Math.round(clamp(v, SCALE_MIN, SCALE_MAX) * 10) / 10;
+      paintScale();
+      audio.play('toggle');
+      save();
+    }
+    $('.st-scale', root).addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (b) setScale(+b.dataset.d ? (cfg.layout.settingsScale || 1) + SCALE_STEP * +b.dataset.d : 1);
+    });
+    paintScale();
+    const order = TAB_GROUPS.flatMap(([, list]) => list).filter((k) => TABS.some((t) => t[0] === k));
+
+    // The profile card: pressing it goes to the profile frame.
+    const me = $('.st-me', root);
+    function paintMe() {
+      const a = cfg.profile.avatar, av = $('.pp-av', me), now = SV.features && SV.features.current();
+      av.textContent = a ? '' : (cfg.profile.name[0] || 'S').toUpperCase();
+      av.style.backgroundImage = a ? `url("${a}")` : '';
+      $('b', me).textContent = cfg.profile.name;
+      $('small', me).textContent = (cfg.theme.preset || 'custom') + (now ? ' · ' + T('SWITCH PROFILE') : '');
+    }
+    me.addEventListener('click', () => { while (stack.length) pop(); SV.features.pick(); });
+
+    // The right side repeats what you're on, in full, so a long description never gets cut off.
+    function help(rowEl) {
+      helpTag.textContent = query ? T('SEARCH') : (TAB_INFO[tab] ? T(TAB_INFO[tab][0]) : '');
+      const b = rowEl && rowEl.querySelector('.row-l b'), s = rowEl && rowEl.querySelector('.row-l small');
+      helpB.textContent = b ? b.textContent : (TAB_INFO[tab] ? T(TAB_INFO[tab][0]) : '');
+      helpP.textContent = s && s.textContent ? s.textContent : (TAB_INFO[tab] ? T(TAB_INFO[tab][1]) : '');
+    }
+    function setLive() {
+      const on = LIVE_TABS.has(tab) && !query;
+      const me2 = stack.find((s) => s.el === root);
+      if (me2) { me2.liveBackdrop = on; syncCover(); }
+      root.classList.toggle('solid', !on);
+      live.textContent = on ? T('LIVE PREVIEW') : '';
+    }
+    function paintNav() {
+      root.classList.toggle('in-nav', inNav);
+      tabs.querySelectorAll('.st-tab').forEach((t) => t.classList.toggle('on', !query && t.dataset.k === tab));
+      const on = $('.st-tab.on', tabs);
+      if (on) on.scrollIntoView({ block: 'nearest' });
+    }
+    tabs.innerHTML = TAB_GROUPS.map(([group, list]) => `<div class="st-group">${esc(T(group))}</div>` + list.filter((k) => TABS.some((t) => t[0] === k)).map((k) =>
+      `<button class="st-tab" data-k="${k}"><svg viewBox="0 0 24 24">${TAB_ICON(k)}</svg><span>${esc(T((TAB_INFO[k] || [k])[0]))}</span></button>`).join('')).join('');
+
+    // Search: the matching rows from every tab, each under the name of its tab.
+    function showSearch(focusIdx = 0) {
+      const q = query.toLowerCase(), out = [];
+      for (const [k, label] of TABS) {
+        let list = [];
+        try { list = settingsRows(k, () => { if (root.isConnected) showSearch(p.idx); }); } catch { continue; }
+        const hits = list.filter((r) => r.matches && r.matches('[data-row]') && r.textContent.toLowerCase().includes(q));
+        if (hits.length) out.push(heading(T(label) + ' · ' + hits.length), ...hits);
+      }
+      if (!out.length) out.push(el(`<div class="row-note">${esc(T('Nothing matches'))} “${esc(query)}”.</div>`));
+      headT.textContent = T('Search');
+      headP.textContent = `“${query}”`;
+      paintNav();
+      setLive();
+      body.replaceChildren(...out);
+      p.focus(focusIdx);
+    }
+    let searchTimer = 0;
+    search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { query = search.value.trim(); if (query) showSearch(); else show(tab); }, 160); });
+    search.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); if (search.value) { search.value = ''; query = ''; show(tab); } else search.blur(); }
+      else if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); search.blur(); }
+    });
+    const step = (d) => order[(order.indexOf(tab) + d + order.length) % order.length];
+    const p = panel(body, { onTab: (d) => show(step(d)), onFocus: help });
 
     function show(next, focusIdx = 0) {
       if (next !== tab) audio.play('nav');
+      const changedTab = next !== tab;
       tab = next;
-      tabs.innerHTML = TABS.map(([k, label]) => `<button class="tab ${k === tab ? 'on' : ''}" data-k="${k}">${esc(T(label))}</button>`).join('');
+      if (query) { query = ''; search.value = ''; }
+      const info = TAB_INFO[tab] || [tab, ''];
+      headT.textContent = T(info[0]);
+      headP.textContent = T(info[1]);
+      paintNav();
+      setLive();
       body.replaceChildren(...settingsRows(tab, (i) => { if (root.isConnected) show(tab, i ?? p.idx); }));
+      if (changedTab) { body.scrollTop = 0; body.style.animation = 'none'; void body.offsetWidth; body.style.animation = ''; }
+      paintMe();
       p.focus(focusIdx);
     }
-    tabs.addEventListener('click', (e) => { const b = e.target.closest('.tab'); if (b) show(b.dataset.k); });
-    root.addEventListener('mousedown', (e) => { if (e.target === root) pop(); });
+    tabs.addEventListener('click', (e) => { const b = e.target.closest('.st-tab'); if (b) { inNav = false; show(b.dataset.k); } });
+    push({
+      el: root, cover: true, liveBackdrop: LIVE_TABS.has(tab),
+      action(a) {
+        if (a === 'search') return search.focus();
+        // One button for controllers: goes up a step at a time, then round to the smallest.
+        if (a === 'random') { const v = cfg.layout.settingsScale || 1; return setScale(v >= SCALE_MAX - 0.001 ? SCALE_MIN : v + SCALE_STEP); }
+        // Left from a row that has nothing to adjust steps out to the page list, for controllers.
+        if (inNav) {
+          if (a === 'up' || a === 'down') return show(step(a === 'up' ? -1 : 1));
+          if (a === 'right' || a === 'confirm') { inNav = false; audio.play('nav'); return paintNav(); }
+          if (a === 'back') { inNav = false; return paintNav(); }
+        } else if (a === 'left') {
+          const rows = [...body.querySelectorAll('[data-row]')], r = rows[p.idx];
+          if (!r || !r._adjust) { inNav = true; audio.play('nav'); return paintNav(); }
+        }
+        return p.action(a);
+      },
+    });
     show(tab);
-    push({ el: root, action: p.action });
   }
 
   // ------------------------------------------------------------------ menus, editor, scan
@@ -1672,6 +2081,10 @@
       { label: 'CHANGE BANNER', sub: 'A picture, GIF or MP4 for the big panel', run: () => pick('media').then((f) => { if (f.url) { g.hero = f.url; changed('games'); toast('Banner changed'); } }) },
       { label: 'ICON FROM A PROGRAM', sub: 'Use the icon of any .exe', run: () => pick('exe').then((f) => { if (f.icon) { g.icon = f.icon; changed('games'); toast('Icon changed'); } }) },
       ...(g.icon ? [{ label: 'DEFAULT ICON', sub: 'Back to the detected icon', run: () => { g.icon = ''; changed('games'); } }] : []),
+      { label: 'LAUNCH VIDEO', sub: g.launchVideo ? 'Set — plays while it starts' : 'A video that plays while this game starts', run: () => pick('video').then((f) => { if (f.url) { g.launchVideo = f.url; changed('games'); toast('Launch video set'); } }) },
+      ...(g.launchVideo ? [{ label: 'REMOVE LAUNCH VIDEO', run: () => { g.launchVideo = ''; changed('games'); } }] : []),
+      { label: 'START SOUND', sub: g.startSound ? 'Set' : 'A sound of your own when you start this game', run: () => pick('audio').then((f) => { if (f.url) { g.startSound = f.url; changed('games'); audio.preview(f.url); } }) },
+      ...(g.startSound ? [{ label: 'REMOVE START SOUND', run: () => { g.startSound = ''; changed('games'); } }] : []),
       { label: 'CHANGE COVER', sub: 'A picture, GIF or MP4 for the tile', run: () => pick('media').then((f) => { if (f.url) { g.cover = f.url; changed('games'); toast('Cover changed'); } }) },
       { label: 'MOVE LEFT', run: () => move(-1) },
       { label: 'MOVE RIGHT', run: () => move(1) },
@@ -1790,7 +2203,7 @@
   function autoImport() {
     let added = 0;
     const take = (list) => list.filter((s) => !known(s)).forEach((s) => { cfg.games.push(fromScan(s)); added++; });
-    for (const k of ['roblox', 'epic', 'steam']) {
+    for (const k of ['roblox', 'epic', 'steam', 'emu']) {
       const found = scan.filter((s) => s.platform === k);
       if (cfg.imported[k] || !found.length) continue;
       take([...found.filter((s) => s.installed !== false), ...found.filter((s) => s.installed === false)]);
@@ -1996,17 +2409,26 @@
 
   // ------------------------------------------------------------------ boot + mode
 
-  let introPlayed = false;
+  let introPlayed = false, wokeUp = false;
   function boot() {
     const body = document.body;
     body.classList.remove('preinit');
     // Your own intro video plays first, then the normal opening (or straight to HOME if that is off).
-    if (mode === 'home' && cfg.fx.introVideo && !introPlayed && SV.effects) { introPlayed = true; return SV.effects.intro(cfg.fx.introVideo, boot); }
-    if (mode !== 'home' || !cfg.behavior.bootAnim) { body.classList.add('entered'); return; }
+    if (mode === 'home' && cfg.fx.introVideo && !introPlayed && !wokeUp && SV.effects) {
+      introPlayed = true;
+      // Your video is the opening: straight to HOME after it, unless you want the built-in one as well.
+      return SV.effects.intro(cfg.fx.introVideo, cfg.fx.introThenOpening ? boot : () => { body.classList.remove('preinit'); body.classList.add('entered'); });
+    }
+    if (mode !== 'home' || !cfg.behavior.bootAnim || wokeUp) { body.classList.add('entered'); return; }
     $('#bootName').innerHTML = [...cfg.texts.brand].map((c, i) => `<span style="--i:${i}">${c === ' ' ? '&nbsp;' : esc(c)}</span>`).join('');
     $('#bootWelcome').textContent = cfg.texts.welcome ? `${cfg.texts.welcome}, ${cfg.profile.name}`.toUpperCase() : '';
+    // Neon lines, then a fade straight into HOME.
+    if (cfg.fx.bootStyle === 'flow' && cfg.backdrop.motion && SV.intro && SV.intro.play({
+      accent: cfg.theme.accent, accent2: cfg.theme.accent2, bg: cfg.theme.bg, sound: (name) => audio.play(name),
+      onEnter: () => body.classList.add('entered'),
+    })) return;
     // Space opening: a warp through the stars to a planet rising over the horizon, then the name.
-    if (cfg.fx.bootStyle === 'space' && cfg.backdrop.motion) {
+    if (cfg.fx.bootStyle !== 'bolt' && cfg.backdrop.motion) {
       body.classList.add('booting', 'boot-space');
       audio.play('boot');
       SV.space.play('boot');
@@ -2028,7 +2450,7 @@
     const was = mode;
     mode = m;
     document.body.dataset.mode = m === 'home' ? 'home' : 'mini';
-    bg.setActive(m === 'home');
+    syncBackdrop();
     audio.setAmbientActive(m === 'home');
     input.setEnabled(m === 'home');
     fit();
@@ -2039,7 +2461,7 @@
       document.body.classList.remove('entered');
       void document.body.offsetWidth;
       document.body.classList.add('entered'); // replay the entrance
-      if (cfg.fx.wipe) SV.title.reveal();
+      if (cfg.fx.wipe || (cfg.fx.videos || {}).return) SV.title.reveal();
       else if (cfg.fx.space && cfg.backdrop.motion && !document.body.classList.contains('booting')) SV.space.play('arrive');
       audio.play('open');
       if (pendingLaunch) { const g = pendingLaunch; pendingLaunch = null; setTimeout(() => launch(g), 350); }
@@ -2067,7 +2489,11 @@
       });
       if (cfg.games.some((g) => g.platform === 'epic')) cfg.imported.epic = true;
     }
-    cfg.v = 6;
+    // 2.8: starts first thing after signing in, with HOME on screen. The setting can still be changed in SYSTEM.
+    if (saved && from < 7) { autostart = true; cfg.behavior.autostartMode = 'home'; host.send('setAutostart', { on: true }); }
+    // 2.8: the neon opening is the one you see, and it follows your own intro video if you have one.
+    if (saved && from < 8) { cfg.fx.bootStyle = 'flow'; cfg.behavior.bootAnim = true; if (cfg.fx.introVideo) cfg.fx.introThenOpening = true; }
+    cfg.v = 8;
     // Configs from before per-account import: whichever Steam accounts already have games on the shelf count as done.
     if (!cfg.imported.steamAccounts)
       cfg.imported.steamAccounts = [...new Set(scan.filter((s) => s.platform === 'steam' && known(s)).flatMap((s) => s.owners || []))];
@@ -2085,6 +2511,7 @@
     // logged, and the launcher still opens, instead of staying on a black screen.
     let added = 0, imported = false;
     try {
+      wokeUp = !!m.wake; // back from page sleep: straight to HOME, no opening
       scan = m.scan || [];
       stats = m.stats || {};
       autostart = !!m.autostart;
@@ -2099,7 +2526,7 @@
       applyConfig();
       renderHome();
       renderMini();
-      bg.setActive(mode === 'home');
+      syncBackdrop();
       audio.setAmbientActive(mode === 'home');
       input.setEnabled(mode === 'home');
       save();
@@ -2121,7 +2548,7 @@
   });
   host.on('mode', (m) => setMode(m.mode));
   // Leaving HOME by other means (tray, hotkey, closing the window): the shell waits for this warp-out.
-  host.on('leave', () => { if (mode === 'home') SV.title.slash(() => { if (cfg.fx.space) softLeave(); }, 60); });
+  host.on('leave', () => { if (mode === 'home') SV.title.slash(() => { if (cfg.fx.space) softLeave(); }, 60, 'leave'); });
   // Alt-tabbing to a game dims and pauses HOME; coming back plays a short re-entry.
   // Coming back after installing or signing in to a store: look again, so its games appear without a restart.
   const setupShown = () => mode === 'home' && !sub && shown.some((g) => g.setup);
@@ -2130,7 +2557,8 @@
     if (m.on && setupShown()) rescanStores(true);
     if (!cfg.fx.focusFx || mode !== 'home') return;
     document.body.classList.toggle('away', !m.on);
-    bg.setActive(m.on);
+    away = !m.on;
+    syncBackdrop();
     if (m.on && cfg.backdrop.motion) SV.space.play('refocus');
   });
   host.on('soundLibrary', (m) => { cfg.sound.library = m.sounds || []; save(); });
@@ -2193,11 +2621,12 @@
       audio.play('hover', cfg.sound.hoverVolume ?? 0.6);
     }, cfg.sound.hoverDwell ?? 70);
   }, { passive: true });
+  host.on('playSound', (m) => m.url && audio.preview(m.url));
   host.on('notice', (m) => { audio.play(m.ok ? 'pick' : 'error'); toast(m.text, m.ok ? '' : 'bad'); });
   let discordStatus = 'Off';
   host.on('discordStatus', (m) => { discordStatus = m.status; const n = document.querySelector('.discord-status'); if (n) n.textContent = m.status; });
   host.on('running', (m) => { running = new Set(m.ids || []); if (m.stats) stats = m.stats; updateRunning(); });
-  host.on('stats', (m) => { stats = { ...stats, ...m.stats }; renderStats(); SV.quests.refresh(); });
+  host.on('stats', (m) => { stats = { ...stats, ...m.stats }; renderStats(); SV.quests.refresh(); if (mode === 'home' && !launching) renderContinue(); });
   host.on('launchFailed', (m) => {
     audio.play('error');
     toast('Could not start: ' + m.error, 'bad');
@@ -2217,7 +2646,7 @@
     get mode() { return mode; },
     get launching() { return launching; },
     $, el, esc, clamp, hash, shiftHue, meshSVG, toast, hints, at, prop, lastPlayed, T,
-    stack, push, pop, isTop, panel, row, heading, R, pick, ask, openMenu, confirmMenu, changed, save, openSettings, leaveTo, openTasks, refreshList, launchDirect, exitList,
+    stack, push, pop, isTop, panel, popover, syncCover, row, heading, R, pick, ask, openMenu, confirmMenu, changed, save, openSettings, leaveTo, openTasks, refreshList, launchDirect, exitList,
     get inList() { return !!sub; },
     launchFx, endLaunch, armLaunchTimeout, renderStats, renderActions, artSrc, scanOf, isInstalled, launch, jumpTo, playtime,
     get running() { return running; },

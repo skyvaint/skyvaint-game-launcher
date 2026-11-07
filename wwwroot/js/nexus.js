@@ -115,7 +115,7 @@
   // The main bar is cfg.nexus itself; extra bars live in cfg.nexus.bars, each with its own items and settings.
   const BAR_DEFAULTS = { enabled: true, position: 'bottom', size: 52, backing: 'glass', names: true, autohide: false, magnify: true, hideFullscreen: true,
     align: 'center', gap: 12, radius: 22, offset: 0, idleOpacity: 100, opacity: 47, magnifyAmount: 145, glow: 100, indicator: 'dot', bounce: true, alwaysNames: false,
-    tagStyle: 'dark', visibility: 'always', fadeStyle: 'fade', fadeMs: 220, length: 0, hoverStyle: 'magnify', clickMode: 'single', launchMode: 'normal' };
+    tagStyle: 'dark', group: true, visibility: 'always', fadeStyle: 'fade', fadeMs: 220, length: 0, hoverStyle: 'magnify', clickMode: 'single', launchMode: 'normal' };
   const PRESETS = {
     desktop: { name: 'Desktop dock', visibility: 'desktop', position: 'bottom', length: 55, backing: 'glass', size: 60, hoverStyle: 'magnify' },
     side: { name: 'Side bar', visibility: 'always', position: 'left', backing: 'pill', size: 44, hoverStyle: 'lift', autohide: true },
@@ -141,6 +141,23 @@
     toast(`${b.name} added — pick what goes on it below`);
     after && after(0);
   }
+  // A copy of a bar with its own apps and the same look, straight after it.
+  function duplicateBar(x, after) {
+    const b = JSON.parse(JSON.stringify(x));
+    delete b.bars;
+    for (const [k, v] of Object.entries(BAR_DEFAULTS)) if (b[k] === undefined) b[k] = v;
+    b.id = newId();
+    b.name = nameOf(x) + ' copy';
+    b.enabled = true;
+    b.items = (b.items || []).map((it) => ({ ...it, id: newId() }));
+    const list = extras(), i = list.indexOf(x);
+    list.splice(i < 0 ? 0 : i + 1, 0, b);
+    editing = b.id;
+    A.changed();
+    audio.play('pick');
+    toast(`${b.name} added`);
+    after && after(0);
+  }
   function removeBar(b, after) {
     A.confirmMenu(`Remove ${nameOf(b)}?`, 'REMOVE', () => {
       nx().bars = extras().filter((x) => x !== b);
@@ -148,6 +165,19 @@
       A.changed();
       after && after(0);
     });
+  }
+
+  // A colour setting: a few presets, or any colour of your own (which then gets its own picker row).
+  const SWATCHES = [['#ffffff', 'White'], ['#3ddc84', 'Green'], ['#00e5ff', 'Cyan'], ['#a970ff', 'Purple'], ['#ff2bd6', 'Pink'], ['#ffd400', 'Gold'], ['#ff3b3b', 'Red']];
+  function colourRows(b, key, label, desc, theme, rerender) {
+    const opts = [['', theme], ...SWATCHES, ['custom', 'My colour']];
+    const known = (v) => opts.some((o) => o[0] === v && v !== 'custom');
+    const choice = R.choice(label, desc, {
+      get: () => (known(b[key] || '') ? b[key] || '' : 'custom'),
+      set: (v) => { b[key] = v === 'custom' ? b[key + 'Own'] || '#7a5cff' : v; },
+    }, opts, () => { A.changed(); rerender(); });
+    if (known(b[key] || '')) return [choice];
+    return [choice, R.color('My ' + label.toLowerCase(), '', { get: () => b[key] || '#7a5cff', set: (v) => { b[key] = b[key + 'Own'] = v; } }, () => A.changed())];
   }
 
   function rows(rerender) {
@@ -164,6 +194,7 @@
           `${x.enabled ? 'ON' : 'OFF'} · ${(x.position || 'bottom').toUpperCase()} · ${(x.items || []).length} ITEMS · ${{ desktop: 'DESKTOP ONLY', apps: 'NOT ON THE DESKTOP' }[x.visibility] || 'ALWAYS'}`, [
             ['EDIT', () => { editing = idOf(x); audio.play('confirm'); rerender(0); }],
             ['RENAME', () => A.ask({ tag: 'NEXUS', title: 'RENAME BAR', label: 'Name', value: nameOf(x), done: (v) => { x.name = v; A.changed(); rerender(); } })],
+            ['DUPLICATE', () => duplicateBar(x, rerender)],
             ...(x === nx() ? [] : [['REMOVE', () => removeBar(x, rerender), 'danger']]),
           ]);
         if (idOf(x) === editing) r.classList.add('editing');
@@ -179,7 +210,8 @@
       R.toggle('Step aside for fullscreen', 'Hides while a game or video covers the whole screen.', P('hideFullscreen')),
       R.toggle('Auto-hide', 'Tucks away until the pointer reaches that edge.', P('autohide')),
       R.choice('Position', 'Which screen edge it sits on.', P('position'), [['bottom', 'Bottom'], ['top', 'Top'], ['left', 'Left'], ['right', 'Right']]),
-      R.choice('Alignment', 'Where along the edge the bar sits.', P('align'), [['center', 'Centre'], ['start', 'Start (left / top)'], ['end', 'End (right / bottom)']]),
+      R.toggle('Share the edge', 'Bars on the same edge sit side by side in the middle; when they do not fit they all shrink, and a hidden one makes room.', P('group')),
+      R.choice('Alignment', 'Where along the edge the bar sits (when it has the edge to itself).', P('align'), [['center', 'Centre'], ['start', 'Start (left / top)'], ['end', 'End (right / bottom)']]),
       R.slider('Bar length', '0 fits the icons; higher stretches the bar along the edge.', P('length'), 0, 100, 5, (v) => (v ? v + '% of the edge' : 'FIT')),
       R.slider('Distance from the edge', '', P('offset'), 0, 120, 4, (v) => v + ' px'),
       heading('FADE IN AND OUT'),
@@ -205,6 +237,8 @@
       R.choice('Launch mode', 'How apps open from this bar. "Bring forward" switches to the app if it is already open instead of starting another.', P('launchMode'),
         [['normal', 'Normal window'], ['maximized', 'Maximized'], ['minimized', 'Minimized'], ['focus', 'Bring forward if open']]),
       R.choice('Running indicator', 'How a running app is marked.', P('indicator'), [['dot', 'Dot'], ['bar', 'Bar'], ['glow', 'Glow'], ['none', 'None']]),
+      ...colourRows(b, 'dotColor', 'Dot colour', 'Colour of the running dot, bar or glow.', 'Second accent', rerender),
+      ...colourRows(b, 'hoverColor', 'Hover glow colour', 'The glow behind a logo under the pointer.', 'Accent', rerender),
       R.toggle('Bounce on click', '', P('bounce')),
 
       heading(`ON ${nameOf(b).toUpperCase()} · ${items.length}`),
@@ -212,6 +246,8 @@
       ...items.map((it, i) => R.buttons(it.name, `${{ game: 'GAME', url: 'WEBSITE', home: 'LAUNCHER · opens HOME' }[it.kind] || 'APP'}${it.target ? ' · ' + it.target : ''}${it.launchMode && it.launchMode !== 'bar' ? ' · OPENS ' + it.launchMode.toUpperCase() : ''}   ← → reorders`, [
         ['▲', () => move(i, -1), 'ghost'], ['▼', () => move(i, 1), 'ghost'],
         ['ICON', () => A.pick('image').then((f) => { if (f.url) { it.icon = f.url; it.customIcon = true; A.changed(); rerender(); } })],
+        [it.sound ? 'SOUND ✓' : 'SOUND', () => (it.sound ? A.openMenu(it.name, [{ label: 'PLAY IT', run: () => audio.preview(it.sound) }, { label: 'CHANGE', run: () => A.pick('audio').then((f) => { if (f.url) { it.sound = f.url; A.changed(); rerender(); } }) }, { label: 'REMOVE', danger: true, run: () => { it.sound = ''; A.changed(); rerender(); } }])
+          : A.pick('audio').then((f) => { if (f.url) { it.sound = f.url; A.changed(); rerender(); audio.preview(f.url); } }))],
         ...(it.kind === 'app' ? [['OPENS', () => A.openMenu(it.name, [['bar', 'Like the bar'], ['normal', 'Normal window'], ['maximized', 'Maximized'], ['minimized', 'Minimized'], ['focus', 'Bring forward if open']]
           .map(([k, label]) => ({ label, sub: (it.launchMode || 'bar') === k ? 'current' : '', run: () => { it.launchMode = k; A.changed(); rerender(); } })))]] : []),
         ...(bars.length > 1 ? [['MOVE TO…', () => A.openMenu('MOVE TO WHICH BAR?', bars.filter((x) => x !== b).map((x) => ({ label: nameOf(x), run: () => { items.splice(i, 1); (x.items || (x.items = [])).push(it); A.changed(); rerender(); } })))]] : []),

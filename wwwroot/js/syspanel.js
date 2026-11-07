@@ -5,7 +5,7 @@
   const { $, el, esc } = A;
   const gb = (b) => (b / 1073741824 >= 100 ? Math.round(b / 1073741824) : (b / 1073741824).toFixed(1)) + ' GB';
 
-  const who = $('#topbar .who');
+  const who = $('#topbar .status');
   const panel = el(`
     <div id="syspanel">
       <div class="sp-head"><span class="sp-avatar"></span><div><b class="sp-name"></b><small class="tag">[ ${esc(A.T('THIS PC'))} ]</small></div></div>

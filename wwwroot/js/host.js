@@ -6,7 +6,8 @@ SV.host = (() => {
   const handlers = {};
 
   const on = (type, fn) => (handlers[type] = handlers[type] || []).push(fn);
-  const emit = (msg) => (handlers[msg.type] || []).forEach((fn) => fn(msg));
+  // One handler failing doesn't stop the others from getting the message.
+  const emit = (msg) => (handlers[msg.type] || []).forEach((fn) => { try { fn(msg); } catch (e) { console.error('[' + msg.type + ']', e); (SV.errors = SV.errors || []).push(msg.type + ': ' + (e && e.message)); } });
 
   // A handler that throws must not stop the others (or later messages): log it and carry on.
   const emitSafe = (msg) => (handlers[msg.type] || []).forEach((fn) => {
@@ -64,6 +65,7 @@ SV.host = (() => {
   const mockScan = () => [
     { scanId: 'roblox_player', name: 'Roblox', platform: 'roblox', target: 'sv:roblox', process: 'RobloxPlayerBeta', installed: true },
     { scanId: 'roblox_studio', name: 'Roblox Studio', platform: 'roblox', target: 'sv:roblox-studio', process: 'RobloxStudioBeta', installed: true },
+    { scanId: 'budokai', name: 'Budokai Tenkaichi', platform: 'emu', target: 'sv:budokai', process: 'pcsx2-qt', installed: true },
     ...['Counter-Strike 2', 'Marvel Rivals', 'THE FINALS', 'TEKKEN 7', 'DOOM', 'Warframe'].map((name, i) => (
       { scanId: 'steam_' + (700 + i), name, platform: 'steam', target: 'steam://rungameid/' + (700 + i), process: '', installed: i < 3, owners: [STEAM_IDS[i % 2]] })),
   ];
@@ -81,6 +83,16 @@ SV.host = (() => {
       emit({ type: 'init', config, stats, scan: mockScan(), mode: mockMode, autostart: false, epic: { installed: true, active: epicActive }, steam, robloxImport: null });
     } else if (type === 'saveConfig') {
       try { localStorage.setItem(KEY, JSON.stringify(d.config)); } catch {}
+    } else if (type === 'dataFiles') {
+      const now = Date.now();
+      emit({ type: 'dataFiles', prompt: !!d.prompt, skip: false, files: [
+        { file: 'current', label: 'Current settings', current: true, at: now, size: 182000, games: 9, accounts: 2, bars: 2, sounds: 4 },
+        { file: 'b1', label: 'Backup', current: false, at: now - 864e5, size: 171000, games: 8, accounts: 2, bars: 1, sounds: 0 },
+        { file: 'b2', label: 'config.json.bak', current: false, at: now - 9 * 864e5, size: 90000, games: 3, accounts: 1, bars: 1, sounds: 0 }] });
+    } else if (type === 'dataRead') {
+      setTimeout(() => emit({ type: 'dataRead', file: d.file, ok: true, config: { profile: { name: 'Older me' }, theme: { preset: 'ocean', accent: '#00b3ff', accent2: '#00ffd0', bg: '#02070b', font: 'bebas', texture: 'hex' },
+        games: [{ name: 'Rocket League', platform: 'epic' }, { name: 'Roblox', platform: 'roblox' }], nexus: { name: 'Main bar', enabled: true, items: [1, 2, 3], position: 'left' }, roblox: { accounts: [1] },
+        backdrop: { style: 'cosmos', levels: { stars: 1, aurora: 1 } }, fx: { introVideo: 'C:\\Videos\\intro.mp4' }, sound: { pack: 'pulse' } } }), 150);
     } else if (type === 'setMode') {
       mockMode = d.mode === 'hidden' ? 'mini' : d.mode;
       emit({ type: 'mode', mode: mockMode });
@@ -95,6 +107,22 @@ SV.host = (() => {
       setTimeout(() => emit({ type: 'launchReady' }), at + 1500);
       setTimeout(() => { emit({ type: 'mode', mode: mockMode }); emit({ type: 'running', ids: [d.id] }); }, at + 3500);
       setTimeout(() => emit({ type: 'running', ids: [] }), at + 10000);
+    } else if (type === 'budokaiScan') {
+      setTimeout(() => emit({ type: 'budokaiState', ok: true, pcsx2: 'C:\\Program Files\\PCSX2\\pcsx2-qt.exe', dolphin: '', found: [
+        { path: 'C:\\Downloads\\Budokai Tenkaichi 3.zip', name: 'Dragon Ball Z - Budokai Tenkaichi 3 (USA)', kind: 'ps2', size: 4.3e9, zip: true },
+        { path: 'C:\\Games\\BT3 Mod.iso', name: 'BT3 Mod', kind: 'ps2', size: 4.1e9 }, { path: 'C:\\Games\\BT3 Wii.rvz', name: 'BT3 Wii', kind: 'wii', size: 1.2e9 }] }), 400);
+    } else if (type === 'budokaiPlay') {
+      setTimeout(() => emit({ type: 'launchStep', text: 'Starting' }), 300);
+      setTimeout(() => emit({ type: 'budokaiDone', ok: true, mode: d.mode, code: d.mode === 'host' ? '1a2b3c4d' : d.code, clicked: true }), 1500);
+    } else if (type === 'budokaiParsec') {
+      setTimeout(() => emit({ type: 'budokaiParsecState', action: d.action, ok: true, found: !window.__noParsec, pad: 'SDL-0' }), 150);
+    } else if (type === 'budokaiUnzip') {
+      [20, 60, 100].forEach((pct, i) => setTimeout(() => emit({ type: 'budokaiUnzip', token: d.token, pct }), 200 * (i + 1)));
+      setTimeout(() => emit({ type: 'budokaiUnzipped', token: d.token, ok: true, path: 'C:\\Downloads\\Budokai\\bt3.iso' }), 900);
+    } else if (type === 'robloxOutfits') {
+      setTimeout(() => emit({ type: 'robloxOutfits', id: d.id, ok: true, current: '', outfits: ['Main', 'Drip', 'Ninja', 'Summer', 'Tryhard'].map((name, i) => ({ id: 9000 + i, name, thumb: '' })) }), 700);
+    } else if (type === 'robloxWear') {
+      setTimeout(() => emit({ type: 'robloxWorn', id: d.id, token: d.token, ok: true, skipped: 0 }), 600);
     } else if (type === 'tasks') {
       emit({ type: 'tasks', all: d.all, games: [{ id: 'fortnite', name: 'Fortnite', count: 2 }], roblox: [{ pid: 4242, account: null, started: Date.now() - 6e5, mem: 812 }], procs: [{ pid: 100, name: 'chrome', title: 'Mock window', mem: 640 }] });
     } else if (type === 'stopGame' || type === 'killProcess') {

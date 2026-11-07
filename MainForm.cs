@@ -17,6 +17,7 @@ using Microsoft.VisualBasic.FileIO;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using Microsoft.Win32;
+using OpenFileDialog = System.Windows.Forms.OpenFileDialog;
 
 namespace Skyvaint;
 
@@ -121,11 +122,7 @@ public sealed partial class MainForm : Form
 
 	private static readonly string CacheDir = Path.Combine(DataSafety.Local, "webview");
 
-	private readonly WebView2 web = new WebView2
-	{
-		Dock = DockStyle.Fill,
-		DefaultBackgroundColor = Color.FromArgb(7, 5, 5)
-	};
+	private WebView2 web = NewPageView();
 
 	private readonly NotifyIcon tray = new NotifyIcon();
 
@@ -1338,6 +1335,7 @@ public sealed partial class MainForm : Form
 	private void MapClipHosts()
 	{
 		CoreWebView2 core = web.CoreWebView2;
+		if (core == null) return; // the page is asleep; the folders are mapped when it loads again
 		for (int i = 0; i < Math.Max(mappedRoots.Count, clips.Roots.Count); i++)
 		{
 			if (i < mappedRoots.Count)
@@ -1544,15 +1542,16 @@ public sealed partial class MainForm : Form
 		// something else (a fresh start, a test file), and any custom pictures that disappeared. See DataSafety.
 		recoveredFrom = DataSafety.RecoverOnStart(ConfigPath, StatePath, MediaDir);
 		config = ReadJson(ConfigPath);
+		// No settings at all when it started: a fresh install. The page is told so even after it reloads.
+		startedFresh = config == null;
 		if (config != null)
 		{
 			bool marked = config[DataSafety.MarkKey] != null;
 			DataSafety.Stamp(config);
 			if (!marked) WriteJson(ConfigPath, config);
-			DataSafety.Snapshot(ConfigPath, force: true);
 		}
 		state = ReadJson(StatePath) ?? new JsonObject();
-		DataSafety.Snapshot(StatePath, force: true);
+		// Backups are made when the launcher turns off (see OnFormClosing), not on every start or save.
 		Task.Run(() => DataSafety.MirrorMedia(MediaDir));
 		if (background)
 		{
@@ -1620,7 +1619,8 @@ public sealed partial class MainForm : Form
 	/// restart in safe graphics.</summary>
 	private void WatchStart()
 	{
-		var watch = new System.Windows.Forms.Timer { Interval = 25000 };
+		// Right after signing in the PC is busy, so a start from there gets longer.
+		var watch = new System.Windows.Forms.Timer { Interval = background ? 90000 : 25000 };
 		watch.Tick += (_, _) =>
 		{
 			watch.Stop();
@@ -1648,7 +1648,6 @@ public sealed partial class MainForm : Form
 
 	private async Task InitWebView()
 	{
-		_ = 1;
 		// No WebView2 runtime: nothing could be drawn, so offer Microsoft's download page instead of a cryptic error.
 		if (!EnsureWebView2(this, Text))
 		{
@@ -1659,10 +1658,7 @@ public sealed partial class MainForm : Form
 		StartupGuard.BeginStart();
 		try
 		{
-			CoreWebView2EnvironmentOptions options = ((DebugPort > 0) ? new CoreWebView2EnvironmentOptions(BrowserArgs() + $" --remote-debugging-port={DebugPort}") : WebOptions());
-			CoreWebView2Environment env = await CoreWebView2Environment.CreateAsync(null, CacheDir, options);
-			await web.EnsureCoreWebView2Async(env);
-		mainEnv = env;
+			await StartPage("");
 		}
 		catch (Exception ex)
 		{
@@ -1672,7 +1668,26 @@ public sealed partial class MainForm : Form
 			Close();
 			return;
 		}
+		StartMemoryCare();
+		WatchStart();
+		shellStarted = true;
+		EnsureDock();
+		RegisterHotkeys();
+		poll.Start();
+		RefreshAutostart();
+	}
+
+	private bool shellStarted;
+
+	/// <summary>Makes the WebView2 and loads the page into it: at start, and again after a page sleep.</summary>
+	private async Task StartPage(string query)
+	{
+		CoreWebView2EnvironmentOptions options = ((DebugPort > 0) ? new CoreWebView2EnvironmentOptions(BrowserArgs() + $" --remote-debugging-port={DebugPort}") : WebOptions());
+		CoreWebView2Environment env = await CoreWebView2Environment.CreateAsync(null, CacheDir, options);
+		await web.EnsureCoreWebView2Async(env);
+		mainEnv = env;
 		CoreWebView2 coreWebView = web.CoreWebView2;
+		WatchPageCrashes(coreWebView);
 		CoreWebView2Settings settings = coreWebView.Settings;
 		settings.AreDefaultContextMenusEnabled = dev;
 		settings.AreDevToolsEnabled = dev;
@@ -1704,11 +1719,7 @@ public sealed partial class MainForm : Form
 			e.Handled = true;
 		};
 		PrepareClips();
-		coreWebView.Navigate("https://skyvaint.example/index.html");
-		WatchStart();
-		EnsureDock();
-		RegisterHotKey(base.Handle, 1, 3u, 36u);
-		poll.Start();
+		coreWebView.Navigate("https://skyvaint.example/index.html" + query);
 	}
 
 	// Pictures and videos the page shows (art, icons, clips, your own files). Reading them happens off the window's
@@ -1726,20 +1737,40 @@ public sealed partial class MainForm : Form
 			string name = Path.GetFileName(Uri.UnescapeDataString(uri.AbsolutePath));
 			string file = Path.Combine(MediaDir, name);
 			string video = Path.GetExtension(name).ToLowerInvariant() switch { ".mp4" or ".m4v" => "video/mp4", ".webm" => "video/webm", ".mov" => "video/quicktime", _ => "" };
-			var (stream, mime) = await Task.Run<(Stream?, string)>(() =>
+			// Video players ask for the file in pieces (Range: bytes=start-end) to seek and loop; answer with that piece.
+			string range = "";
+			try { range = e.Request.Headers.Contains("Range") ? e.Request.Headers.GetHeader("Range") : ""; } catch { }
+			var (stream, mime, status, contentRange, length) = await Task.Run<(Stream?, string, int, string, long)>(() =>
 			{
-				if (name == "" || !File.Exists(file)) return (null, "");
-				if (video != "") return (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.Asynchronous | FileOptions.SequentialScan), video);
+				if (name == "" || !File.Exists(file)) return (null, "", 404, "", 0);
+				if (video != "")
+				{
+					var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.Asynchronous);
+					long size = fs.Length;
+					var m = System.Text.RegularExpressions.Regex.Match(range, @"bytes=(\d*)-(\d*)");
+					if (m.Success && size > 0)
+					{
+						long start = m.Groups[1].Value == "" ? Math.Max(0, size - long.Parse(m.Groups[2].Value)) : long.Parse(m.Groups[1].Value);
+						long end = m.Groups[1].Value != "" && m.Groups[2].Value != "" ? Math.Min(size - 1, long.Parse(m.Groups[2].Value)) : size - 1;
+						// Pieces of at most 8 MB, so a seek never has to wait for the rest of a huge file.
+						end = Math.Min(end, start + 8 * 1024 * 1024 - 1);
+						if (start >= size) { fs.Dispose(); return (null, video, 416, $"bytes */{size}", 0); }
+						return (new RangeStream(fs, start, end - start + 1), video, 206, $"bytes {start}-{end}/{size}", end - start + 1);
+					}
+					return (fs, video, 200, "", size);
+				}
 				byte[] bytes = File.ReadAllBytes(file);
-				return (new MemoryStream(bytes), MimeOf(name, bytes));
+				return (new MemoryStream(bytes), MimeOf(name, bytes), 200, "", bytes.Length);
 			});
 			if (stream == null)
 			{
-				e.Response = env.CreateWebResourceResponse(null, 404, "Not Found", "");
+				e.Response = env.CreateWebResourceResponse(null, status, status == 416 ? "Range Not Satisfiable" : "Not Found", status == 416 ? "Content-Range: " + contentRange : "");
 				return;
 			}
-			CoreWebView2WebResourceResponse response = env.CreateWebResourceResponse(stream, 200, "OK", "");
+			CoreWebView2WebResourceResponse response = env.CreateWebResourceResponse(stream, status, status == 206 ? "Partial Content" : "OK", "");
 			response.Headers.AppendHeader("Content-Type", mime);
+			if (video != "") { response.Headers.AppendHeader("Accept-Ranges", "bytes"); response.Headers.AppendHeader("Content-Length", length.ToString()); }
+			if (contentRange != "") response.Headers.AppendHeader("Content-Range", contentRange);
 			response.Headers.AppendHeader("Access-Control-Allow-Origin", "*");
 			// Files you picked are saved under a unique name, so they can be cached for good.
 			bool picked = System.Text.RegularExpressions.Regex.IsMatch(name, @"^(image|media|video|audio|icon)_[0-9a-f]{32}\.", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -1949,6 +1980,11 @@ public sealed partial class MainForm : Form
 		{
 			web.CoreWebView2.PostWebMessageAsJson(msg.ToJsonString());
 		}
+		else if (pageAsleep && NeedsPage.Contains(msg["type"]?.ToString() ?? ""))
+		{
+			wakeQueue.Enqueue(msg);
+			_ = WakePage();
+		}
 	}
 
 	private void OnMessage(JsonObject m)
@@ -1956,6 +1992,8 @@ public sealed partial class MainForm : Form
 		switch (Str("type"))
 		{
 		case "ready":
+		{
+			bool woke = pageAsleep;
 			pageReady = true;
 			StartupGuard.Reached();
 			// Each part is fetched on its own: one failing (a scan, a store that isn't installed the way we expect on
@@ -1965,6 +2003,8 @@ public sealed partial class MainForm : Form
 			{
 				["type"] = "init",
 				["config"] = config?.DeepClone(),
+				["fresh"] = startedFresh,
+				["wake"] = woke,
 				["stats"] = Guarded("stats", () => Stats().DeepClone(), new JsonObject()),
 				["scan"] = Guarded<JsonNode?>("game scan", () => ScanGames(), new JsonArray()),
 				["mode"] = mode,
@@ -1974,11 +2014,18 @@ public sealed partial class MainForm : Form
 				["robloxImport"] = Guarded<JsonNode?>("Roblox import", () => RobloxImport(), null),
 				["safeGraphics"] = StartupGuard.SafeGraphics
 			});
+			if (woke)
+			{
+				PageAwake();
+				Guarded("update checks", () => { OnPageReadyUpdates(); return true; }, false);
+				break;
+			}
 			Guarded("show HOME", () => { SetMode(mode, notify: false); return true; }, false);
 			base.Opacity = 1.0;
 			Guarded("first game poll", () => { PollGames(); return true; }, false);
 			Guarded("update checks", () => { OnPageReadyUpdates(); return true; }, false);
 			break;
+		}
 		case "clientError":
 			StartupGuard.Log("Page error: " + Str("text"));
 			break;
@@ -1988,6 +2035,7 @@ public sealed partial class MainForm : Form
 			if (restoring) break;
 			var incoming = m["config"]?.DeepClone() as JsonObject;
 			if (incoming != null) DataSafety.Stamp(incoming, config);
+			RememberBeforeChange(config);
 			config = incoming;
 			if (config != null)
 			{
@@ -2002,6 +2050,7 @@ public sealed partial class MainForm : Form
 			EnsureDock();
 			PushDock();
 			UpdatePresence();
+			RegisterHotkeys();
 			break;
 		}
 		case "launch":
@@ -2021,7 +2070,7 @@ public sealed partial class MainForm : Form
 			PickFile(m["kind"]?.ToString() ?? "image", Str("token"));
 			break;
 		case "setAutostart":
-			SetAutostart(m["on"]?.GetValue<bool>() ?? false);
+			{ bool on = m["on"]?.GetValue<bool>() ?? false; _ = Task.Run(() => SetAutostart(on)); }
 			break;
 		case "rescan":
 			Send(new JsonObject
@@ -2054,7 +2103,7 @@ public sealed partial class MainForm : Form
 			Quit();
 			break;
 		default:
-			if (!OnAccountMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m) && !OnUpdateMessage(m) && !OnSetupMessage(m))
+			if (!OnAccountMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m) && !OnUpdateMessage(m) && !OnSetupMessage(m) && !OnBudokaiMessage(m) && !OnCareMessage(m))
 			{
 				OnClipMessage(m);
 			}
@@ -2069,6 +2118,8 @@ public sealed partial class MainForm : Form
 	private void SetMode(string m, bool notify = true)
 	{
 		mode = m;
+		if (pageAsleep && m != "hidden") _ = WakePage();
+		SideForMode();
 		if (notify)
 		{
 			Send(new JsonObject
@@ -2203,7 +2254,7 @@ public sealed partial class MainForm : Form
 	{
 		if (m.Msg == 786)
 		{
-			ToggleHome();
+			if ((int)m.WParam == 2) OpenMenuHotkey(); else ToggleHome();
 		}
 		base.WndProc(ref m);
 	}
@@ -2217,12 +2268,21 @@ public sealed partial class MainForm : Form
 			return;
 		}
 		UnregisterHotKey(base.Handle, 1);
+		UnregisterHotKey(base.Handle, 2);
 		tray.Visible = false;
 		try { discord.SetActivity(null); discord.Close(); } catch { }
 		foreach (var d in docks.Values) d.Close();
+		foreach (var w in widgetForms.Values) w.Close();
 		SaveState();
+		// One dated backup of the settings and stats each time the launcher turns off (Quit, Windows shutting down,
+		// an update restart). Nothing is copied while it runs.
+		DataSafety.Snapshot(ConfigPath, force: true);
+		DataSafety.Snapshot(StatePath, force: true);
 		base.OnFormClosing(e);
 	}
+
+	/// <summary>Another copy started with --quit: close exactly like tray -> Quit.</summary>
+	internal void QuitFromOutside() => Quit();
 
 	private void Quit()
 	{
@@ -2438,6 +2498,63 @@ public sealed partial class MainForm : Form
 			limit = Math.Min(limit, 45);
 		}
 		launchSkip = false;
+		// While the launch screen shows, the launcher stays on top: splash screens, updaters and half-drawn game
+		// windows open underneath it instead of flashing over it. It steps aside once the game is fully up.
+		// It never stays on top for more than 20 seconds: a game it can't find (another process name, a launcher in
+		// between) would otherwise sit under a black launch screen.
+		bool hold = mode == "home" && base.Visible && BehaviorFlag("holdFront", fallback: true);
+		bool wasTop = base.TopMost;
+		int holdId = ++holdSerial;
+		if (hold)
+		{
+			base.TopMost = true;
+			_ = Task.Delay(20000).ContinueWith(_ => { try { BeginInvoke(() => { if (holdSerial == holdId) base.TopMost = wasTop; }); } catch { } }, TaskScheduler.Default);
+		}
+		try
+		{
+			return await WaitForGameInner(names, before, need, limit, settle);
+		}
+		finally
+		{
+			holdSerial++;
+			if (hold) base.TopMost = wasTop;
+		}
+	}
+
+	private int holdSerial;
+
+	[DllImport("user32.dll")] private static extern bool IsHungAppWindow(nint hWnd);
+
+	private static bool CoversScreen(nint hwnd)
+	{
+		if (!GetWindowRect(hwnd, out var r)) return false;
+		var s = Screen.FromHandle(hwnd).Bounds;
+		return r.Left <= s.Left && r.Top <= s.Top && r.Right >= s.Right && r.Bottom >= s.Bottom;
+	}
+
+	/// <summary>A game window counts as ready when it covers the screen, or has kept the same size and answered
+	/// for a moment (not still being created or showing a loading splash that resizes).</summary>
+	private async Task<bool> SettledWindow(nint hwnd, int maxMs)
+	{
+		var screen = Screen.FromHandle(hwnd).Bounds;
+		RECT last = default;
+		int same = 0;
+		var until = DateTime.Now.AddMilliseconds(maxMs);
+		while (DateTime.Now < until && !launchSkip)
+		{
+			if (!GetWindowRect(hwnd, out var r)) return false;
+			bool full = r.Left <= screen.Left && r.Top <= screen.Top && r.Right >= screen.Right && r.Bottom >= screen.Bottom;
+			if (full && !IsHungAppWindow(hwnd)) return true;
+			if (r.Left == last.Left && r.Top == last.Top && r.Right == last.Right && r.Bottom == last.Bottom && !IsHungAppWindow(hwnd)) { if (++same >= 6) return true; }
+			else same = 0;
+			last = r;
+			await Task.Delay(250);
+		}
+		return true;
+	}
+
+	private async Task<nint> WaitForGameInner(string[] names, HashSet<int> before, int need, int limit, int settle)
+	{
 		Send(new JsonObject
 		{
 			["type"] = "launchWaiting",
@@ -2497,8 +2614,18 @@ public sealed partial class MainForm : Form
 		}
 		if (found != IntPtr.Zero && !launchSkip)
 		{
+			await SettledWindow(found, 10000);
+			// A full-screen game goes in front straight away: covering it (even for a moment) can turn it black.
+			if (CoversScreen(found))
+			{
+				holdSerial++;
+				base.TopMost = false;
+				SetForegroundWindow(found);
+			}
 			Send(new JsonObject { ["type"] = "launchReady" });
 			await Task.Delay(settle);
+			base.TopMost = false;
+			SetForegroundWindow(found);
 		}
 		return found;
 	}
@@ -2560,7 +2687,19 @@ public sealed partial class MainForm : Form
 		}
 	}
 
-	private void PollGames()
+	private bool polling;
+
+	// Listing every process takes long enough to be felt, so it happens off the window's thread.
+	private async void PollGames()
+	{
+		if (polling) return;
+		polling = true;
+		try { await PollGamesNow(); }
+		catch (Exception ex) { StartupGuard.Log("Game poll", ex); }
+		finally { polling = false; }
+	}
+
+	private async Task PollGamesNow()
 	{
 		if (stateDirty && (DateTime.Now - lastStateSave).TotalSeconds > 5.0)
 		{
@@ -2580,24 +2719,8 @@ public sealed partial class MainForm : Form
 		{
 			return;
 		}
-		HashSet<string> live = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		int roblox = 0;
-		Process[] processes = Process.GetProcesses();
-		foreach (Process p in processes)
-		{
-			try
-			{
-				live.Add(p.ProcessName);
-				if (p.ProcessName.Equals("RobloxPlayerBeta", StringComparison.OrdinalIgnoreCase))
-				{
-					roblox++;
-				}
-			}
-			catch
-			{
-			}
-			p.Dispose();
-		}
+		HashSet<string> live = await Task.Run(LiveProcessNames);
+		lastLive = live;
 		PublishRoblox();
 		HashSet<string> now = (from w in wanted
 			where w.Item2.Any(live.Contains)
@@ -2670,6 +2793,19 @@ public sealed partial class MainForm : Form
 			["type"] = "filePicked",
 			["token"] = token
 		};
+		// A game file (ISO, CHD, RVZ…): it can be gigabytes, so only its path comes back, nothing is copied.
+		if (kind == "iso")
+		{
+			using OpenFileDialog iso = new OpenFileDialog { Filter = "Games, mods and archives|*.iso;*.chd;*.cso;*.zso;*.bin;*.gz;*.rvz;*.wbfs;*.gcz;*.ciso;*.wia;*.gcm;*.zip;*.7z;*.rar|Save data (memory cards)|*.ps2;*.mcd;*.mc2;*.bin;*.max;*.psu|All files|*.*", Multiselect = true };
+			if (iso.ShowDialog(this) == DialogResult.OK)
+			{
+				reply["path"] = iso.FileName;
+				reply["name"] = Path.GetFileName(iso.FileName);
+				reply["paths"] = new JsonArray(iso.FileNames.Select(f => (JsonNode)JsonValue.Create(f)).ToArray());
+			}
+			Send(reply);
+			return;
+		}
 		if (kind == "folder")
 		{
 			using (FolderBrowserDialog folders = new FolderBrowserDialog
@@ -2688,7 +2824,7 @@ public sealed partial class MainForm : Form
 		}
 		OpenFileDialog openFileDialog = new OpenFileDialog();
 		OpenFileDialog openFileDialog2 = openFileDialog;
-		string filter = kind == "media" ? "Pictures, GIFs and videos|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico;*.mp4;*.webm;*.m4v;*.mov|Pictures|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico|Videos|*.mp4;*.webm;*.m4v;*.mov" : kind == "video" ? "Videos|*.mp4;*.webm;*.m4v;*.mov" : ((kind == "image") ? "Images|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico" : ((!(kind == "audio")) ? "Games and shortcuts|*.exe;*.lnk;*.url;*.bat|All files|*.*" : "Audio|*.mp3;*.wav;*.ogg;*.m4a;*.flac"));
+		string filter = kind == "font" ? "Fonts|*.ttf;*.otf;*.woff;*.woff2" : kind == "media" ? "Pictures, GIFs and videos|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico;*.mp4;*.webm;*.m4v;*.mov|Pictures|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico|Videos|*.mp4;*.webm;*.m4v;*.mov" : kind == "video" ? "Videos|*.mp4;*.webm;*.m4v;*.mov" : ((kind == "image") ? "Images|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif;*.bmp;*.ico" : ((!(kind == "audio")) ? "Games and shortcuts|*.exe;*.lnk;*.url;*.bat|All files|*.*" : "Audio|*.mp3;*.wav;*.ogg;*.m4a;*.flac"));
 		openFileDialog2.Filter = filter;
 		using OpenFileDialog dlg = openFileDialog;
 		if (dlg.ShowDialog(this) == DialogResult.OK)
@@ -2772,7 +2908,7 @@ public sealed partial class MainForm : Form
 	private void TrayLaunch(string id)
 	{
 		JsonObject game = FindGame(id);
-		if ((!(game?["target"]?.ToString() == "sv:roblox") && (!(game?["platform"]?.ToString() == "epic") || EpicList().Count <= 1 || !BehaviorFlag("promptAccount", fallback: true))) || !pageReady)
+		if ((!(game?["target"]?.ToString() is "sv:roblox" or "sv:budokai") && (!(game?["platform"]?.ToString() == "epic") || EpicList().Count <= 1 || !BehaviorFlag("promptAccount", fallback: true))) || !pageReady)
 		{
 			Launch(id, null, applyAfterLaunch: false);
 			return;
@@ -2829,28 +2965,6 @@ public sealed partial class MainForm : Form
 		}
 	}
 
-	private static bool IsAutostart()
-	{
-		using RegistryKey key = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
-		return key?.GetValue("SkyvaintGameLauncher") != null;
-	}
-
-	private static void SetAutostart(bool on)
-	{
-		using RegistryKey key = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", writable: true);
-		if (key != null)
-		{
-			if (on)
-			{
-				key.SetValue("SkyvaintGameLauncher", "\"" + Environment.ProcessPath + "\" --background");
-			}
-			else
-			{
-				key.DeleteValue("SkyvaintGameLauncher", throwOnMissingValue: false);
-			}
-		}
-	}
-
 	private void SaveState()
 	{
 		if (restoring) return; // a backup's stats were just put back; don't write the old ones over them
@@ -2871,10 +2985,11 @@ public sealed partial class MainForm : Form
 		}
 	}
 
+	private bool startedFresh;
+
 	private static void WriteJson(string path, JsonObject json)
 	{
-		// The settings and the stats keep dated backups outside the data folder (see DataSafety).
-		if (path == ConfigPath || path == StatePath) DataSafety.Snapshot(path);
+		// No backup here: backups are made only when the launcher turns off (see OnFormClosing).
 		try
 		{
 			string text = path + ".tmp";

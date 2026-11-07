@@ -19,10 +19,16 @@ SV.bg = (() => {
     if (m.type !== 'need') return;
     const img = new Image();
     img.decoding = 'async';
-    img.onload = () => createImageBitmap(img).then((bitmap) => post('image', { url: m.url, bitmap }, [bitmap])).catch(() => post('image', { url: m.url, bitmap: null }));
+    // Decoded at the size it will be drawn, not the file's: a 4K picture is 32 MB once decoded.
+    img.onload = () => createImageBitmap(img, ...fitted(img)).then((bitmap) => post('image', { url: m.url, bitmap }, [bitmap])).catch(() => post('image', { url: m.url, bitmap: null }));
     img.onerror = () => post('image', { url: m.url, bitmap: null });
     img.src = m.url;
   };
+
+  function fitted(img) {
+    const scale = Math.min(1, (innerWidth * devicePixelRatio * 1.1) / (img.naturalWidth || 1), (innerHeight * devicePixelRatio * 1.1) / (img.naturalHeight || 1));
+    return scale < 1 ? [{ resizeWidth: Math.round(img.naturalWidth * scale), resizeHeight: Math.round(img.naturalHeight * scale), resizeQuality: 'medium' }] : [];
+  }
 
   function sync() { post('active', { on: active && !document.hidden }); }
 

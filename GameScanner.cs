@@ -33,6 +33,7 @@ internal static class GameScanner
 		try
 		{
 			ScanRoblox(found, mediaDir, mediaHost, wanted);
+			ScanBudokai(found, mediaDir, mediaHost);
 		}
 		catch
 		{
@@ -301,6 +302,30 @@ internal static class GameScanner
 			{
 			}
 		}
+	}
+
+	// Budokai Tenkaichi: one tile that opens its own picker (PCSX2 or Dolphin, your game file or mod, NetPlay).
+	private static void ScanBudokai(JsonArray found, string mediaDir, string mediaHost)
+	{
+		var game = new JsonObject
+		{
+			["scanId"] = "budokai",
+			["name"] = "Budokai Tenkaichi",
+			["platform"] = "emu",
+			["target"] = "sv:budokai",
+			["process"] = "pcsx2-qt",
+			["installed"] = true
+		};
+		try
+		{
+			var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+			var exe = new[] { Path.Combine(pf, "PCSX2", "pcsx2-qt.exe"), Path.Combine(pf, "Dolphin", "Dolphin.exe") }.FirstOrDefault(File.Exists);
+			if (exe != null) game["icon"] = ShellImage.SaveIcon(exe, mediaDir, mediaHost, "icon_budokai");
+		}
+		catch
+		{
+		}
+		found.Add(game);
 	}
 
 	private static void ScanRoblox(JsonArray found, string mediaDir, string mediaHost, List<WantedArt> wanted)

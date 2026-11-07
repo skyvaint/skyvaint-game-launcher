@@ -19,6 +19,8 @@
     if (wantOpen) { wantOpen = false; return open(); }
     if (!m.auto) return;
     const s = setup();
+    // A fresh install goes through the setup wizard first; that already lists what is missing.
+    if (!s.done) return;
     // First start: show it if anything at all is missing. Later: only for recommended apps not skipped.
     const ask = !s.seen ? missing().length > 0 : missing().some((i) => i.recommended && !s.skipped.includes(i.id));
     const first = !s.seen;
