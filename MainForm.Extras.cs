@@ -100,8 +100,17 @@ public sealed partial class MainForm
         try
         {
             var old = Icon;
-            Icon = AppIcon.ToIcon(AppIcon.Draw(64, config, MediaDir));
-            tray.Icon = AppIcon.ToIcon(AppIcon.Draw(32, config, MediaDir));
+            if (AppIcon.IcoFile(config, MediaDir) is { } own)
+            {
+                // Your .ico as it is: Windows picks the size it needs from it.
+                using (var s = new MemoryStream(File.ReadAllBytes(own))) Icon = new Icon(s);
+                using (var s = new MemoryStream(File.ReadAllBytes(own))) tray.Icon = new Icon(s, SystemInformation.SmallIconSize.Width * DeviceDpi / 96, SystemInformation.SmallIconSize.Height * DeviceDpi / 96);
+            }
+            else
+            {
+                Icon = AppIcon.ToIcon(AppIcon.Draw(64, config, MediaDir));
+                tray.Icon = AppIcon.ToIcon(AppIcon.Draw(32, config, MediaDir));
+            }
             foreach (var d in docks.Values) d.Icon = Icon;
         }
         catch { }
@@ -122,7 +131,8 @@ public sealed partial class MainForm
             var ico = Path.Combine(DataDir, "appicon.ico");
             if (File.Exists(ico))
             {
-                AppIcon.SaveIco(ico, s => AppIcon.Draw(s, config, MediaDir));
+                if (AppIcon.IcoFile(config, MediaDir) is { } own) File.Copy(own, ico, overwrite: true);
+                else AppIcon.SaveIco(ico, s => AppIcon.Draw(s, config, MediaDir));
                 AppIcon.RefreshShell();
             }
         }

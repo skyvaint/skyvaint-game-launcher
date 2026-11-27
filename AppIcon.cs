@@ -39,8 +39,36 @@ static class AppIcon
         return path;
     }
 
+    /// <summary>Your own .ico (Settings → Icon → My .ico file), when that is the icon chosen and the file is there.</summary>
+    public static string? IcoFile(JsonNode? config, string mediaDir)
+    {
+        var icon = config?["appIcon"];
+        if (icon?["style"]?.ToString() != "ico") return null;
+        var file = PictureFile(icon?["ico"]?.ToString(), mediaDir);
+        return file != null && file.EndsWith(".ico", StringComparison.OrdinalIgnoreCase) ? file : null;
+    }
+
+    /// <summary>The size of your .ico closest to <paramref name="size"/>, as it is (no frame, no colours).</summary>
+    static Bitmap? FromIco(string file, int size)
+    {
+        try
+        {
+            using var stream = new MemoryStream(File.ReadAllBytes(file));
+            using var ico = new Icon(stream, size, size);
+            using var bmp = ico.ToBitmap();
+            if (bmp.Width == size && bmp.Height == size) return new Bitmap(bmp);
+            var outBmp = new Bitmap(size, size);
+            using var g = Graphics.FromImage(outBmp);
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.DrawImage(bmp, 0, 0, size, size);
+            return outBmp;
+        }
+        catch { return null; }
+    }
+
     public static Bitmap Draw(int size, JsonNode? config, string mediaDir)
     {
+        if (IcoFile(config, mediaDir) is { } icoFile && FromIco(icoFile, size) is { } own) return own;
         var icon = config?["appIcon"];
         string style = icon?["style"]?.ToString() ?? "bolt", shape = icon?["shape"]?.ToString() ?? "rounded";
         bool theme = true;
