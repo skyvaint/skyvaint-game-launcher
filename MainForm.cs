@@ -1721,6 +1721,20 @@ public sealed partial class MainForm : Form
 			e.Handled = true;
 		};
 		PrepareClips();
+		// A new build: the page files changed, but WebView2 can keep serving its cached copies of them, so an update
+		// looked like nothing had changed. Only the file cache goes; sign-ins and saved page data stay.
+		try
+		{
+			string build = File.GetLastWriteTimeUtc(Path.Combine(AppContext.BaseDirectory, "wwwroot", "js", "app.js")).Ticks.ToString() + "/" + Application.ProductVersion;
+			if (state["pageBuild"]?.ToString() != build)
+			{
+				await coreWebView.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.DiskCache);
+				state["pageBuild"] = build;
+				stateDirty = true;
+				StartupGuard.Log("New page files: cache cleared");
+			}
+		}
+		catch (Exception ex) { StartupGuard.Log("Page cache", ex); }
 		coreWebView.Navigate("https://skyvaint.example/index.html" + query);
 	}
 
