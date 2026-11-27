@@ -158,7 +158,7 @@ SV.host = (() => {
       setTimeout(() => emit({ type: 'discover', epic: [0, 1].map((i) => item(i, 'epic')), steam: { top: [0, 1, 2].map((i) => item(i, 'steam')), specials: [], new: [] },
         roblox: { trending: [0, 1, 2, 3].map((i) => ({ title: 'Roblox hit ' + (i + 1), image: '', sub: '12,345 PLAYING', url: 'https://www.roblox.com/games/1', placeId: 1000 + i })), rising: [], playing: [] } }), 300);
     } else if (type === 'startMenu') {
-      setTimeout(() => emit({ type: 'startMenu', apps: [{ name: 'Discord', path: 'C:\\Discord.lnk', process: 'Discord', icon: '' }, { name: 'Spotify', path: 'C:\\Spotify.lnk', process: 'Spotify', icon: '' }] }), 300);
+      setTimeout(() => emit({ type: 'startMenu', apps: [{ name: 'Discord', path: 'C:\\Discord.lnk', process: 'Discord', icon: '' }, { name: 'Spotify', path: 'C:\\Spotify.lnk', process: 'Spotify', icon: '' }, { name: 'Claude', path: 'shell:AppsFolder\Claude_test!Claude', process: '', icon: '' }, { name: 'ChatGPT', path: 'shell:AppsFolder\OpenAI_test!App', process: '', icon: '' }] }), 300);
     } else if (type === 'applyIconToShortcuts') {
       emit({ type: 'notice', ok: true, text: 'Icon applied to 2 shortcuts (mock)' });
     } else if (type === 'launchSkip') {

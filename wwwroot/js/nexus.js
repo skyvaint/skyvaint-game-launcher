@@ -62,7 +62,32 @@
   host.on('init', () => {
     if (!nx().seeded) askSeed(false);
     syncIcons();
+    setTimeout(addWanted, 2500); // after the settings are loaded
   });
+
+  // Apps asked for by name (Claude, ChatGPT…): once, from your Start menu, onto the Main Bar, with their own icons.
+  // Ones that aren't installed are left out quietly; ones already on the bar aren't added twice.
+  function addWanted() {
+    const want = nx().wantApps || [];
+    if (!want.length) return;
+    const go = () => {
+      const items = nx().items || (nx().items = []), added = [];
+      for (const name of want) {
+        const a = (startMenu || []).find((x) => (x.name || '').toLowerCase() === name.toLowerCase());
+        if (!a || items.some((x) => x.target && x.target.toLowerCase() === (a.path || '').toLowerCase())) continue;
+        items.push({ id: newId(), kind: 'app', name: a.name, target: a.path, process: a.process || '', icon: a.icon || '' });
+        added.push(a.name);
+      }
+      nx().wantApps = [];
+      A.changed();
+      if (added.length) toast(added.join(' and ') + ' added to the Main Bar');
+      refresh && refresh();
+      SV.gamesView && SV.gamesView.sync();
+    };
+    if (startMenu) return go();
+    startWaiter = go;
+    host.send('startMenu');
+  }
 
   // Game logos follow the game's artwork unless you picked one for the bar.
   function syncIcons() {

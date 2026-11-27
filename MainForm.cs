@@ -2130,7 +2130,7 @@ public sealed partial class MainForm : Form
 			Quit();
 			break;
 		default:
-			if (!OnAccountMessage(m) && !OnLedMessage(m) && !OnDesktopMessage(m) && !OnLaunchSeqMessage(m) && !OnLibraryMessage(m) && !OnAssetMessage(m) && !OnScreenMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m) && !OnUpdateMessage(m) && !OnSetupMessage(m) && !OnBudokaiMessage(m) && !OnCareMessage(m))
+			if (!OnAccountMessage(m) && !OnInstallMessage(m) && !OnLedMessage(m) && !OnDesktopMessage(m) && !OnLaunchSeqMessage(m) && !OnLibraryMessage(m) && !OnAssetMessage(m) && !OnScreenMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m) && !OnUpdateMessage(m) && !OnSetupMessage(m) && !OnBudokaiMessage(m) && !OnCareMessage(m))
 			{
 				OnClipMessage(m);
 			}

@@ -535,6 +535,7 @@
     dev: '<path d="M5.2 3.6l15.2 4.1-4.1 15.2L1.1 18.8z"/><path d="M10.2 10.1l3.9 1-1 3.9-3.9-1z"/>',
     nexus: '<rect x="3" y="15" width="18" height="5" rx="1.5"/><rect x="5.5" y="9" width="4" height="4" rx="1"/><rect x="10.5" y="9" width="4" height="4" rx="1"/><rect x="15.5" y="9" width="3" height="4" rx="1"/>',
     mono: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>',
+    install: '<path d="M12 3v12M7 10l5 5 5-5M4 17v3h16v-3"/>',
     leds: '<circle cx="12" cy="10" r="5"/><path d="M10 15v3h4v-3M10 21h4M12 1v2M4.2 4.2l1.4 1.4M19.8 4.2l-1.4 1.4M2 10h2M20 10h2"/>',
     library: '<path d="M4 4h4v16H4zM10 4h4v16h-4zM16.5 4.5l3.8 1 -3.9 15-3.8-1z"/>',
     creator: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3M15 20h5"/>',
@@ -1512,9 +1513,9 @@
 
   // ------------------------------------------------------------------ settings
 
-  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['widgets', 'WIDGETS'], ['social', 'SOCIAL'], ['discord', 'DISCORD'], ['developer', 'DEVELOPER'], ['performance', 'PERFORMANCE'], ['system', 'SYSTEM'], ['updates', 'UPDATES'], ['data', 'DATA'], ['icons', 'ICONS'], ['wallpaper', 'WALLPAPER'], ['roblox', 'ROBLOX'], ['homeicons', 'HOME ICONS'], ['deskwall', 'DESKTOP WALLPAPER'], ['creator', 'CREATOR'], ['leds', 'LED COLOURS']];
+  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['widgets', 'WIDGETS'], ['social', 'SOCIAL'], ['discord', 'DISCORD'], ['developer', 'DEVELOPER'], ['performance', 'PERFORMANCE'], ['system', 'SYSTEM'], ['updates', 'UPDATES'], ['data', 'DATA'], ['icons', 'ICONS'], ['wallpaper', 'WALLPAPER'], ['roblox', 'ROBLOX'], ['homeicons', 'HOME ICONS'], ['deskwall', 'DESKTOP WALLPAPER'], ['creator', 'CREATOR'], ['leds', 'LED COLOURS'], ['install', 'INSTALLATION']];
   const TAB_GROUPS = [['LOOK', ['theme', 'wallpaper', 'backdrop', 'effects', 'icons', 'texts', 'sound']], ['LIBRARY', ['games', 'roblox', 'feeds']],
-    ['ACCOUNTS', ['accounts', 'discord', 'social']], ['DESKTOP', ['deskwall', 'widgets', 'creator', 'leds', 'homeicons', 'nexus']], ['SYSTEM', ['performance', 'system', 'updates', 'data', 'developer']]];
+    ['ACCOUNTS', ['accounts', 'discord', 'social']], ['DESKTOP', ['deskwall', 'widgets', 'creator', 'leds', 'homeicons', 'nexus']], ['SYSTEM', ['install', 'performance', 'system', 'updates', 'data', 'developer']]];
   const TAB_INFO = {
     theme: ['Theme', 'Colours, fonts, shapes and what shows on HOME.'], backdrop: ['Backdrop', 'The animated scene behind everything.'], effects: ['Effects', 'Motion, lights and transitions.'],
     texts: ['Texts', 'Every piece of wording on screen.'], sound: ['Sound', 'Sound packs, music and button sounds.'], games: ['Games', 'What is on your shelf.'],
@@ -1522,7 +1523,7 @@
     social: ['Social', 'Sites beside HOME.'], discord: ['Discord', 'What your Discord profile shows.'], performance: ['Performance', 'Profiles, memory and shortcuts.'], system: ['System', 'Add-ons, behaviour and language.'],
     updates: ['Updates', 'New versions and your backups.'], data: ['Data', 'See what is inside your settings before loading them.'], developer: ['Developer', 'Roblox Studio and dev tools.'],
     icons: ['Icons', 'Covers, banners, icons and launch videos for each game, kept with this profile.'], wallpaper: ['Wallpaper', 'Your own picture, GIF or video behind the launcher.'],
-    roblox: ['Roblox', 'Your Roblox games and places, and how Roblox starts.'], homeicons: ['Home icons', 'Your own buttons, placed anywhere on HOME, on any screen.'], deskwall: ['Desktop wallpaper', 'Live wallpapers behind your desktop icons, on every screen.'], creator: ['Creator', 'Design your own icons and widgets.'], leds: ['LED colours', 'Your RGB lights, through OpenRGB.'], accounts: ['Accounts', 'Steam, Epic and Roblox sign-ins.'],
+    roblox: ['Roblox', 'Your Roblox games and places, and how Roblox starts.'], homeicons: ['Home icons', 'Your own buttons, placed anywhere on HOME, on any screen.'], deskwall: ['Desktop wallpaper', 'Live wallpapers behind your desktop icons, on every screen.'], creator: ['Creator', 'Design your own icons and widgets.'], leds: ['LED colours', 'Your RGB lights, through OpenRGB.'], install: ['Installation', 'The apps this launcher works with, one click to install or update.'], accounts: ['Accounts', 'Steam, Epic and Roblox sign-ins.'],
   };
   const TAB_ICON = (k) => ICON[k] || ICON.settings;
   // Pages that hand the reader off to another page say so in one line.
@@ -1551,6 +1552,7 @@
     if (tab === 'deskwall' && SV.deskWall) return SV.deskWall.rows(rerender);
     if (tab === 'creator' && SV.creator) return SV.creator.rows(rerender);
     if (tab === 'leds' && SV.leds) return SV.leds.rows(rerender);
+    if (tab === 'install' && SV.install) return SV.install.rows(rerender);
     if (tab === 'effects' && SV.hoverFx) return [...SV.hoverFx.rows(rerender), ...(settingsRowsBase(tab, rerender) || [])];
     if (tab === 'wallpaper') {
       const parts = sectionsOf(settingsRowsBase('backdrop', rerender)).filter((s) => s.head && WALLPAPER_HEADS.test(s.head.textContent));
@@ -2795,7 +2797,9 @@
     if (saved && from < 14) { cfg.home.view = 'games'; cfg.home.window = true; }
     // Max memory saver and a 300 MB limit (asked for by you).
     if (saved && from < 15) { cfg.perf.memorySaver = 'max'; cfg.perf.memoryLimit = 300; }
-    cfg.v = 15;
+    // Claude and ChatGPT on the Main Bar (asked for by you); nexus.js adds them from the Start menu.
+    if (saved && from < 16) cfg.nexus.wantApps = ['Claude', 'ChatGPT'];
+    cfg.v = 16;
     // Configs from before per-account import: whichever Steam accounts already have games on the shelf count as done.
     if (!cfg.imported.steamAccounts)
       cfg.imported.steamAccounts = [...new Set(scan.filter((s) => s.platform === 'steam' && known(s)).flatMap((s) => s.owners || []))];
