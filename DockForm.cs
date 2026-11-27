@@ -304,6 +304,13 @@ sealed class DockForm : Form
             if (Math.Abs(mouse.Value.X - c[i]) <= (w + gap) / 2 && mouse.Value.Y <= lift + w + 4 * k) { hover = i; break; }
         }
         Cursor = hover >= 0 ? Cursors.Hand : Cursors.Default;
+        // The launcher's own logo: hovering it brings up OPEN, QUIT and the stats panel.
+        if (hover >= 0 && items[hover].Kind == "home")
+        {
+            var p = Cursor.Position;
+            int r = (int)(size * SizeFactor * items[hover].Scale * DeviceDpi / 96f * 0.6f);
+            owner.LauncherHover(new Rectangle(p.X - r, p.Y - r, r * 2, r * 2), p, position);
+        }
         Wake();
     }
 

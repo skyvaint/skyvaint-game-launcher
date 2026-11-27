@@ -2961,6 +2961,7 @@ public sealed partial class MainForm : Form
 		tray.Icon = MakeIcon(32);
 		tray.Text = "skyvaint game launcher";
 		tray.ContextMenuStrip = menu;
+		HookTrayHover();
 		tray.Visible = true;
 		tray.MouseClick += delegate(object? _, MouseEventArgs e)
 		{
