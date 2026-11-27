@@ -56,7 +56,7 @@ public sealed partial class MainForm
                 return true;
             case "openRelease":
                 var url = latestRelease?["url"]?.ToString() ?? $"https://github.com/{Repo}/releases";
-                try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose(); } catch { }
+                try { Detached.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
                 return true;
             case "updateRoblox":
                 _ = CheckRoblox(install: true, manual: true);

@@ -68,25 +68,55 @@ public sealed partial class MainForm
     readonly System.Windows.Forms.Timer memoryTimer = new() { Interval = 10000 };
     [DllImport("kernel32.dll")] static extern bool SetProcessWorkingSetSize(IntPtr process, IntPtr min, IntPtr max);
 
-    /// <summary>The launcher's own memory plus its page processes, in MB.</summary>
+    /// <summary>What the launcher really uses, in MB: this process plus the WebView2 processes it runs (the page,
+    /// the hidden Roblox page, the side browser), however deep they sit. Programs it started are not counted: those
+    /// are games and apps, and since 2.9 they run on their own anyway (see Detached). The old count only followed the
+    /// main page's browser process and missed the rest.</summary>
     async Task<(long mb, List<int> pids)> MemoryNow()
     {
-        var pids = new List<int> { Environment.ProcessId };
-        try
-        {
-            // The page runs in WebView2's own processes: its browser process and everything under it.
-            // The page objects belong to the window's thread.
-            int root = InvokeRequired ? (int)Invoke(() => web?.CoreWebView2 != null ? (int)web.CoreWebView2.BrowserProcessId : 0) : web?.CoreWebView2 != null ? (int)web.CoreWebView2.BrowserProcessId : 0;
-            if (root > 0) pids.AddRange(Tree(root));
-        }
-        catch { }
         await Task.CompletedTask;
+        var pids = new List<int> { Environment.ProcessId };
+        try { pids.AddRange(OwnWebViews()); } catch { }
         long bytes = 0;
         foreach (var id in pids.Distinct())
         {
             try { using var p = Process.GetProcessById(id); bytes += p.PrivateMemorySize64; } catch { }
         }
         return (bytes / (1024 * 1024), pids);
+    }
+
+    /// <summary>Every msedgewebview2 process below the launcher, following only WebView2 processes downwards.</summary>
+    static List<int> OwnWebViews()
+    {
+        var kids = new Dictionary<int, List<(int pid, string name)>>();
+        var snap = CreateToolhelp32Snapshot(2, 0);
+        try
+        {
+            var e = new PROCESSENTRY32 { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32>() };
+            if (Process32FirstW(snap, ref e))
+                do
+                {
+                    int parent = (int)e.th32ParentProcessID;
+                    if (!kids.TryGetValue(parent, out var l)) kids[parent] = l = new();
+                    l.Add(((int)e.th32ProcessID, e.szExeFile ?? ""));
+                } while (Process32NextW(snap, ref e));
+        }
+        finally { CloseHandle(snap); }
+        var found = new List<int>();
+        var todo = new Queue<int>();
+        todo.Enqueue(Environment.ProcessId);
+        while (todo.Count > 0)
+        {
+            int at = todo.Dequeue();
+            if (!kids.TryGetValue(at, out var l)) continue;
+            foreach (var (pid, name) in l)
+            {
+                if (pid == at || found.Contains(pid) || !name.Equals("msedgewebview2.exe", StringComparison.OrdinalIgnoreCase)) continue;
+                found.Add(pid);
+                todo.Enqueue(pid);
+            }
+        }
+        return found;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -148,12 +178,23 @@ public sealed partial class MainForm
         try { if (sidePanel?.Core != null) sidePanel.Core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal; } catch { }
     }
 
-    bool trimmedAway;
+    bool trimmedAway, trimmedIdle;
+    DateTime leftAt = DateTime.MaxValue;
+
+    /// <summary>Hands memory the processes aren't using right now back to Windows. Safe while on screen.</summary>
+    static void TrimSets(IEnumerable<int> pids)
+    {
+        foreach (var id in pids.Distinct())
+        {
+            try { using var p = Process.GetProcessById(id); SetProcessWorkingSetSize(p.Handle, -1, -1); } catch { }
+        }
+    }
 
     void StartMemoryCare()
     {
         VisibleChanged += (_, _) => { if (Visible) WakePages(); };
-        Activated += (_, _) => WakePages();
+        Activated += (_, _) => { WakePages(); leftAt = DateTime.MaxValue; trimmedIdle = false; };
+        Deactivate += (_, _) => leftAt = DateTime.Now;
         Resize += (_, _) => { if (WindowState != FormWindowState.Minimized) WakePages(); };
         memoryTimer.Tick += async (_, _) =>
         {
@@ -173,6 +214,10 @@ public sealed partial class MainForm
             if (limit > 0 && mb > limit && away) { await Trim(pids, hard: true); (mb, _) = await MemoryNow(); }
             else if (saver != "off" && away && !trimmedAway) { trimmedAway = true; await Trim(pids, hard: saver == "max"); }
             if (!away) trimmedAway = false;
+            // Idle: on screen but you've been in another window for 30 seconds.
+            bool idle = !away && (DateTime.Now - leftAt).TotalSeconds > 30;
+            if (idle && !trimmedIdle && saver != "off") { trimmedIdle = true; TrimSets(pids); GC.Collect(2, GCCollectionMode.Optimized, false); (mb, _) = await MemoryNow(); }
+            else if (!away && limit > 0 && mb > limit) { TrimSets(pids); (mb, _) = await MemoryNow(); }
             if (pageReady) Send(new JsonObject { ["type"] = "memory", ["mb"] = mb, ["limit"] = limit });
         };
         memoryTimer.Start();

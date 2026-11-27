@@ -57,11 +57,23 @@ internal static class RobloxApi
 		{
 			match = Regex.Match(input, "(\\d{3,})");
 		}
-		if (!match.Success)
+		long placeId;
+		if (match.Success)
 		{
-			throw new Exception("That doesn't look like a place ID or game link.");
+			placeId = long.Parse(match.Groups[1].Value);
 		}
-		long placeId = long.Parse(match.Groups[1].Value);
+		else
+		{
+			// A name like HYPERSHOT or BLUE LOCK RIVALS: the first game Roblox's own search finds.
+			string q = input.Trim();
+			if (q.Length < 2) throw new Exception("Type a game name, a game link or a place ID.");
+			JsonNode found = await Get($"https://apis.roblox.com/search-api/omni-search?searchQuery={Uri.EscapeDataString(q)}&sessionId={Guid.NewGuid()}&pageType=all");
+			JsonNode hit = (found?["searchResults"] as JsonArray)?
+				.SelectMany(g => (g?["contents"] as JsonArray)?.Select(c => c) ?? Enumerable.Empty<JsonNode?>())
+				.FirstOrDefault(c => c?["rootPlaceId"] != null);
+			if (hit == null) throw new Exception($"Roblox found no game called \"{q}\".");
+			placeId = hit["rootPlaceId"]!.GetValue<long>();
+		}
 		JsonNode universe = (await Get($"https://apis.roblox.com/universes/v1/places/{placeId}/universe"))?["universeId"];
 		if (universe == null)
 		{

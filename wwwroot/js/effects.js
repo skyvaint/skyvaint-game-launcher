@@ -51,6 +51,7 @@
 
   // ---------------------------------------------------------------- background music
   const music = new Audio();
+  addEventListener('sv-sound', (e) => { music.muted = e.detail; });
   music.preload = 'auto';
   let track = -1, musicTarget = 0, musicFade = 0, ctx = null, analyser = null, beatData = null;
   const tracks = () => (A.cfg.sound.bgmTracks || []).filter(Boolean);
@@ -211,7 +212,7 @@
     box.prepend(v);
     document.body.append(box);
     v.dataset.keep = 'always';
-    v.muted = !!opts.muted;
+    v.muted = !!opts.muted || SV.audio.onlyAmbience;
     v.loop = false;
     try { v.currentTime = 0; } catch {}
     const rate = Math.min(4, Math.max(0.1, +opts.rate || 1));
@@ -335,7 +336,7 @@
     if (!url) { if (v) v.remove(); box.classList.remove('has-video'); return; }
     if (!v) { v = document.createElement('video'); v.className = 'lf-video'; v.playsInline = true; box.prepend(v); }
     v.src = url;
-    v.muted = !A.cfg.fx.launchVideoSound;
+    v.muted = !A.cfg.fx.launchVideoSound || SV.audio.onlyAmbience;
     v.volume = Math.min(1, A.cfg.sound.master ?? 0.6);
     v.loop = true;
     const f = A.cfg.fx;

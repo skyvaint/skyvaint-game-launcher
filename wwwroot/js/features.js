@@ -180,8 +180,18 @@
       idx = Math.min(idx, list.length - 1);
       box.innerHTML = list.map((x, i) => x.add
         ? `<button class="pf add" style="--i:${i}" data-i="${i}"><div class="pf-art"></div><div class="pf-pic"><b>+</b></div><div class="pf-meta"><b>${esc(A.T('NEW PROFILE'))}</b><small>${esc(A.T('ADD ONE'))}</small></div><i class="pf-ring"></i></button>`
-        : `<button class="pf" style="--i:${i};--pf:${swatch(x.look)}" data-i="${i}"><div class="pf-art"></div>${x.id === P().current ? `<span class="pf-now">${esc(A.T('NOW'))}</span>` : ''}
-            <div class="pf-pic">${picOf(x, 'prof-pic')}</div><div class="pf-meta"><b>${esc(x.name)}</b><small>${esc(presetOf(x))}</small></div><i class="pf-ring"></i></button>`).join('');
+        : `<button class="pf" style="--i:${i};--pf:${swatch(x.look)};--pc:${accentOf(x) || 'var(--accent)'}" data-i="${i}"><div class="pf-art"><i class="pf-rays"></i><i class="pf-halo"></i></div>${x.id === P().current ? `<span class="pf-now">${esc(A.T('NOW'))}</span>` : ''}
+            <span class="pf-no">${String(i + 1).padStart(2, '0')}</span>
+            <div class="pf-pic">${picOf(x, 'prof-pic')}</div><div class="pf-meta"><small class="pf-title">${esc(presetOf(x))}</small><b>${esc(x.name)}</b><span class="pf-tags">${[whenUsed(x), x.id === P().current ? A.T('IN USE') : ''].filter(Boolean).map((t) => `<i>${esc(t)}</i>`).join('')}</span></div><i class="pf-sheen"></i><i class="pf-ring"></i></button>`).join('');
+      // The cards tilt towards the mouse, with a light that follows it (like skyvaint.com's character card).
+      box.querySelectorAll('.pf').forEach((c) => {
+        c.addEventListener('pointermove', (e) => {
+          const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+          c.style.setProperty('--ry', ((x - 0.5) * 7).toFixed(1) + 'deg'); c.style.setProperty('--rx', ((0.5 - y) * 5).toFixed(1) + 'deg');
+          c.style.setProperty('--mx', (x * 100).toFixed(1) + '%'); c.style.setProperty('--my', (y * 100).toFixed(1) + '%');
+        });
+        c.addEventListener('pointerleave', () => ['--rx', '--ry', '--mx', '--my'].forEach((p) => c.style.removeProperty(p)));
+      });
       focus();
     }
     const choose = (i) => {
@@ -231,7 +241,7 @@
       const c = A.cfg, b = document.body.classList;
       if (!c || ++tries > 120) return clearInterval(t);
       if (!(c.setup && c.setup.done)) return;
-      if (!P().ask) return clearInterval(t);
+      if (!P().ask || SV.profilesShown) return clearInterval(t); // the sound opening already showed them
       if (A.mode !== 'home' || !b.contains('entered') || b.contains('away') || A.stack.length || A.launching || document.querySelector('.fullvid')) return;
       clearInterval(t);
       pick();

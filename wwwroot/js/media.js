@@ -19,14 +19,33 @@ SV.media = (() => {
   const settle = (url) => { (waiters.get(url) || []).forEach((f) => f()); waiters.delete(url); };
 
   // ---------------------------------------------------------------- GIF: decoded in a worker, drawn by the clock
-  const gifs = new Map(); // url -> { frames, total, w, h } | 'loading' | 'native'
+  const gifs = new Map(); // url -> { frames, total, w, h, bytes, used } | 'loading' | 'native'
+  // Decoded frames are big (every frame is a full picture), so all GIFs together get one budget. Frames are decoded
+  // at the size they are shown, not the file's, and the GIFs that haven't been on screen the longest are let go
+  // first. A GIF too big for its share plays as a plain <img>, which the browser decodes a frame at a time.
+  const GIF_BUDGET = 160 * 1024 * 1024, GIF_MAX_SIDE = 640;
+  let gifBytes = 0;
+  function evictGifs(keep) {
+    const onScreen = new Set([...document.getElementsByClassName('anim-gif')].map((c) => c.dataset.src));
+    const old = [...gifs.entries()].filter(([u, g]) => typeof g === 'object' && u !== keep && !onScreen.has(u)).sort((a, b) => a[1].used - b[1].used);
+    for (const [u, g] of old) {
+      if (gifBytes <= GIF_BUDGET) break;
+      for (const f of g.frames) f.bmp.close && f.bmp.close();
+      gifBytes -= g.bytes;
+      gifs.delete(u);
+    }
+  }
   let worker = null;
   try {
     worker = new Worker('js/mediaworker.js');
     worker.onmessage = (e) => {
       const m = e.data;
-      if (m.ok) gifs.set(m.url, { frames: m.frames, total: m.total, w: m.w, h: m.h });
-      else toNative(m.url);
+      if (m.ok) {
+        const bytes = m.w * m.h * 4 * m.frames.length;
+        gifs.set(m.url, { frames: m.frames, total: m.total, w: m.w, h: m.h, bytes, used: performance.now() });
+        gifBytes += bytes;
+        evictGifs(m.url);
+      } else toNative(m.url);
       settle(m.url);
       kick();
     };
@@ -48,7 +67,7 @@ SV.media = (() => {
       const res = await fetch(url);
       if (!res.ok) throw new Error('http ' + res.status);
       const data = await res.arrayBuffer();
-      worker.postMessage({ url, data, type: res.headers.get('content-type') || 'image/gif', first }, [data]);
+      worker.postMessage({ url, data, type: res.headers.get('content-type') || 'image/gif', first, maxSide: GIF_MAX_SIDE, maxBytes: GIF_BUDGET / 2 }, [data]);
     } catch { toNative(url); settle(url); }
   }
 
@@ -62,6 +81,7 @@ SV.media = (() => {
       const url = c.dataset.src, g = gifs.get(url);
       if (!g) { load(url, true); continue; }
       if (typeof g === 'string') continue;
+      g.used = now;
       if (c.width !== g.w || c.height !== g.h) { c.width = g.w; c.height = g.h; c._f = -1; }
       const at = (now - startOf(url)) % g.total;
       let f = 0;
@@ -94,6 +114,28 @@ SV.media = (() => {
     }
     return v;
   }
+  // Videos taken off the screen are paused at once. The few most recent stay loaded so switching back is instant;
+  // the rest give their decoder and buffers back after a while.
+  const KEEP_DETACHED = 3, RELEASE_AFTER = 20000;
+  setInterval(() => {
+    const now = performance.now(), off = [];
+    for (const [url, list] of pool) for (const v of list) {
+      if (v.isConnected) { v._off = 0; continue; }
+      if (!v.paused) v.pause();
+      v._off = v._off || now;
+      off.push([url, v]);
+    }
+    off.sort((a, b) => b[1]._off - a[1]._off);
+    for (const [url, v] of off.slice(KEEP_DETACHED)) {
+      if (now - v._off < RELEASE_AFTER) continue;
+      v.removeAttribute('src');
+      v.load();
+      const list = pool.get(url) || [];
+      list.splice(list.indexOf(v), 1);
+      if (!list.length) pool.delete(url);
+    }
+  }, 4000);
+
   function sync(v, url) {
     if (isFinite(v.duration) && v.duration > 0) {
       const want = ((performance.now() - startOf(url)) / 1000) % v.duration;
@@ -123,9 +165,10 @@ SV.media = (() => {
     for (const url of urls) {
       if (!url || warmed.has(url)) continue;
       warmed.add(url);
-      if (isVideo(url)) player(url).load();
-      else if (isGif(url)) load(url, false);
-      else { const i = new Image(); i.decoding = 'async'; i.src = url; }
+      // Only still pictures are warmed up. Decoding every game's GIFs and videos ahead of time held hundreds of MB
+      // for things that weren't on screen; they load when they are shown instead.
+      if (isVideo(url) || isGif(url)) continue;
+      const i = new Image(); i.decoding = 'async'; i.src = url;
     }
   }
 

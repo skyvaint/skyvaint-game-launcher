@@ -82,7 +82,7 @@ public sealed partial class MainForm
     static void OpenSetupUrl(string url)
     {
         if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return;
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose(); } catch { }
+        try { Detached.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
     }
 
     bool OnSetupMessage(JsonObject m)

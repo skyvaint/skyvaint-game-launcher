@@ -1058,7 +1058,7 @@ public sealed partial class MainForm : Form
 		if (joined && window != IntPtr.Zero && !launchSkip)
 		{
 			Send(new JsonObject { ["type"] = "launchReady" });
-			await Task.Delay(settle);
+			await Task.Delay(SeqSettle(settle));
 		}
 		return window;
 	}
@@ -1202,10 +1202,10 @@ public sealed partial class MainForm : Form
 				: followUserId > 0 ? $"request=RequestFollowUser&browserTrackerId={tracker}&userId={followUserId}"
 				: $"request=RequestGame&browserTrackerId={tracker}&placeId={placeId}&isPlayTogetherGame=false";
 			string join = Uri.EscapeDataString("https://assetgame.roblox.com/game/PlaceLauncher.ashx?" + request);
-			Process.Start(new ProcessStartInfo($"roblox-player:1+launchmode:play+gameinfo:{ticket.Task.Result}+launchtime:{DateTimeOffset.Now.ToUnixTimeMilliseconds()}+placelauncherurl:{join}+browsertrackerid:{tracker}+robloxLocale:en_us+gameLocale:en_us+channel:+LaunchExp:InGame")
+			Detached.Start(new ProcessStartInfo($"roblox-player:1+launchmode:play+gameinfo:{ticket.Task.Result}+launchtime:{DateTimeOffset.Now.ToUnixTimeMilliseconds()}+placelauncherurl:{join}+browsertrackerid:{tracker}+robloxLocale:en_us+gameLocale:en_us+channel:+LaunchExp:InGame")
 			{
 				UseShellExecute = true
-			})?.Dispose();
+			});
 			return (ok: true, error: null);
 		}
 		catch (Exception ex)
@@ -1383,10 +1383,10 @@ public sealed partial class MainForm : Form
 		case "clipOpen":
 			if (path != null && File.Exists(path))
 			{
-				Process.Start(new ProcessStartInfo(path)
+				Detached.Start(new ProcessStartInfo(path)
 				{
 					UseShellExecute = true
-				})?.Dispose();
+				});
 			}
 			break;
 		case "clipCopyPath":
@@ -1570,7 +1570,8 @@ public sealed partial class MainForm : Form
 			mainForm.PollExtras();
 		};
 		// Losing and regaining the focus (alt-tabbing to a game and back) gets its own small transition.
-		base.Activated += delegate { if (mode == "home") Send(new JsonObject { ["type"] = "focus", ["on"] = true }); };
+		// The page gets the keyboard right away, so keys and the controller work without a click first.
+		base.Activated += delegate { if (mode == "home") { Send(new JsonObject { ["type"] = "focus", ["on"] = true }); try { if (sidePanel?.ContainsFocus != true) web?.Focus(); } catch { } } };
 		base.Deactivate += delegate { if (mode == "home") Send(new JsonObject { ["type"] = "focus", ["on"] = false }); };
 		base.Load += async delegate
 		{
@@ -2037,12 +2038,21 @@ public sealed partial class MainForm : Form
 			// While a backup is being put back the page still holds the old settings; don't let it write them.
 			if (restoring) break;
 			var incoming = m["config"]?.DeepClone() as JsonObject;
+			bool wasWindowed = HomeWindowed;
 			if (incoming != null) DataSafety.Stamp(incoming, config);
 			RememberBeforeChange(config);
 			config = incoming;
 			if (config != null)
 			{
 				WriteJson(ConfigPath, config);
+			}
+			SyncDesktop();
+			if (mode == "home" && base.Visible && wasWindowed != HomeWindowed)
+			{
+				suppressMove = true;
+				SetRoundCorners(HomeWindowed);
+				base.Bounds = HomeBounds(Screen.FromControl(this));
+				suppressMove = false;
 			}
 			if (mode == "mini")
 			{
@@ -2106,7 +2116,7 @@ public sealed partial class MainForm : Form
 			Quit();
 			break;
 		default:
-			if (!OnAccountMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m) && !OnUpdateMessage(m) && !OnSetupMessage(m) && !OnBudokaiMessage(m) && !OnCareMessage(m))
+			if (!OnAccountMessage(m) && !OnLedMessage(m) && !OnDesktopMessage(m) && !OnLaunchSeqMessage(m) && !OnLibraryMessage(m) && !OnAssetMessage(m) && !OnScreenMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m) && !OnUpdateMessage(m) && !OnSetupMessage(m) && !OnBudokaiMessage(m) && !OnCareMessage(m))
 			{
 				OnClipMessage(m);
 			}
@@ -2160,11 +2170,12 @@ public sealed partial class MainForm : Form
 		}
 		else
 		{
-			Screen screen = (base.Visible ? Screen.FromControl(this) : Screen.FromPoint(System.Windows.Forms.Cursor.Position));
-			SetRoundCorners(round: false);
+			// Already on screen: stays where it is. Appearing: on the screen chosen in Settings → SYSTEM → Screen.
+			Screen screen = (base.Visible ? Screen.FromControl(this) : TargetScreen());
+			SetRoundCorners(HomeWindowed);
 			base.TopMost = false;
 			suppressMove = true;
-			base.Bounds = screen.Bounds;
+			base.Bounds = HomeBounds(screen);
 			suppressMove = false;
 			Show();
 			Activate();
@@ -2251,6 +2262,12 @@ public sealed partial class MainForm : Form
 			state["miniY"] = base.Top;
 			stateDirty = true;
 		}
+		else if (mode == "home" && HomeWindowed && !suppressMove && base.Visible && base.WindowState == FormWindowState.Normal)
+		{
+			state["winX"] = base.Left;
+			state["winY"] = base.Top;
+			stateDirty = true;
+		}
 	}
 
 	protected override void WndProc(ref Message m)
@@ -2290,6 +2307,8 @@ public sealed partial class MainForm : Form
 	private void Quit()
 	{
 		quitting = true;
+		QuietOthers(false);
+		CloseWalls(true);
 		Close();
 	}
 
@@ -2317,6 +2336,8 @@ public sealed partial class MainForm : Form
 
 	private void LaunchFailed(string id, string error, JsonObject? game = null)
 	{
+		if (seqActive) { EndSequence(); DesktopPause(running.Count > 0); }
+		StartupGuard.Log("Launch failed: " + error);
 		Send(new JsonObject
 		{
 			["type"] = "launchFailed",
@@ -2342,9 +2363,11 @@ public sealed partial class MainForm : Form
 	{
 		if (launchBusy)
 		{
+			StartupGuard.Log("Launch ignored: another launch is still starting");
 			return;
 		}
 		JsonObject game = FindGame(id);
+		StartupGuard.Log($"Launch asked for: {game?["name"]} ({game?["platform"]})");
 		string target = game?["target"]?.ToString();
 		if (string.IsNullOrWhiteSpace(target))
 		{
@@ -2352,6 +2375,7 @@ public sealed partial class MainForm : Form
 			return;
 		}
 		launchBusy = true;
+		LedGameStarted();
 		launchSkip = false;
 		string[] names = Array.Empty<string>();
 		HashSet<int> before = new HashSet<int>();
@@ -2384,9 +2408,14 @@ public sealed partial class MainForm : Form
 			names = ProcessNames(game);
 			before = PidsOf(names);
 			Step("Starting " + name);
+			StartupGuard.Log("Launch: starting " + name);
 			if (epic)
 			{
-				await EpicAccounts.LaunchUri(target, () => PidsOf(names).Except(before).Any());
+				if (!await EpicAccounts.LaunchUri(target, () => PidsOf(names).Except(before).Any()))
+				{
+					LaunchFailed(id, "Epic didn't react. Open the Epic Games Launcher once and try again.", game);
+					return;
+				}
 			}
 			else
 			{
@@ -2415,7 +2444,7 @@ public sealed partial class MainForm : Form
 						psi.WorkingDirectory = Path.GetDirectoryName(target);
 					}
 				}
-				Process.Start(psi)?.Dispose();
+				Detached.Start(psi);
 			}
 		}
 		catch (Exception ex)
@@ -2440,6 +2469,7 @@ public sealed partial class MainForm : Form
 		{
 			nint num = ((!(mode == "home" && wait) || !BehaviorFlag("waitForGame", fallback: true)) ? IntPtr.Zero : (await WaitForGame(names, before, 1)));
 			nint window = num;
+			StartupGuard.Log(window != IntPtr.Zero ? "Launch: " + name + " is up" : "Launch: no window of " + name + " seen" + (launchSkip ? " (sent to the background)" : ""));
 			await AfterLaunch(window);
 		}
 	}
@@ -2568,6 +2598,7 @@ public sealed partial class MainForm : Form
 		while (DateTime.Now < until && !launchSkip && !quitting && found == IntPtr.Zero)
 		{
 			await Task.Delay(600);
+			if (seqActive && names.Length == 0 && DateTime.Now > seqStart.AddMilliseconds(seqTextAt + seqHold + 2500)) break;
 			int count = 0;
 			nint first = IntPtr.Zero;
 			for (int i = 0; i < names.Length; i++)
@@ -2626,7 +2657,7 @@ public sealed partial class MainForm : Form
 				SetForegroundWindow(found);
 			}
 			Send(new JsonObject { ["type"] = "launchReady" });
-			await Task.Delay(settle);
+			await Task.Delay(SeqSettle(settle));
 			base.TopMost = false;
 			SetForegroundWindow(found);
 		}
@@ -2647,12 +2678,17 @@ public sealed partial class MainForm : Form
 
 	private async Task AfterLaunch(nint gameWindow = 0)
 	{
+		try { await AfterLaunchInner(gameWindow); } finally { if (seqActive) EndSequence(); }
+	}
+
+	private async Task AfterLaunchInner(nint gameWindow)
+	{
 		string after = Behavior("afterLaunch", "hidden");
 		if (after != "stay" && after != mode)
 		{
 			if (gameWindow != IntPtr.Zero && mode == "home" && base.Visible)
 			{
-				await FadeOut();
+				if (seqActive) await SeqFadeOut(); else await FadeOut();
 			}
 			SetMode(after);
 			base.Opacity = 1.0;
@@ -2753,6 +2789,8 @@ public sealed partial class MainForm : Form
 		}
 		List<string> list = running.Except(now).ToList();
 		running = now;
+		LedPlaying(now.Count > 0);
+		DesktopPause(now.Count > 0);
 		SaveState();
 		Send(new JsonObject
 		{
@@ -2896,6 +2934,14 @@ public sealed partial class MainForm : Form
 				});
 			}
 			menu.Items.Add(new ToolStripSeparator());
+			if (Screen.AllScreens.Length > 1)
+			{
+				Add(menu, "Move to the next screen", delegate
+				{
+					if (mode == "hidden") SetMode("home");
+					MoveToScreen(null);
+				});
+			}
 			Add(menu, "Quit", Quit);
 		};
 		tray.Icon = MakeIcon(32);

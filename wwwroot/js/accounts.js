@@ -584,7 +584,30 @@
   });
   host.on('robloxClients', (m) => { clients = m.count; instances = m.instances || []; A.renderStats(); refresh(); });
 
+  // A quick link to one Roblox game, for the NEXUS bar, HOME icons and widgets: by name (HYPERSHOT, BLUE LOCK
+  // RIVALS), link or place ID. It opens straight into the game through Roblox itself.
+  function askGameLink(done) {
+    A.ask({
+      tag: 'ROBLOX GAME', title: 'WHICH GAME?', label: 'Name, game link or place ID', button: 'FIND', placeholder: 'Hypershot',
+      desc: 'Type the name of the game, or paste its roblox.com link.',
+      done: (input) => {
+        if (!input.trim()) return;
+        toast('Looking it up on Roblox…');
+        const token = newId();
+        lookups[token] = (m) => {
+          if (m.error || !m.place) { audio.play('error'); return toast(m.error || 'Could not find that game.', 'bad'); }
+          const p = m.place;
+          const name = String(p.name || 'Roblox').replace(/^\[[^\]]*\]\s*/, '').trim() || p.name;
+          done({ kind: 'url', name, target: `roblox://experiences/start?placeId=${p.placeId}`, icon: p.icon || '', placeId: p.placeId });
+          toast(name + ' added');
+        };
+        host.send('robloxResolvePlace', { token, input: input.trim() });
+      },
+    });
+  }
+
   SV.roblox = {
+    askGameLink,
     // Takes over what the standalone Roblox manager had saved, the first time only. True when something came across.
     init(old) {
       const r = rb(), flags = cfg().imported;
@@ -623,6 +646,14 @@
 
     // For the game lists and the rows under HOME.
     places: () => rb().places,
+    // Plays a saved place with the accounts ticked last time (or the first account), without the picker.
+    quickPlay(i) {
+      const r = rb();
+      if (i >= 0 && i < r.places.length) r.placeIdx = i;
+      const list = picked().length ? picked() : r.accounts.slice(0, 1);
+      if (!list.length) return SV.roblox.openAt(null, i);
+      play(list);
+    },
     // The account / server picker with one place already chosen.
     openAt(g, i) {
       const r = rb();
@@ -808,7 +839,14 @@
           ['REMOVE', () => removeAccount(a, rerender), 'danger'],
         ])),
         R.button('Add a Roblox account', 'Opens the real Roblox sign-in page in its own isolated profile.', 'SIGN IN', () => addAccount()),
-        heading('ROBLOX PLACES'),
+        R.button('Your Roblox games and places', 'They have their own page now: Settings → ROBLOX.', 'OPEN', () => A.openSettings && A.openSettings('roblox')),
+      ];
+    },
+    // Settings → ROBLOX: the places you play, and how Roblox starts.
+    placeRows(rerender) {
+      const r = rb();
+      return [
+        heading('YOUR ROBLOX GAMES'),
         ...r.places.map((p, i) => R.buttons(p.name, `Place ID ${p.placeId}${p.server ? ' · private server' : ' · public servers'}${i === r.placeIdx ? ' · current' : ''}`, [
           ['USE', () => { r.placeIdx = i; audio.play('toggle'); A.save(); rerender(); }],
           ['SERVER', () => setServer(p, rerender)],

@@ -8,7 +8,8 @@
   host.on('careCheck', (m) => { check = m; wizardRefresh && wizardRefresh(); });
   host.on('memory', (m) => { memory = m; const n = document.querySelector('.mem-now'); if (n) n.textContent = memText(); });
   host.on('openMenu', () => { while (A.stack.length) A.pop(); A.openSettings('theme'); });
-  const memText = () => `${memory.mb || '…'} MB in use${memory.limit ? ` · limit ${memory.limit} MB` : ''}`;
+  // The launcher and its own page processes. Games and apps it opened run on their own since 2.9, so they aren't in it.
+  const memText = () => `${memory.mb || '…'} MB · the launcher and its page${memory.limit ? ` · limit ${memory.limit} MB` : ''}`;
 
   // ---- performance profiles
 

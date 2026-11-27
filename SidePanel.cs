@@ -14,10 +14,16 @@ sealed class SidePanel : Panel
 {
     readonly MainForm owner;
     readonly Func<Task<CoreWebView2Environment?>> env;
-    readonly Panel header = new() { Dock = DockStyle.Top, Height = 44 };
-    readonly FlowLayoutPanel rail = new() { Dock = DockStyle.Left, Width = 54, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(6, 8, 0, 8) };
+    readonly Panel header = new() { Dock = DockStyle.Top, Height = 52 };
+    readonly Panel loading = new() { Height = 2, Width = 0, Left = 0, Top = 50 };
+    readonly AddressPill pill = new() { Height = 34, Margin = new Padding(6, 1, 6, 0) };
+    readonly List<(RailTile tile, string url)> tiles = new();
+    readonly System.Windows.Forms.Timer loadAnim = new() { Interval = 30 };
+    float loadAt;
+    IconBtn? reloadBtn;
+    readonly FlowLayoutPanel rail = new() { Dock = DockStyle.Left, Width = 56, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(7, 10, 0, 8) };
     readonly Panel grip = new() { Dock = DockStyle.Left, Width = 6, Cursor = Cursors.SizeWE };
-    readonly TextBox address = new() { BorderStyle = BorderStyle.None, Font = new Font("Segoe UI", 10f) };
+    readonly TextBox address = new() { BorderStyle = BorderStyle.None, Font = new Font("Segoe UI", 10.5f) };
     readonly ToolTip tips = new();
     WebView2? view;
     internal CoreWebView2? Core => view?.CoreWebView2;
@@ -75,23 +81,41 @@ sealed class SidePanel : Panel
         return b;
     }
 
+    IconBtn Icon(string icon, string tip, Action click)
+    {
+        var b = new IconBtn(icon) { Accent = accent };
+        b.Click += (_, _) => click();
+        tips.SetToolTip(b, tip);
+        return b;
+    }
+
     void BuildHeader()
     {
-        var row = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Padding = new Padding(4, 6, 4, 0) };
-        row.Controls.Add(Btn("◀", "Back", () => { if (view?.CanGoBack == true) view.GoBack(); }));
-        row.Controls.Add(Btn("▶", "Forward", () => { if (view?.CanGoForward == true) view.GoForward(); }));
-        row.Controls.Add(Btn("⟳", "Reload", () => view?.Reload()));
-        var box = new Panel { Width = 200, Height = 30, Padding = new Padding(8, 6, 8, 0), Margin = new Padding(4, 1, 4, 0) };
+        var row = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Padding = new Padding(8, 9, 6, 0) };
+        row.Controls.Add(Icon("back", "Back (Alt+Left)", () => { if (view?.CanGoBack == true) view.GoBack(); }));
+        row.Controls.Add(Icon("forward", "Forward (Alt+Right)", () => { if (view?.CanGoForward == true) view.GoForward(); }));
+        row.Controls.Add(reloadBtn = Icon("reload", "Reload (F5)", () => { if (loadAnim.Enabled) view?.CoreWebView2?.Stop(); else view?.Reload(); }));
         address.Dock = DockStyle.Fill;
         address.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; Go(address.Text); } };
-        box.Controls.Add(address);
-        row.Controls.Add(box);
-        row.Controls.Add(Btn("＋", "Save this site to your list", () => { var u = view?.Source?.AbsoluteUri; if (!string.IsNullOrEmpty(u) && u != "about:blank") owner.OnSideMessage(new JsonObject { ["type"] = "addSite", ["url"] = u, ["title"] = view?.CoreWebView2?.DocumentTitle ?? "" }); }));
-        row.Controls.Add(Btn("▣", "View: side, wide, full screen or its own window", () => ViewMenu(row)));
-        row.Controls.Add(Btn("↗", "Open in your browser", () => { var u = view?.Source?.AbsoluteUri; if (!string.IsNullOrEmpty(u)) try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(u) { UseShellExecute = true })?.Dispose(); } catch { } }));
-        row.Controls.Add(Btn("✕", "Close", () => owner.OnSideMessage(new JsonObject { ["type"] = "close" })));
+        address.GotFocus += (_, _) => { pill.Focus_ = true; pill.Invalidate(); BeginInvoke(address.SelectAll); };
+        address.LostFocus += (_, _) => { pill.Focus_ = false; pill.Invalidate(); };
+        pill.Controls.Add(address);
+        row.Controls.Add(pill);
+        var box = pill;
+        row.Controls.Add(Icon("add", "Save this site to your list", () => { var u = view?.Source?.AbsoluteUri; if (!string.IsNullOrEmpty(u) && u != "about:blank") owner.OnSideMessage(new JsonObject { ["type"] = "addSite", ["url"] = u, ["title"] = view?.CoreWebView2?.DocumentTitle ?? "" }); }));
+        row.Controls.Add(Icon("view", "View: side, wide, full screen or its own window", () => ViewMenu(row)));
+        row.Controls.Add(Icon("out", "Open in your browser", () => { var u = view?.Source?.AbsoluteUri; if (!string.IsNullOrEmpty(u)) try { Detached.Start(new System.Diagnostics.ProcessStartInfo(u) { UseShellExecute = true }); } catch { } }));
+        row.Controls.Add(Icon("close", "Close", () => owner.OnSideMessage(new JsonObject { ["type"] = "close" })));
         header.Controls.Add(row);
-        header.Resize += (_, _) => box.Width = Math.Max(80, header.Width - 7 * 38 - 20);
+        header.Controls.Add(loading);
+        header.Resize += (_, _) => { box.Width = Math.Max(80, header.Width - 7 * 38 - 24); loading.Top = header.Height - 2; };
+        loading.BringToFront();
+        // The thin loading bar: it runs while a page loads and finishes when it is done.
+        loadAnim.Tick += (_, _) =>
+        {
+            loadAt += (0.92f - loadAt) * 0.05f;
+            loading.Width = (int)(header.Width * loadAt);
+        };
     }
 
     /// <summary>Colours, sites, side and width from the settings.</summary>
@@ -103,9 +127,14 @@ sealed class SidePanel : Panel
         BackColor = rail.BackColor = bg;
         header.BackColor = Color.FromArgb(Math.Min(255, bg.R + 6), Math.Min(255, bg.G + 5), Math.Min(255, bg.B + 5));
         grip.BackColor = Color.FromArgb(90, accent);
-        address.BackColor = Color.FromArgb(30, 24, 24);
-        address.ForeColor = Color.FromArgb(245, 239, 238);
-        if (address.Parent is Panel p) p.BackColor = address.BackColor;
+        header.BackColor = Color.FromArgb(12, 12, 12);
+        BackColor = rail.BackColor = Color.FromArgb(9, 9, 9);
+        pill.Fill = Color.FromArgb(26, 26, 26);
+        address.BackColor = pill.Fill;
+        address.ForeColor = Color.FromArgb(240, 240, 240);
+        loading.BackColor = accent;
+        foreach (var (t, _) in tiles) t.Accent = accent;
+        grip.BackColor = Color.FromArgb(40, 255, 255, 255);
         var side = social?["side"]?.ToString() == "left" ? DockStyle.Left : DockStyle.Right;
         sideDock = side;
         if (view_ is "side" or "wide" && !videoFull && Dock != side) { Dock = side; grip.Dock = side == DockStyle.Left ? DockStyle.Right : DockStyle.Left; }
@@ -132,16 +161,47 @@ sealed class SidePanel : Panel
     void BuildRail(List<(string name, string url)> sites)
     {
         rail.Controls.Clear();
+        tiles.Clear();
         foreach (var (name, url) in sites)
         {
-            var b = Btn(name.Length > 0 ? name[..1] : "?", name, () => Go(url), 42);
-            b.Height = 42;
-            b.Margin = new Padding(0, 0, 0, 6);
-            b.Font = new Font("Segoe UI Semibold", 12f);
-            rail.Controls.Add(b);
-            _ = LoadIcon(b, url);
+            var t = new RailTile { Letter = name.Length > 0 ? name[..1] : "?", Accent = accent };
+            t.Click += (_, _) => Go(url);
+            tips.SetToolTip(t, name);
+            rail.Controls.Add(t);
+            tiles.Add((t, url));
+            _ = LoadTileIcon(t, url);
         }
         rail.Controls.Add(Btn("+", "Add a site (Settings → Social)", () => owner.OnSideMessage(new JsonObject { ["type"] = "addSite" }), 42));
+    }
+
+    static async Task LoadTileIcon(RailTile t, string url)
+    {
+        try
+        {
+            var host = new Uri(url).Host;
+            var bytes = await http.GetByteArrayAsync($"https://www.google.com/s2/favicons?domain={host}&sz=64");
+            using var ms = new MemoryStream(bytes);
+            var img = new Bitmap(Image.FromStream(ms), 44, 44);
+            if (t.IsDisposed) return;
+            t.BeginInvoke(() => { t.Pic = img; t.Invalidate(); });
+        }
+        catch { }
+    }
+
+    /// <summary>The rail tile of the site you're on lights up; the padlock shows for https.</summary>
+    void MarkActive(string? source)
+    {
+        string host = "";
+        try { host = new Uri(source ?? "").Host.Replace("www.", ""); } catch { }
+        foreach (var (t, u) in tiles)
+        {
+            string h = "";
+            try { h = new Uri(u).Host.Replace("www.", ""); } catch { }
+            bool on = h != "" && (host == h || host.EndsWith("." + h));
+            if (t.Active != on) { t.Active = on; t.Invalidate(); }
+        }
+        pill.Secure = (source ?? "").StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        pill.Invalidate();
     }
 
     static async Task LoadIcon(Button b, string url)
@@ -181,7 +241,22 @@ sealed class SidePanel : Panel
             if (ownWindow != null) ownWindow.WindowState = videoFull ? FormWindowState.Maximized : FormWindowState.Normal;
             else Apply();
         };
-        core.SourceChanged += (_, _) => { if (!address.Focused) address.Text = core.Source; };
+        core.SourceChanged += (_, _) => { if (!address.Focused) address.Text = core.Source; MarkActive(core.Source); };
+        core.NavigationStarting += (_, _) => { loadAt = 0.08f; loading.Visible = true; loadAnim.Start(); if (reloadBtn != null) { reloadBtn.Icon = "stop"; reloadBtn.Invalidate(); } };
+        core.NavigationCompleted += (_, _) =>
+        {
+            loadAnim.Stop();
+            loading.Width = header.Width;
+            _ = Task.Delay(250).ContinueWith(_ => { try { BeginInvoke(() => { loading.Width = 0; }); } catch { } });
+            if (reloadBtn != null) { reloadBtn.Icon = "reload"; reloadBtn.Invalidate(); }
+        };
+        // Keys like a normal browser: Ctrl+L address, F5 reload, Alt+arrows back and forward, Esc stops.
+        view.KeyDown += (_, _) => { };
+        core.Settings.AreBrowserAcceleratorKeysEnabled = true;
+        view.PreviewKeyDown += (_, e) =>
+        {
+            if (e.Control && e.KeyCode == Keys.L) BeginInvoke(() => { address.Focus(); address.SelectAll(); });
+        };
         core.DocumentTitleChanged += (_, _) => owner.OnSideMessage(new JsonObject { ["type"] = "title", ["title"] = core.DocumentTitle, ["url"] = core.Source });
     }
 

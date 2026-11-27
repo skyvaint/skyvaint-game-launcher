@@ -20,6 +20,20 @@ SV.audio = (() => {
         slam: [[-36, 0, 0.42, 0.95, -52], [-24, 0, 0.16, 0.45, -36]],
       },
       noisy: { slam: [0, 0.32], confirm: [0, 0.18], boot: [0.2, 1.4], launch: [0, 1.1] } },
+    // Early-2000s console menu feel: soft glassy ticks, a warm two-note select, a falling back, deep airy swells.
+    console2k: { name: 'PS2-style', wave: 'sine', base: 740, decay: 1.5, lowpass: 5200, noise: 0.35, gain: 0.95, octave: 0.22, attack: 0.004,
+      events: {
+        nav: [[0, 0, 0.05, 0.42], [12, 0.004, 0.03, 0.14]],
+        toggle: [[4, 0, 0.05, 0.4], [11, 0.035, 0.07, 0.3]],
+        confirm: [[-5, 0, 0.12, 0.46], [2, 0.05, 0.34, 0.44], [14, 0.06, 0.5, 0.16]],
+        back: [[2, 0, 0.08, 0.42], [-7, 0.05, 0.26, 0.4, -10]],
+        open: [[-12, 0, 0.3, 0.4], [-5, 0.06, 0.34, 0.34], [2, 0.12, 0.4, 0.26]],
+        pick: [[2, 0, 0.08, 0.4], [9, 0.07, 0.1, 0.4], [14, 0.14, 0.45, 0.32]],
+        star: [[2, 0, 0.1, 0.36], [7, 0.09, 0.1, 0.36], [11, 0.18, 0.12, 0.36], [14, 0.27, 0.8, 0.34]],
+        error: [[-12, 0, 0.14, 0.5], [-13, 0.12, 0.26, 0.5]],
+        slam: [[-36, 0, 0.6, 0.9, -48], [-24, 0, 0.3, 0.35, -31]],
+      },
+      noisy: { slam: [0, 0.4], open: [0, 0.35], boot: [0.1, 1.6], launch: [0, 1.2] } },
     pulse:   { name: 'Pulse',   wave: 'sine',     base: 660, decay: 1.0, lowpass: 9000, noise: 0.0 },
     bolt:    { name: 'Bolt',    wave: 'sawtooth', base: 330, decay: 0.8, lowpass: 2600, noise: 0.6 },
     arcade:  { name: 'Arcade',  wave: 'square',   base: 523, decay: 0.6, lowpass: 5200, noise: 0.0, gain: 0.5 },
@@ -61,7 +75,7 @@ SV.audio = (() => {
 
   let ctx, master, ambientNodes, echoGain;
   let opt = { master: 0.6, pack: 'pulse', events: {}, custom: {}, ambient: 0, pitch: 0, echo: 0 };
-  let ambientOn = true;
+  let ambientOn = true, ambientHold = false; // hold: another window is in front, or a game is starting
 
   function ensure() {
     if (ctx) return true;
@@ -161,7 +175,7 @@ SV.audio = (() => {
 
   let lastAt = {}, volume = 1;
   function play(event, vol = 1) {
-    if (opt.master <= 0 || opt.events[event] === false) return;
+    if (opt.master <= 0 || opt.events[event] === false || opt.onlyAmbience || (window.SV && SV.silent)) return;
     const now = performance.now();
     if (now - (lastAt[event] || 0) < 28) return; // the same sound twice in one frame is just louder, not useful
     // Two cursor sounds right on top of each other (a hover just before a key press) only play once.
@@ -181,8 +195,70 @@ SV.audio = (() => {
   }
 
   // Low drone under the HOME screen. Two detuned voices through a slowly breathing filter.
+  // PS2-style ambience, made here from tones: two slow airy chords drifting into each other, a soft breath of noise,
+  // and now and then a far-off glassy note. Built once; it fades with the volume and costs nothing while silent.
+  let con = null;
+  function consoleAmbient(level) {
+    if (level <= 0) {
+      if (con) { con.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.7); clearTimeout(con.timer); con.timer = 0; clearTimeout(con.off); con.off = setTimeout(() => { if (con && !con.timer) con.stop(); }, 5000); }
+      return;
+    }
+    if (!ensure()) return;
+    if (ctx.state === 'suspended') ctx.resume();
+    if (!con) {
+      const gain = ctx.createGain(), lp = ctx.createBiquadFilter(), delay = ctx.createDelay(2), fb = ctx.createGain(), wet = ctx.createGain(), made = [];
+      gain.gain.value = 0;
+      lp.type = 'lowpass'; lp.frequency.value = 900; lp.Q.value = 0.4;
+      delay.delayTime.value = 0.62; fb.gain.value = 0.48; wet.gain.value = 0.5;
+      lp.connect(gain); lp.connect(delay); delay.connect(fb).connect(delay); delay.connect(wet).connect(gain);
+      gain.connect(master);
+      // Two chords, each with its own very slow swell, in opposite phase.
+      [[73.42, 110, 164.81, 220], [65.41, 98, 146.83, 246.94]].forEach((chord, c) => {
+        const swell = ctx.createGain(), lfo = ctx.createOscillator(), depth = ctx.createGain();
+        swell.gain.value = 0.5; lfo.frequency.value = 0.035; depth.gain.value = c ? -0.45 : 0.45;
+        lfo.connect(depth).connect(swell.gain); swell.connect(lp); lfo.start(); made.push(lfo);
+        chord.forEach((f, i) => [-3, 3].forEach((cents) => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.type = i < 2 ? 'sine' : 'triangle'; o.frequency.value = f; o.detune.value = cents; g.gain.value = 0.11 / (1 + i * 0.5);
+          o.connect(g).connect(swell); o.start(); made.push(o);
+        }));
+      });
+      // The breath: filtered noise, barely there.
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const n = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), ng = ctx.createGain();
+      n.buffer = buf; n.loop = true; bp.type = 'bandpass'; bp.frequency.value = 520; bp.Q.value = 0.6; ng.gain.value = 0.02;
+      n.connect(bp).connect(ng).connect(lp); n.start(); made.push(n);
+      con = { gain, lp, timer: 0, off: 0, stop() { made.forEach((x) => { try { x.stop(); x.disconnect(); } catch {} }); [gain, lp, delay, fb, wet].forEach((x) => x.disconnect()); con = null; } };
+    }
+    clearTimeout(con.off);
+    con.gain.gain.setTargetAtTime(level * 0.55, ctx.currentTime, 1.2);
+    if (!con.timer) {
+      const chime = () => {
+        if (!con) return;
+        const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime, f = [587.33, 659.25, 880, 987.77, 1174.66][Math.random() * 5 | 0];
+        o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.045, t + 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + 4);
+        o.connect(g).connect(con.lp); o.start(t); o.stop(t + 4.1);
+        con.timer = setTimeout(chime, 5000 + Math.random() * 8000);
+      };
+      con.timer = setTimeout(chime, 3000);
+    }
+  }
+  // Your own ambience file, looped.
+  let own = null;
+  function ownAmbient(url, level) {
+    if (!url || level <= 0) { if (own) { own.pause(); if (!url) own = null; } return; }
+    if (!own || own._u !== url) { if (own) own.pause(); own = new Audio(url); own._u = url; own.loop = true; }
+    own.volume = Math.max(0, Math.min(1, level * opt.master));
+    own.play().catch(() => {});
+  }
+
   function updateAmbient() {
-    const level = ambientOn ? opt.ambient : 0;
+    const want = ambientOn && !ambientHold ? opt.ambient : 0;
+    ownAmbient(opt.ambientFile, want);
+    consoleAmbient(!opt.ambientFile && opt.ambientKind === 'console' ? want : 0);
+    const level = !opt.ambientFile && opt.ambientKind !== 'console' ? want : 0;
     if (level <= 0) {
       if (ambientNodes) ambientNodes.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.4);
       return;
@@ -212,6 +288,7 @@ SV.audio = (() => {
 
   function configure(sound) {
     opt = { ...opt, ...sound };
+    dispatchEvent(new CustomEvent('sv-sound', { detail: !!opt.onlyAmbience }));
     if (master) master.gain.setTargetAtTime(opt.master, ctx.currentTime, 0.05);
     if (echoGain) echoGain.gain.setTargetAtTime((opt.echo || 0) * 0.7, ctx.currentTime, 0.05);
     updateAmbient();
@@ -221,6 +298,13 @@ SV.audio = (() => {
     ambientOn = on;
     if (ctx) updateAmbient();
   }
+  function holdAmbient(on) {
+    if (ambientHold === !!on) return;
+    ambientHold = !!on;
+    updateAmbient();
+  }
 
-  return { play, configure, setAmbientActive, PACKS, EVENT_NAMES, preview: (url) => playFile(url) };
+  return { play, configure, setAmbientActive, holdAmbient, PACKS, EVENT_NAMES, preview: (url) => playFile(url),
+    // A sound that belongs to an action (a click, a game starting): quiet when only the ambience is on.
+    effect: (url) => { if (!opt.onlyAmbience) playFile(url); }, get onlyAmbience() { return !!opt.onlyAmbience; } };
 })();

@@ -254,10 +254,10 @@ internal static class SteamAccounts
 
 	public static void Open(bool silent)
 	{
-		Process.Start(new ProcessStartInfo(Exe ?? throw new Exception("Steam doesn't look installed."), silent ? "-silent" : "")
+		Detached.Start(new ProcessStartInfo(Exe ?? throw new Exception("Steam doesn't look installed."), silent ? "-silent" : "")
 		{
 			UseShellExecute = true
-		})?.Dispose();
+		});
 	}
 
 	public static async Task<bool> WaitForSignIn(string steamId, int seconds, Func<bool> cancel)

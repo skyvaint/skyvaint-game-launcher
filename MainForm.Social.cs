@@ -177,6 +177,22 @@ public sealed partial class MainForm
                     Send(stats);
                 }
                 return true;
+            case "mixer":
+                Task.Run(() =>
+                {
+                    var apps = new JsonArray();
+                    try { foreach (var (key, name, level, muted) in NowPlaying.AppVolume.All()) apps.Add(new JsonObject { ["key"] = key, ["name"] = name, ["level"] = Math.Round(level * 100), ["muted"] = muted }); } catch { }
+                    BeginInvoke(() => Send(new JsonObject { ["type"] = "mixer", ["apps"] = apps }));
+                });
+                return true;
+            case "mixerSet":
+            {
+                var key = m["key"]?.ToString() ?? "";
+                float? level = m["level"] is JsonNode l ? (float)(l.GetValue<double>() / 100.0) : null;
+                bool? mute = m["mute"] is JsonNode mu ? mu.GetValue<bool>() : null;
+                Task.Run(() => { try { NowPlaying.AppVolume.SetApp(key, level, mute); } catch { } });
+                return true;
+            }
             case "setVolume":
                 try { SystemStats.Volume.Set((float)((m["level"]?.GetValue<double>() ?? 50) / 100.0)); } catch { }
                 return true;

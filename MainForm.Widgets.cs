@@ -88,7 +88,8 @@ public sealed partial class MainForm
                     {
                         if (app?["sound"]?.ToString() is { Length: > 0 } s) Send(new JsonObject { ["type"] = "playSound", ["url"] = s });
                         if (app?["kind"]?.ToString() == "game") TrayLaunch(app["gameId"]?.ToString() ?? "");
-                        else if (target != "") Process.Start(new ProcessStartInfo(target) { UseShellExecute = true, Arguments = app?["args"]?.ToString() ?? "" })?.Dispose();
+                        else if (app?["kind"]?.ToString() == "home") SetMode("home");
+                        else if (target != "") Detached.Start(new ProcessStartInfo(target) { UseShellExecute = true, Arguments = app?["args"]?.ToString() ?? "" });
                         OpenedFromBar();
                     }
                     catch { }

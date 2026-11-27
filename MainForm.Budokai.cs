@@ -153,16 +153,16 @@ public sealed partial class MainForm
                         reply["pad"] = Emulators.SetupPlayer2(exe, friendPad);
                     }
                     if (Process.GetProcessesByName("parsecd").Length == 0)
-                        Process.Start(new ProcessStartInfo(parsec) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(parsec) })?.Dispose();
+                        Detached.Start(new ProcessStartInfo(parsec) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(parsec) });
                     else
-                        Process.Start(new ProcessStartInfo(parsec) { UseShellExecute = true })?.Dispose(); // brings its window up
+                        Detached.Start(new ProcessStartInfo(parsec) { UseShellExecute = true }); // brings its window up
                     break;
                 case "join":
                     var link = (m["link"]?.ToString() ?? "").Trim();
                     if (!System.Text.RegularExpressions.Regex.IsMatch(link, @"^(https://(www\.)?parsec\.(gg|app)/|parsec://)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
                         throw new Exception("That doesn't look like a Parsec link (it starts with https://parsec.gg/).");
                     if (parsec == null) break;
-                    Process.Start(new ProcessStartInfo(link) { UseShellExecute = true })?.Dispose();
+                    Detached.Start(new ProcessStartInfo(link) { UseShellExecute = true });
                     break;
             }
             reply["ok"] = true;
@@ -184,7 +184,7 @@ public sealed partial class MainForm
             {
                 // Dolphin is only opened, nothing is set up in it.
                 var app = Emulators.FindDolphin(Str("exe")) ?? dolphinFound ?? throw new Exception("Dolphin wasn't found (pick Dolphin.exe in the Budokai options).");
-                Process.Start(new ProcessStartInfo(app) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(app) })?.Dispose();
+                Detached.Start(new ProcessStartInfo(app) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(app) });
                 done["ok"] = true;
                 BeginInvoke(() => Send(done));
                 return;
@@ -204,7 +204,7 @@ public sealed partial class MainForm
                 if (Str("myPad") != "") { try { Emulators.SetupPlayer1(exe, Str("myPad") == "controller"); } catch (Exception ex) { Step("Controls: " + ex.Message); } }
                 Step("Starting PCSX2");
                 var args = (full ? "-fullscreen " : "") + "-fastboot -- \"" + path + "\"";
-                Process.Start(new ProcessStartInfo(exe, args) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) })?.Dispose();
+                Detached.Start(new ProcessStartInfo(exe, args) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) });
                 done["ok"] = true;
             }
             else
@@ -214,7 +214,7 @@ public sealed partial class MainForm
                 {
                     Step("Starting Dolphin");
                     var args = (full ? "--config=Dolphin.Display.Fullscreen=True " : "") + "-b -e \"" + path + "\"";
-                    Process.Start(new ProcessStartInfo(exe, args) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) })?.Dispose();
+                    Detached.Start(new ProcessStartInfo(exe, args) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) });
                     done["ok"] = true;
                 }
                 else

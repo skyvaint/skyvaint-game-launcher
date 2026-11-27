@@ -262,6 +262,7 @@
       R.button('Add a program', 'Any .exe or shortcut on this PC.', 'PICK FILE', addApp),
       R.button('Add a game', 'One of your launcher games.', 'PICK GAME', addGameMenu),
       R.button('Add a website', 'Opens in your browser.', 'ADD URL', addSite),
+      R.button('Add a Roblox game', 'By name like HYPERSHOT, or a game link. Opens straight into it.', 'ADD GAME', () => SV.roblox.askGameLink(add)),
       R.button('Add the launcher', 'A logo that opens HOME. Uses your app icon.', 'ADD', () => add({ kind: 'home', name: 'Skyvaint', icon: '', target: '' })),
       R.button('Fill with my apps', 'Your most played games, plus Epic, Steam, Discord, Medal and Bloxstrap if they are on this PC — whatever is missing from this bar.', 'FILL', () => askSeed(true)),
     ];

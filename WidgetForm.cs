@@ -8,8 +8,10 @@ namespace Skyvaint;
 
 /// <summary>
 /// A desktop widget, Rainmeter style: a see-through window that draws one thing straight onto the desktop.
-/// Kinds: "clock" (time and date), "music" (cover, song, controls), "perf" (CPU / RAM with little graphs, drives)
-/// and "apps" (a frame of app icons). Unlock the widgets to drag them anywhere; they can show only on the desktop.
+/// Kinds: "clock" (time and date), "music" (cover, song, controls), "perf" (CPU / RAM with little graphs, drives),
+/// "apps" (a frame of app icons), "icon" (one app, game or site as a desktop icon), and the text cards "date", "note"
+/// and "countdown". Unlock the widgets to drag them anywhere, on any screen; they can show only on the desktop.
+/// Each one has its own size, corners, background colour, text colour and opacity.
 /// </summary>
 sealed class WidgetForm : Form
 {
@@ -18,14 +20,17 @@ sealed class WidgetForm : Form
     public string WidgetId { get; }
     string kind = "clock", style = "glass", accentHex = "#ff1f1f";
     float scale = 1, opacity = 0.92f;
-    bool locked = true, suppressed, h24 = true;
+    bool locked = true, suppressed, h24 = true, showName = true;
+    float radius = 16, iconPx = 64;
+    Color? bgColor, textColor;
+    string text = "", label = "", date = "", hoverStyle = "glow";
     Color accent = Color.FromArgb(255, 31, 31), accent2 = Color.FromArgb(255, 77, 61), bg = Color.FromArgb(7, 5, 5);
     JsonObject? data;
     JsonArray apps = new();
     readonly Dictionary<string, Bitmap?> images = new();
     readonly List<(RectangleF r, string action)> hits = new();
     readonly Queue<double> cpuHist = new(), ramHist = new();
-    Point? dragFrom;
+    Point? dragFrom, dragScreen;
     int hover = -1;
     float fade = 0, fadeTarget = 1;
     readonly System.Windows.Forms.Timer anim = new() { Interval = 15 };
@@ -52,7 +57,9 @@ sealed class WidgetForm : Form
 
     Size BaseSize => kind switch
     {
-        "music" => new Size(360, 132), "perf" => new Size(300, 190), "apps" => new Size(Math.Max(140, Math.Min(6, Math.Max(1, apps.Count)) * 76 + 24), 40 + (int)Math.Ceiling(Math.Max(1, apps.Count) / 6.0) * 86),
+        "music" => new Size(360, 132), "perf" => new Size(300, 190), "apps" => new Size(Math.Max(140, (int)(Math.Min(gridCols, Math.Max(1, apps.Count)) * (GridCell + gridGap) - gridGap + 24)), (int)(24 + Math.Ceiling(Math.Max(1, apps.Count) / (double)gridCols) * (GridRow + gridGap) - gridGap)),
+        "icon" => new Size((int)iconPx + 36, (int)iconPx + (showName ? 46 : 24)),
+        "note" or "date" or "countdown" => new Size(260, 96),
         _ => new Size(330, 140),
     };
 
@@ -65,6 +72,18 @@ sealed class WidgetForm : Form
         opacity = Math.Clamp((float)(Num(w["opacity"]) ?? 0.92), 0.2f, 1f);
         h24 = w["clock24"]?.GetValue<bool>() ?? true;
         apps = w["apps"] as JsonArray ?? new JsonArray();
+        radius = Math.Clamp((float)(Num(w["radius"]) ?? 16), 0, 80);
+        iconPx = Math.Clamp((float)(Num(w["iconSize"]) ?? 64), 24, 256);
+        gridCols = Math.Clamp((int)(Num(w["cols"]) ?? 6), 1, 12);
+        gridGap = Math.Clamp((float)(Num(w["gap"]) ?? 0), 0, 80);
+        gridIcon = Math.Clamp((float)(Num(w["gridIcon"]) ?? 44), 20, 160);
+        showName = w["showName"]?.GetValue<bool>() ?? true;
+        bgColor = w["bgColor"]?.ToString() is { Length: 7 } bc ? Hex(bc, Color.Black) : null;
+        textColor = w["textColor"]?.ToString() is { Length: 7 } tc ? Hex(tc, Color.White) : null;
+        text = w["text"]?.ToString() ?? "";
+        label = w["label"]?.ToString() ?? "";
+        date = w["date"]?.ToString() ?? "";
+        hoverStyle = w["hover"]?.ToString() ?? "glow";
         this.locked = locked;
         accentHex = theme?["accent"]?.ToString() ?? accentHex;
         accent = Hex(accentHex, accent);
@@ -72,10 +91,13 @@ sealed class WidgetForm : Form
         bg = Hex(theme?["bg"]?.ToString(), bg);
         var k = DeviceDpi / 96f * scale;
         var size = new Size((int)(BaseSize.Width * k), (int)(BaseSize.Height * k));
-        var screen = (Screen.PrimaryScreen ?? Screen.AllScreens[0]).WorkingArea;
-        int x = (int)(Num(w["x"]) ?? screen.Right - size.Width - 40), y = (int)(Num(w["y"]) ?? screen.Top + 40);
-        x = Math.Clamp(x, screen.Left - size.Width + 40, screen.Right - 40);
-        y = Math.Clamp(y, screen.Top, screen.Bottom - 40);
+        // Kept on whichever screen it was put on (every screen counts, not only the main one). A widget whose screen
+        // was unplugged comes back to the main screen.
+        var main = (Screen.PrimaryScreen ?? Screen.AllScreens[0]).WorkingArea;
+        int x = (int)(Num(w["x"]) ?? main.Right - size.Width - 40), y = (int)(Num(w["y"]) ?? main.Top + 40);
+        var on = Screen.AllScreens.FirstOrDefault(s => s.Bounds.IntersectsWith(new Rectangle(x, y, size.Width, size.Height)))?.WorkingArea ?? main;
+        x = Math.Clamp(x, on.Left - size.Width + 40, on.Right - 40);
+        y = Math.Clamp(y, on.Top, on.Bottom - 40);
         var r = new Rectangle(x, y, size.Width, size.Height);
         if (Bounds != r) Bounds = r;
         if (!Visible && !suppressed) Show();
@@ -107,7 +129,7 @@ sealed class WidgetForm : Form
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);
-        if (e.Button == MouseButtons.Left && !locked) dragFrom = e.Location;
+        if (e.Button == MouseButtons.Left && !locked) { dragFrom = e.Location; dragScreen = Cursor.Position; }
     }
     protected override void OnMouseMove(MouseEventArgs e)
     {
@@ -127,9 +149,15 @@ sealed class WidgetForm : Form
         base.OnMouseUp(e);
         if (dragFrom != null)
         {
-            bool moved = Math.Abs(e.X - dragFrom.Value.X) > 3 || Math.Abs(e.Y - dragFrom.Value.Y) > 3;
+            // Measured on the screen: the window moves with the pointer, so inside it the pointer never seems to move
+            // (that is what made letting go of a dragged icon open its app).
+            var start = dragScreen ?? Cursor.Position;
+            bool moved = Math.Abs(Cursor.Position.X - start.X) > 3 || Math.Abs(Cursor.Position.Y - start.Y) > 3;
             dragFrom = null;
+            dragScreen = null;
             if (moved) { owner.OnWidgetMessage(new JsonObject { ["type"] = "moved", ["id"] = WidgetId, ["x"] = Left, ["y"] = Top }); return; }
+            // Unlocked means arranging: a click doesn't open anything.
+            if (e.Button == MouseButtons.Left) return;
         }
         if (e.Button == MouseButtons.Right) { ShowMenu(); return; }
         var hit = hits.FirstOrDefault(x => x.r.Contains(e.Location));
@@ -165,8 +193,8 @@ sealed class WidgetForm : Form
             var all = new RectangleF(0, 0, Width, Height);
             if (style != "none")
             {
-                using var path = Rounded(RectangleF.Inflate(all, -1, -1), 16 * k);
-                using var fill = new SolidBrush(style == "accent" ? Color.FromArgb(200, accent) : Color.FromArgb(170, bg));
+                using var path = Rounded(RectangleF.Inflate(all, -1, -1), radius * k);
+                using var fill = new SolidBrush(style == "custom" && bgColor is Color own ? Color.FromArgb(215, own) : style == "accent" ? Color.FromArgb(200, accent) : Color.FromArgb(170, bg));
                 g.FillPath(fill, path);
                 using var pen = new Pen(Color.FromArgb(locked ? 70 : 200, accent), (locked ? 1 : 2) * k);
                 g.DrawPath(pen, path);
@@ -181,6 +209,8 @@ sealed class WidgetForm : Form
                 case "music": DrawMusic(g, k); break;
                 case "perf": DrawPerf(g, k); break;
                 case "apps": DrawApps(g, k); break;
+                case "icon": DrawIcon(g, k); break;
+                case "note": case "date": case "countdown": DrawCard(g, k); break;
                 default: DrawClock(g, k); break;
             }
         }
@@ -290,27 +320,99 @@ sealed class WidgetForm : Form
         }
     }
 
+    // App grid: columns, the space between icons and the icon size come from Settings → WIDGETS.
+    int gridCols = 6;
+    float gridGap, gridIcon = 44;
+    float GridCell => Math.Max(76, gridIcon + 32);
+    float GridRow => gridIcon + (showName ? 42 : 18);
+
     void DrawApps(Graphics g, float k)
     {
-        float pad = 12 * k, cell = 76 * k, icon = 44 * k;
+        float pad = 12 * k, cell = GridCell * k, icon = gridIcon * k, gap = gridGap * k, rowH = GridRow * k;
         using var name = F(10.5f * k, FontStyle.Bold, "Segoe UI Semibold");
         using var fmt = new StringFormat { Alignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
         if (apps.Count == 0) { g.DrawString("Add apps in Settings → Widgets", name, Muted, new RectangleF(0, Height / 2f - 8 * k, Width, 20 * k), fmt); return; }
         int i = 0;
         foreach (var a in apps.OfType<JsonObject>())
         {
-            int col = i % 6, row = i / 6;
-            var c = new RectangleF(pad + col * cell, pad + row * 86 * k, cell, 84 * k);
+            int col = i % gridCols, row = i / gridCols;
+            var c = new RectangleF(pad + col * (cell + gap), pad + row * (rowH + gap), cell, rowH - 2 * k);
             hits.Add((c, "app:" + i));
             bool hot = hover == hits.Count - 1;
-            if (hot) { using var hb = new SolidBrush(Color.FromArgb(60, accent)); using var hp = Rounded(RectangleF.Inflate(c, -3 * k, -3 * k), 10 * k); g.FillPath(hb, hp); }
-            var ir = new RectangleF(c.X + (cell - icon) / 2, c.Y + 8 * k - (hot ? 3 * k : 0), icon, icon);
+            // Hovered: the icon simply grows a little.
+            float grow = hot ? icon * 0.16f : 0;
+            var ir = new RectangleF(c.X + (cell - icon - grow) / 2, c.Y + 8 * k - grow / 2, icon + grow, icon + grow);
             var img = Load(a["icon"]?.ToString() ?? "");
             if (img != null) g.DrawImage(img, ir);
             else { using var b = new LinearGradientBrush(ir, accent2, accent, 60f); using var p = Rounded(ir, 10 * k); g.FillPath(b, p); }
-            g.DrawString(a["name"]?.ToString() ?? "", name, White, new RectangleF(c.X + 2, c.Y + 58 * k, cell - 4, 16 * k), fmt);
+            if (showName) g.DrawString(a["name"]?.ToString() ?? "", name, White, new RectangleF(c.X + 2, c.Y + icon + 14 * k, cell - 4, 16 * k), fmt);
             i++;
         }
+    }
+
+    Brush Ink() => textColor is Color c ? new SolidBrush(c) : new SolidBrush(Color.FromArgb(245, 239, 238));
+
+    /// <summary>One app, game or site, like a desktop shortcut but in your own style.</summary>
+    void DrawIcon(Graphics g, float k)
+    {
+        var a = apps.OfType<JsonObject>().FirstOrDefault();
+        float size = iconPx * k, x = (Width - size) / 2, y = 12 * k;
+        bool hot = hover == 0 && locked;
+        if (hot && hoverStyle == "lift") y -= 4 * k;
+        var ir = new RectangleF(x, y, size, size);
+        if (hot && hoverStyle == "glow") { using var gp = Rounded(RectangleF.Inflate(ir, 5 * k, 5 * k), radius * k + 4 * k); using var gb = new SolidBrush(Color.FromArgb(90, accent)); g.FillPath(gb, gp); }
+        if (hot && hoverStyle == "grow") ir = RectangleF.Inflate(ir, 4 * k, 4 * k);
+        hits.Add((new RectangleF(0, 0, Width, Height), "app:0"));
+        var img = a == null ? null : Load(a["icon"]?.ToString() ?? "");
+        using (var clip = Rounded(ir, Math.Min(radius * k, size / 2)))
+        {
+            if (img != null) { g.SetClip(clip); g.DrawImage(img, ir); g.ResetClip(); }
+            else
+            {
+                using var b = new LinearGradientBrush(ir, accent2, accent, 60f);
+                g.FillPath(b, clip);
+                using var letter = F(size * 0.45f, FontStyle.Bold, "Segoe UI Black");
+                using var mid = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                g.DrawString((a?["name"]?.ToString() ?? "?")[..1].ToUpperInvariant(), letter, Brushes.White, ir, mid);
+            }
+        }
+        if (showName && a != null)
+        {
+            using var name = F(12f * k, FontStyle.Bold, "Segoe UI Semibold");
+            using var fmt = new StringFormat { Alignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+            using var shadow = new SolidBrush(Color.FromArgb(160, 0, 0, 0));
+            using var ink = Ink();
+            var nr = new RectangleF(2, ir.Bottom + 6 * k, Width - 4, 18 * k);
+            g.DrawString(a["name"]?.ToString() ?? "", name, shadow, new RectangleF(nr.X + 1, nr.Y + 1, nr.Width, nr.Height), fmt);
+            g.DrawString(a["name"]?.ToString() ?? "", name, ink, nr, fmt);
+        }
+    }
+
+    /// <summary>A text card: today's date, a note of your own, or the days left until a date.</summary>
+    void DrawCard(Graphics g, float k)
+    {
+        string big, small;
+        var now = DateTime.Now;
+        if (kind == "date") { big = now.ToString("ddd d").ToUpperInvariant(); small = now.ToString("MMMM yyyy").ToUpperInvariant(); }
+        else if (kind == "countdown")
+        {
+            small = (label == "" ? "COUNTDOWN" : label).ToUpperInvariant();
+            if (DateTime.TryParse(date, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var when))
+            {
+                int days = (int)Math.Ceiling((when.Date - now.Date).TotalDays);
+                big = days > 1 ? $"{days} DAYS" : days == 1 ? "TOMORROW" : days == 0 ? "TODAY" : "DONE";
+            }
+            else big = "—";
+        }
+        else { big = text == "" ? "Your note" : text; small = (label == "" ? "NOTE" : label).ToUpperInvariant(); }
+        float pad = 18 * k;
+        using var bigFont = F(30 * k, FontStyle.Bold, "Segoe UI Black");
+        using var smallFont = F(12 * k, FontStyle.Bold, "Segoe UI Semibold");
+        using var fmt = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+        using var ink = Ink();
+        using var acc = new SolidBrush(textColor is Color c ? Color.FromArgb(190, c) : accent2);
+        g.DrawString(big, bigFont, ink, new RectangleF(pad, pad - 4 * k, Width - pad * 2, 42 * k), fmt);
+        g.DrawString(small, smallFont, acc, new RectangleF(pad, pad + 40 * k, Width - pad * 2, 18 * k), fmt);
     }
 
     Bitmap? Load(string url)

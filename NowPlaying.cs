@@ -109,7 +109,7 @@ sealed class NowPlaying
 
     // ---------- the playing app's own volume (Windows volume mixer) ----------
 
-    static class AppVolume
+    internal static class AppVolume
     {
         [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumerator { }
 
@@ -187,6 +187,60 @@ sealed class NowPlaying
         {
             var ctx = Guid.Empty;
             try { foreach (var v in For(aumid)) { v.SetMasterVolume(Math.Clamp(level, 0, 1), ref ctx); if (level > 0) v.SetMute(false, ref ctx); } } catch { }
+        }
+
+        /// <summary>Every app making sound right now, one line per program (a browser's tabs count as one).</summary>
+        public static List<(string key, string name, float level, bool muted)> All()
+        {
+            var apps = new Dictionary<string, (string name, float level, bool muted)>();
+            foreach (var (name, title, v) in Sessions())
+            {
+                if (apps.ContainsKey(name)) continue;
+                try { v.GetMasterVolume(out var level); v.GetMute(out var muted); apps[name] = (title, level, muted); } catch { }
+            }
+            return apps.Select(kv => (kv.Key, kv.Value.name, kv.Value.level, kv.Value.muted)).OrderBy(a => a.name).ToList();
+        }
+
+        public static void SetApp(string key, float? level, bool? mute)
+        {
+            var ctx = Guid.Empty;
+            foreach (var (name, _, v) in Sessions())
+            {
+                if (name != key) continue;
+                try
+                {
+                    if (level.HasValue) { v.SetMasterVolume(Math.Clamp(level.Value, 0, 1), ref ctx); if (level > 0) v.SetMute(false, ref ctx); }
+                    if (mute.HasValue) v.SetMute(mute.Value, ref ctx);
+                }
+                catch { }
+            }
+        }
+
+        static IEnumerable<(string name, string title, ISimpleAudioVolume v)> Sessions()
+        {
+            var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
+            if (enumerator.GetDefaultAudioEndpoint(0, 1, out var device) != 0) yield break;
+            var iid = typeof(IAudioSessionManager2).GUID;
+            if (device.Activate(ref iid, 0x17, IntPtr.Zero, out var o) != 0) yield break;
+            if (((IAudioSessionManager2)o).GetSessionEnumerator(out var list) != 0) yield break;
+            list.GetCount(out int n);
+            for (int i = 0; i < n; i++)
+            {
+                list.GetSession(i, out var ctl);
+                ctl.GetState(out int state);
+                ctl.GetProcessId(out uint pid);
+                if (pid == 0 || state == 2) continue; // system sounds, and sessions that have ended
+                string name, title;
+                try
+                {
+                    using var p = System.Diagnostics.Process.GetProcessById((int)pid);
+                    name = p.ProcessName.ToLowerInvariant();
+                    title = name;
+                    try { var d = p.MainModule?.FileVersionInfo.FileDescription; if (!string.IsNullOrWhiteSpace(d)) title = d.Trim(); } catch { }
+                }
+                catch { continue; }
+                yield return (name, title, (ISimpleAudioVolume)ctl);
+            }
         }
 
         public static void Mute(string aumid, bool on)

@@ -48,3 +48,12 @@ Work that must carry on while you play belongs in the shell, not the page. A mes
 ## Controller and hover
 
 While a controller is in use, `body[data-input=pad]` hides the pointer and turns pointer events off. In `css/ui.css`, animate only transform and opacity.
+
+## Tauri shell (tauri/src-tauri)
+
+Version 3 is a Rust/Tauri shell around the same `wwwroot` page (`host.js` picks Tauri first, then WebView2). Build with
+`cargo build --release --features custom-protocol` in `tauri/src-tauri`; the page files are packed into the exe, so rebuild after page edits.
+Its own data folder is `%APPDATA%\SkyvaintLauncherNext` (first start copies config/state from the old launcher, which is only read); test with `--data`.
+Desktop wallpapers sit behind the icons by re-parenting into Explorer's Progman/WorkerW (`desktop.rs`, `MainForm.DesktopWall.cs`).
+Explorer's windows can be inspected from a Claude shell. From PowerShell, pass `[IntPtr]::Zero` for an unused title (`$null` becomes an
+empty string and finds nothing), and use `GetAncestor(h, GA_PARENT)`: `GetParent` returns the owner for pop-up windows.

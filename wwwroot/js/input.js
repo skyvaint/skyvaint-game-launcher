@@ -65,6 +65,11 @@ SV.input = (() => {
     moved += Math.abs(e.movementX) + Math.abs(e.movementY);
     if (moved >= MOUSE_TAKEOVER) setDevice('kb');
   }, { passive: true });
+  // While the controller is in use the page ignores the mouse, so the first click used to be lost. It now goes to
+  // whatever is under the pointer.
+  let lost = null;
+  addEventListener('mousedown', (e) => { lost = null; if (device === 'pad' && e.button === 0) { setDevice('kb'); lost = document.elementFromPoint(e.clientX, e.clientY); } }, { capture: true, passive: true });
+  addEventListener('mouseup', (e) => { const el = lost; lost = null; if (!el) return; const x = e.clientX, y = e.clientY; setTimeout(() => { const now = document.elementFromPoint(x, y); if (el.isConnected && now && (now === el || el.contains(now) || now.contains(el))) el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: x, clientY: y })); }, 0); }, { capture: true, passive: true });
   for (const type of ['mousedown', 'wheel', 'dragenter']) addEventListener(type, () => { if (device === 'pad') setDevice('kb'); }, { passive: true, capture: true });
 
   // What the right stick scrolls: the top screen's long list, or the rows under HOME.

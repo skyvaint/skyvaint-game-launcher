@@ -11,3 +11,8 @@ _realdata/
 _restore/
 build.log
 git-push.log
+tauri/src-tauri/target/
+tauri/src-tauri/gen/
+
+# Your own intro sound: kept on this PC only, not in the repository or releases.
+wwwroot/audio/intro.mp3

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The launcher page talks to the shell through one command and one event.",
+  "windows": ["main", "wall-*", "top-*"],
+  "permissions": ["core:default"]
+}

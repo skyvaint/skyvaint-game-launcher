@@ -46,7 +46,7 @@ public sealed partial class MainForm
             case "openUrl":
                 var url = Str("url");
                 if (Regex.IsMatch(url, @"^(https?|steam|com\.epicgames\.launcher|roblox|discord|parsec)://", RegexOptions.IgnoreCase))
-                    try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose(); } catch { }
+                    try { Detached.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
                 return true;
 
             case "startMenu":
@@ -371,7 +371,7 @@ public sealed partial class MainForm
             else if (kind == "url")
             {
                 if (Regex.IsMatch(target, @"^[a-z][a-z0-9+.-]*://", RegexOptions.IgnoreCase))
-                    Process.Start(new ProcessStartInfo(target) { UseShellExecute = true })?.Dispose();
+                    Detached.Start(new ProcessStartInfo(target) { UseShellExecute = true });
             }
             else
             {
@@ -379,7 +379,7 @@ public sealed partial class MainForm
                 var args = item["args"]?.ToString();
                 if (!string.IsNullOrWhiteSpace(args)) psi.Arguments = args;
                 if (File.Exists(target)) psi.WorkingDirectory = Path.GetDirectoryName(target)!;
-                Process.Start(psi)?.Dispose();
+                Detached.Start(psi);
             }
         }
         catch (Exception ex)
@@ -653,6 +653,27 @@ public sealed partial class MainForm
 
     // ---------- Start menu apps (for adding to the bar) ----------
 
+    /// <summary>Store apps from the Start menu: (name, AppUserModelID). Only packaged apps (their ID has a "!").</summary>
+    static List<(string name, string id)> StoreApps()
+    {
+        var found = new List<(string, string)>();
+        try
+        {
+            using var p = Process.Start(new ProcessStartInfo("powershell.exe", "-NoProfile -NonInteractive -Command \"Get-StartApps | ForEach-Object { $_.Name + [char]9 + $_.AppID }\"")
+            { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, StandardOutputEncoding = System.Text.Encoding.UTF8 });
+            if (p == null) return found;
+            var text = p.StandardOutput.ReadToEnd();
+            p.WaitForExit(10000);
+            foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var parts = line.Split('\t');
+                if (parts.Length == 2 && parts[1].Contains('!') && !Regex.IsMatch(parts[0], @"uninstall|readme|help|settings$", RegexOptions.IgnoreCase)) found.Add((parts[0], parts[1]));
+            }
+        }
+        catch { }
+        return found;
+    }
+
     Task StartMenuApps()
     {
         var done = new TaskCompletionSource<JsonArray>();
@@ -689,6 +710,17 @@ public sealed partial class MainForm
                             ["icon"] = ShellImage.SaveIcon(lnk, MediaDir, MediaHost, key),
                         });
                     }
+                // Microsoft Store apps (Claude, ChatGPT, Spotify from the Store…) have no shortcut file; Windows lists them
+                // under shell:AppsFolder, and that address opens them.
+                foreach (var (appName, appId) in StoreApps())
+                {
+                    if (!seen.Add(appName)) continue;
+                    var path = "shell:AppsFolder\\" + appId;
+                    var key = "nexus_" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(appId.ToLowerInvariant())))[..16];
+                    string icon = "";
+                    try { icon = ShellImage.SaveIcon(path, MediaDir, MediaHost, key) ?? ""; } catch { }
+                    list.Add(new JsonObject { ["name"] = appName, ["path"] = path, ["process"] = "", ["icon"] = icon });
+                }
             }
             catch { }
             done.TrySetResult(list);

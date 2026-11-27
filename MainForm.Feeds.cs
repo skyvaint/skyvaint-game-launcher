@@ -160,7 +160,7 @@ public sealed partial class MainForm
             {
                 var path = m["path"]?.ToString() ?? "";
                 if (File.Exists(path) && Regex.IsMatch(path, @"\.rbxlx?$", RegexOptions.IgnoreCase))
-                    Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
+                    Detached.Start(new ProcessStartInfo(path) { UseShellExecute = true });
                 else Send(new JsonObject { ["type"] = "notice", ["ok"] = false, ["text"] = "That file isn't there any more." });
             }
             else
@@ -168,7 +168,7 @@ public sealed partial class MainForm
                 long place = m["placeId"]?.GetValue<long>() ?? 0, universe = m["universeId"]?.GetValue<long>() ?? 0;
                 if (place <= 0) return;
                 var uri = $"roblox-studio:1+launchmode:edit+task:EditPlace+placeId:{place}" + (universe > 0 ? $"+universeId:{universe}" : "");
-                Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true })?.Dispose();
+                Detached.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
             }
         }
         catch (Exception ex) { Send(new JsonObject { ["type"] = "notice", ["ok"] = false, ["text"] = "Couldn't open Studio: " + ex.Message }); }

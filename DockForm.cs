@@ -146,6 +146,11 @@ sealed class DockForm : Form
         dotColor = s?["dotColor"]?.ToString() is { Length: 7 } dc ? Hex(dc, accent2) : null;
         hoverColor = s?["hoverColor"]?.ToString() is { Length: 7 } hc ? Hex(hc, accent) : null;
         bg = Hex(t?["bg"]?.ToString(), bg);
+        mono = t?["mono"] is JsonValue mv && mv.TryGetValue(out bool mb) && mb;
+        // "Keep in colour" (THEME → MODE): icons and/or the bar's own colours can stay in colour.
+        var keep = (t?["monoExclude"] as JsonArray)?.Select(x => x?.ToString()).ToHashSet() ?? new HashSet<string?>();
+        monoIcons = (mono && !keep.Contains("icons")) || (!mono && t?["monoIcons"] is JsonValue mi && mi.TryGetValue(out bool mib) && mib);
+        if (mono && !keep.Contains("ui")) { accent = Grey(accent); accent2 = Grey(accent2); bg = Grey(bg); if (dotColor is Color d) dotColor = Grey(d); if (hoverColor is Color h) hoverColor = Grey(h); }
 
         var old = items.ToDictionary(i => i.Id);
         var list = new List<Item>();
@@ -631,7 +636,7 @@ sealed class DockForm : Form
     Bitmap? TileFor(Item it)
     {
         int px = Math.Max(32, (int)Math.Ceiling(ic * maxS));
-        var key = it.Icon + "|" + px + "|" + it.Name + "|" + accent.ToArgb() + "|" + radius;
+        var key = it.Icon + "|" + px + "|" + it.Name + "|" + accent.ToArgb() + "|" + radius + "|" + monoIcons;
         if (it.TileKey == key) return it.Tile;
         var src = Source(it.Icon);
         if (src == null && it.Icon != "" && loading.Contains(it.Icon)) return it.Tile; // still downloading
@@ -643,7 +648,30 @@ sealed class DockForm : Form
         return it.Tile;
     }
 
+    // Black and white (THEME → MODE): the bar's colours and logos go grey with the rest of the launcher.
+    bool mono, monoIcons;
+    static Color Grey(Color c) { int l = (int)(c.R * 0.299 + c.G * 0.587 + c.B * 0.114); return Color.FromArgb(c.A, l, l, l); }
+
     Bitmap MakeTile(Bitmap? src, string name, int px)
+    {
+        var tile = MakeColourTile(src, name, px);
+        if (!monoIcons) return tile;
+        var grey = new Bitmap(tile.Width, tile.Height, PixelFormat.Format32bppArgb);
+        using (var g = Graphics.FromImage(grey))
+        using (var attrs = new ImageAttributes())
+        {
+            attrs.SetColorMatrix(new ColorMatrix(new[]
+            {
+                new float[] { 0.299f, 0.299f, 0.299f, 0, 0 }, new float[] { 0.587f, 0.587f, 0.587f, 0, 0 }, new float[] { 0.114f, 0.114f, 0.114f, 0, 0 },
+                new float[] { 0, 0, 0, 1, 0 }, new float[] { 0, 0, 0, 0, 1 },
+            }));
+            g.DrawImage(tile, new Rectangle(0, 0, tile.Width, tile.Height), 0, 0, tile.Width, tile.Height, GraphicsUnit.Pixel, attrs);
+        }
+        tile.Dispose();
+        return grey;
+    }
+
+    Bitmap MakeColourTile(Bitmap? src, string name, int px)
     {
         var tile = new Bitmap(px, px, PixelFormat.Format32bppArgb);
         using var g = Graphics.FromImage(tile);

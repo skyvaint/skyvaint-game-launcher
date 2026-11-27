@@ -126,21 +126,24 @@
     manrope: ['Manrope', "'Manrope','Segoe UI',sans-serif"],
     mono: ['JetBrains Mono', "'JetBrains Mono',Consolas,monospace"],
     pixel: ['Press Start 2P', "'Press Start 2P',monospace"],
+    intertight: ['Inter Tight', "'Inter Tight','Segoe UI Variable Display','Segoe UI',sans-serif"],
+    chakra: ['Chakra Petch', "'Chakra Petch','Inter Tight','Segoe UI',sans-serif"],
   };
 
   const defaults = () => ({
     v: 8,
     profile: { name: 'Player', avatar: '' },
-    theme: { preset: 'predator', ...PRESETS.predator, tileShape: 'cut', font: 'anton', uiScale: 1, vignette: true, hero: true, ticker: true, meshStyle: 'mixed',
+    theme: { preset: 'predator', ...PRESETS.predator, mono: false, tileShape: 'cut', font: 'anton', uiScale: 1, vignette: true, hero: true, ticker: true, meshStyle: 'mixed',
       tileSize: 1, heroSide: 'right', glow: 1, cut: 1.1, tickerSpeed: 1, tickerText: '', texture: 'grain', textureOpacity: 0.6,
       bodyFont: 'manrope', monoFont: 'mono', fontFile: '', titleScale: 1, titleSpacing: 0, titleCase: 'upper', titleStyle: 'gradient', textScale: 1, tagCase: 'upper' },
     appIcon: { style: 'bolt', shape: 'rounded', useTheme: true, letter: 'S', image: '', markColor: '#ffffff', fit: 'cover', zoom: 100, offsetX: 0, offsetY: 0, bare: false, logo: 'auto' },
     texts: Object.fromEntries(Object.entries(TEXTS).map(([k, v]) => [k, v[1]])),
-    home: { clips: true, strip: 'continue', stripSpeed: 1, stripClick: 'start', stripRoblox: true, stripSize: 1 },
+    home: { view: 'games', window: true, clips: true, strip: 'continue', stripSpeed: 1, stripClick: 'start', stripRoblox: true, stripSize: 1, widgets: [], icons: [],
+      widgetStyle: { size: 'm', bg: 'glass', hover: 'lift', radius: 0.7, labels: true, opacity: 1 } },
     music: { enabled: true },
     widgets: { items: [], locked: true },
     social: { enabled: true, side: 'right', width: 420, sites: [], mobile: true },
-    layout: { heroNum: true, stats: true, tags: true, hints: true, shelfLabel: true, filters: true, profileName: true, clock: true, hero: true, settingsScale: 1 },
+    layout: { heroNum: true, stats: true, tags: true, hints: true, shelfLabel: true, filters: true, profileName: true, clock: true, hero: true, settingsScale: 1, frameScale: 1.2 },
     nexus: { enabled: false, seeded: false, position: 'bottom', size: 52, backing: 'none', names: true, autohide: false, magnify: true, hideFullscreen: true, items: [],
       align: 'center', gap: 12, radius: 22, offset: 0, idleOpacity: 100, opacity: 47, magnifyAmount: 145, glow: 100, indicator: 'dot', bounce: true, alwaysNames: false, tagStyle: 'dark',
       name: 'Main bar', visibility: 'always', fadeStyle: 'fade', fadeMs: 220, length: 0, hoverStyle: 'magnify', clickMode: 'single', launchMode: 'normal', bars: [] },
@@ -154,19 +157,19 @@
       meshStyle: 'poly', meshDensity: 13, meshMotion: 1, meshLines: 1, meshFill: 1, meshColor: 'duo', image: '', imageDim: 0.55,
       intensity: 0.8, speed: 1, quality: 'auto', fps: 0, slowFps: 60, motion: true, calmWhilePlaying: true, video: '', videoMix: 0.45, videoSpeed: 1, photo: '',
       videoBlend: 'screen', videoDim: 0.2, videoBlur: 0, videoSaturate: 1 },
-    perf: { smooth: true, meter: false, uncapped: false, dgpu: false, memorySaver: 'balanced', memoryLimit: 0, sleepHidden: true },
+    perf: { smooth: true, meter: false, uncapped: false, dgpu: false, memorySaver: 'max', memoryLimit: 300, sleepHidden: true },
     fx: { trail: true, ripple: true, tilt: true, glitch: true, scramble: true, rgb: true, chroma: false, scan: false, shake: true, confetti: true, warp: true, pulse: true,
-      launchStyle: 'slabs', sparks: 1, space: true, focusFx: true, bootStyle: 'flow', fadeWindow: true, wipe: true,
+      launchStyle: 'slabs', sparks: 1, space: true, focusFx: true, bootStyle: 'sound', introSound: '', introDrop: 14.35, introProfiles: true, fadeWindow: true, wipe: true,
       spotlight: true, rays: false, dust: true, breathe: false, bloom: true, sweep: true, flare: false, light: 1, transition: 'slash',
       introVideo: '', introMuted: false, introMax: 30, rotateText: '', rotateEvery: 6, cursorGlow: false,
       rim: false, bars: false, barsSize: 7, parallax: false, parallaxAmount: 1, reflect: false, beat: false, grainAnim: false, chromaHover: false, glowColor: '',
       transitionVideo: '', transitionCover: 0.4, transitionMax: 3, transitionSound: false,
       transitionSpeed: 1, transitionTint: 'none', transitionTintColor: '#ff1f1f', transitionTintAmount: 0.6, transitionHue: 0, transitionSaturate: 1, transitionBright: 1, transitionContrast: 1, transitionOpacity: 1, launchVideo: '', launchVideoSound: true, launchVideoOnly: false, videos: {}, introThenOpening: false,
       launchVideoSpeed: 1, launchVideoTint: 'none', launchVideoTintColor: '#ff1f1f', launchVideoTintAmount: 0.6, launchVideoHue: 0, launchVideoSaturate: 1, launchVideoBright: 1, launchVideoContrast: 1, launchVideoOpacity: 1 },
-    sound: { master: 0.6, pack: 'pulse', events: { nav: true, confirm: true, back: true, boot: true, launch: true }, custom: { boot: '', launch: '', nav: '', confirm: '', back: '', toggle: '', open: '', pick: '', star: '', error: '', slam: '' }, ambient: 0, bgmTracks: [], bgmVolume: 0.4, bgmShuffle: false, bgmLoop: true, bgmPauseInGame: true, bgmInBackground: false, funcs: {}, haptics: true, hover: true, hoverGap: 220, hoverVolume: 0.6, hoverDwell: 70, library: [],
+    sound: { onlyAmbience: false, ambientKind: 'hum', ambientFile: '', master: 0.6, pack: 'pulse', events: { nav: true, confirm: true, back: true, boot: true, launch: true }, custom: { boot: '', launch: '', nav: '', confirm: '', back: '', toggle: '', open: '', pick: '', star: '', error: '', slam: '' }, ambient: 0, bgmTracks: [], bgmVolume: 0.4, bgmShuffle: false, bgmLoop: true, bgmPauseInGame: true, bgmInBackground: false, funcs: {}, haptics: true, hover: true, hoverGap: 220, hoverVolume: 0.6, hoverDwell: 70, library: [],
       pitch: 0, echo: 0 },
     behavior: { bootAnim: true, afterLaunch: 'hidden', onGameExit: 'home', closeAction: 'hidden', autostartMode: 'hidden', miniOnTop: true, miniSize: 'm', clock24: true,
-      promptAccount: true, hideUninstalled: false, waitForGame: true, launchWait: 120, launchSettle: 2, hotkeyShow: 'Ctrl+Alt+Home', hotkeyMenu: 'Ctrl+Alt+M', holdFront: true },
+      screen: 'cursor', promptAccount: true, hideUninstalled: false, waitForGame: true, launchWait: 120, launchSettle: 2, hotkeyShow: 'Ctrl+Alt+Home', hotkeyMenu: 'Ctrl+Alt+M', holdFront: true },
     games: [],
     art: {}, // game id -> { cover, hero, icon }: pictures this look uses instead of the game's own
     imported: { steam: false, epic: false, roblox: false, robloxManager: false },
@@ -367,6 +370,32 @@
     root.setProperty('--a', a.join(','));
     root.setProperty('--a2', a2.join(','));
     root.setProperty('--on-accent', lum(a) > 0.6 ? '#0b0808' : '#ffffff');
+    // Black and white: one grey filter over the whole page, pictures, GIFs, videos and the backdrop included.
+    // With things kept in colour (MODE → Keep in colour), each part goes grey on its own instead.
+    const ex = new Set(t.monoExclude || []), whole = !!t.mono && ex.size === 0;
+    const grey = (p, own) => !whole && ((!!t.mono && !ex.has(p)) || (!t.mono && !!own));
+    const html = document.documentElement;
+    html.classList.toggle('mono', whole);
+    html.classList.toggle('menu-site', t.menuStyle !== 'classic');
+    html.classList.toggle('mono-icons', grey('icons', t.monoIcons));
+    html.classList.toggle('mono-videos', grey('videos', t.monoVideos));
+    html.classList.toggle('mono-trans', grey('launch', t.monoTransitions));
+    html.classList.toggle('mono-bd', grey('backdrop', false));
+    if (grey('ui', false)) {
+      // Menus and highlights: the theme colours themselves turn grey.
+      const g = (c) => { const l = Math.round(c[0] * 0.299 + c[1] * 0.587 + c[2] * 0.114); return [l, l, l]; };
+      const hx = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+      root.setProperty('--accent', hx(g(a))); root.setProperty('--accent2', hx(g(a2)));
+      root.setProperty('--a', g(a).join(',')); root.setProperty('--a2', g(a2).join(','));
+    }
+    root.setProperty('--fz', clamp(+(cfg.layout.frameScale || 1.2), 0.8, 1.8));
+    const ws = (cfg.home && cfg.home.widgetStyle) || {};
+    document.body.dataset.hwSize = ws.size || 'm';
+    document.body.dataset.hwBg = ws.bg || 'glass';
+    document.body.dataset.hwHover = ws.hover || 'lift';
+    document.body.classList.toggle('hw-nolabels', ws.labels === false);
+    root.setProperty('--hw-radius', (ws.radius ?? 0.7) + 'rem');
+    root.setProperty('--hw-opacity', ws.opacity ?? 1);
     if (t.fontFile) loadFontFile(t.fontFile);
     root.setProperty('--display', fontCss(t.font, "'Anton','Impact',sans-serif"));
     root.setProperty('--body', fontCss(t.bodyFont, "'Manrope','Segoe UI',system-ui,sans-serif"));
@@ -463,7 +492,9 @@
   }
 
   function fit() {
-    const px = mode === 'home' ? Math.min(innerHeight / 67.5, innerWidth / 120) * cfg.theme.uiScale : 16;
+    // The compact HOME reads like a normal app: steady text, only a little bigger on big windows.
+    const compact = SV.gamesView && SV.gamesView.on();
+    const px = mode !== 'home' ? 16 : compact ? Math.max(12, Math.min(17, innerHeight / 52, innerWidth / 88)) * cfg.theme.uiScale : Math.min(innerHeight / 67.5, innerWidth / 120) * cfg.theme.uiScale;
     document.documentElement.style.fontSize = px.toFixed(2) + 'px';
   }
   addEventListener('resize', fit);
@@ -503,6 +534,16 @@
     shop: '<path d="M4 8h16l-1.4 11.2a2 2 0 0 1-2 1.8H7.4a2 2 0 0 1-2-1.8z"/><path d="M8.5 8V6.5a3.5 3.5 0 0 1 7 0V8"/>',
     dev: '<path d="M5.2 3.6l15.2 4.1-4.1 15.2L1.1 18.8z"/><path d="M10.2 10.1l3.9 1-1 3.9-3.9-1z"/>',
     nexus: '<rect x="3" y="15" width="18" height="5" rx="1.5"/><rect x="5.5" y="9" width="4" height="4" rx="1"/><rect x="10.5" y="9" width="4" height="4" rx="1"/><rect x="15.5" y="9" width="3" height="4" rx="1"/>',
+    mono: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>',
+    leds: '<circle cx="12" cy="10" r="5"/><path d="M10 15v3h4v-3M10 21h4M12 1v2M4.2 4.2l1.4 1.4M19.8 4.2l-1.4 1.4M2 10h2M20 10h2"/>',
+    library: '<path d="M4 4h4v16H4zM10 4h4v16h-4zM16.5 4.5l3.8 1 -3.9 15-3.8-1z"/>',
+    creator: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3M15 20h5"/>',
+    deskwall: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4M5 14l4-4 3 3 3-3 4 4"/>',
+    screen: '<rect x="2" y="5" width="11" height="8" rx="1.2"/><rect x="11" y="10" width="11" height="8" rx="1.2"/>',
+    icons: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/>',
+    homeicons: '<rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="9" width="6" height="6" rx="1.5"/><rect x="6" y="15" width="6" height="6" rx="1.5"/>',
+    wallpaper: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M3 17l6-5 4 3 3-2 5 4"/>',
+    roblox: '<path d="M6.2 3 3 17.8 17.8 21 21 6.2z"/><path d="M10.5 9.2l4.3.9-.9 4.3-4.3-.9z"/>',
     more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
     data: '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.700 3.600 3 8 3s8-1.300 8-3V6M4 12c0 1.700 3.600 3 8 3s8-1.300 8-3"/>',
     backdrop: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.500"/>',
@@ -519,6 +560,7 @@
   };
   const FUNCS = [
     { id: 'search', label: 'Search', desc: 'Find a game by typing its name', run: () => openSearch() },
+    { id: 'library', label: 'Library', desc: 'Every picture, GIF, video, sound, font, game and folder you use', run: () => SV.library.open() },
     { id: 'random', label: 'Random', desc: 'Can\'t decide? Spin for a game', run: () => roll() },
     { id: 'stats', label: 'Playtime', desc: 'How long you played each game', run: () => openPlaytime() },
     { id: 'discover', label: 'Discover', desc: 'Free games, deals and trending Roblox', run: () => SV.discover.open() },
@@ -535,17 +577,23 @@
     { id: 'sound', label: 'Sound', desc: 'Sound packs and volume', run: () => openSettings('sound') },
     { id: 'settings', label: 'Settings', desc: 'Games, behaviour, language and more', run: () => openSettings('games') },
     { id: 'power', label: 'Power', desc: 'Quit, sleep or switch to mini', run: () => openPower() },
+    { id: 'mono', label: 'Black and white', desc: 'Turn the colour off or back on', run: () => { cfg.theme.mono = !cfg.theme.mono; audio.play('toggle'); changed('games'); toast(cfg.theme.mono ? 'Black and white' : 'Colour is back'); } },
+    { id: 'gamesview', label: 'Games view', desc: 'A calm library like Epic: every game, your order, ENTER plays', run: () => { cfg.home.view = cfg.home.view === 'games' ? 'classic' : 'games'; changed(); SV.gamesView.sync(); } },
+    { id: 'screen', label: 'Next screen', desc: 'Move the launcher to your other screen', multi: true, run: () => host.send('moveScreen', {}) },
   ];
   // Each top bar button can have its own click sound (Settings → Sound → Button sounds).
-  const funcSound = (f) => { const u = (cfg.sound.funcs || {})[f.id]; if (u) audio.preview(u); else audio.play('confirm'); };
+  const funcSound = (f) => { const u = (cfg.sound.funcs || {})[f.id]; if (u) audio.effect(u); else audio.play('confirm'); };
   // The Developer button only shows in developer mode.
   const FUNC_BY_ID = Object.fromEntries(FUNCS.map((f) => [f.id, f]));
   // The top bar keeps what you reach for most, with names; everything else is one press away under MORE.
-  const BAR_LABELLED = ['search', 'discover', 'clips', 'quests', 'shop'];
+  const BAR_LABELLED = ['search', 'library', 'discover', 'clips', 'quests', 'shop'];
   const BAR_ICONS = ['social', 'settings', 'power'];
   const MORE = { id: 'more', label: 'More', desc: 'Everything else', run: (node) => openMore(node) };
   const PROFILE = { id: 'profile', label: 'Profile', desc: 'Switch or manage profiles', run: (node) => SV.features.quick(node) };
-  const moreFuncs = () => FUNCS.filter((f) => !BAR_LABELLED.includes(f.id) && !BAR_ICONS.includes(f.id) && (!f.dev || cfg.dev.enabled));
+  let screens = [];
+  host.on('screens', (m) => { screens = m.screens || []; });
+  host.on('init', () => host.send('screens'));
+  const moreFuncs = () => FUNCS.filter((f) => !BAR_LABELLED.includes(f.id) && !BAR_ICONS.includes(f.id) && (!f.dev || cfg.dev.enabled) && (!f.multi || screens.length > 1));
   const funcs = () => [...BAR_LABELLED.map((k) => FUNC_BY_ID[k]), MORE, ...BAR_ICONS.map((k) => FUNC_BY_ID[k]), PROFILE];
   const funcNode = (i) => document.querySelector(`#funcs .func[data-i="${i}"]`);
   function funcHtml(f, i) {
@@ -1045,9 +1093,30 @@
 
   // The full-screen "now starting" sequence. `sub` is a line under the title, `list` optional HTML (Roblox accounts),
   // `g` the game, whose banner takes over the screen once it has loaded.
+  // Auroras on every screen, then SKYVAINT, then a slow fade into the game (Launch transition → Auroras).
+  let aurora = null;
+  function auroraColors() {
+    const w = (cfg.desktop && cfg.desktop.all) || {};
+    return w.kind === 'vfx' && (w.colorA || w.colorB) ? [w.colorA || cfg.theme.accent, w.colorB || cfg.theme.accent2] : [cfg.theme.accent, cfg.theme.accent2];
+  }
   function launchFx(title, sub = '', list = '', g = null) {
+    audio.holdAmbient(true);
+    // Games view: no full-screen launch, a short aurora in its small frame.
+    if (SV.gamesView && SV.gamesView.active()) { launching = true; SV.gamesView.frameFx(title); return; }
+    if (cfg.fx.launchStyle === 'aurora' && window.SVAurora) {
+      launching = true;
+      SV.silent = cfg.fx.launchQuiet !== false;
+      const node = $('#launchfx');
+      node.classList.remove('out', 'waiting', 'ready');
+      node.classList.add('on', 'aur');
+      const start = Date.now(), colors = auroraColors();
+      if (aurora) aurora.stop();
+      aurora = SVAurora.play(document.body, { colors, start, text: true, name: g ? g.name : title });
+      host.send('launchSequence', { start, textAt: SVAurora.T.text, hold: 1800, fade: 3000, colors, quiet: cfg.fx.launchQuiet !== false });
+      return;
+    }
     launching = true;
-    if (g && g.startSound) audio.preview(g.startSound); else audio.play('launch');
+    if (g && g.startSound) audio.effect(g.startSound); else audio.play('launch');
     input.rumble(0.8, 260);
     bg.strike();
     $('#lfTitle').textContent = title;
@@ -1058,7 +1127,7 @@
     $('#lfBanner').innerHTML = (g ? art(g, 'hero') : '') + `<span class="tag">[ ${esc(cfg.texts.ready)} ]</span><b>${esc(g ? g.name : title)}</b>`;
     const node = $('#launchfx');
     node.classList.remove('out', 'waiting', 'ready');
-    SV.effects && SV.effects.launch((g && g.launchVideo) || cfg.fx.launchVideo || '');
+    SV.effects && SV.effects.launch((g && artSrc(g, 'launchVideo')) || cfg.fx.launchVideo || '');
     node.classList.add('on');
     fx.warp(true);
     if (cfg.fx.shake && cfg.backdrop.motion) {
@@ -1094,7 +1163,7 @@
     if (who) { cfg.epic.last[g.id] = who.id; who.lastUsed = Date.now(); save(); }
 
     launchFx(g.name, who ? 'AS ' + who.name.toUpperCase() : g.platform === 'steam' ? SV.steam.launchName(g) : '', '', g);
-    setTimeout(() => host.send('launch', { id: g.id, account: who ? who.id : undefined, wait: isInstalled(g) }), 1300);
+    setTimeout(() => host.send('launch', { id: g.id, account: who ? who.id : undefined, wait: isInstalled(g) }), aurora ? 3600 : 1300);
     armLaunchTimeout();
   }
 
@@ -1109,6 +1178,11 @@
   function endLaunch() {
     if (!launching) return;
     launching = false;
+    SV.gamesView && SV.gamesView.frameEnd();
+    audio.holdAmbient(false);
+    SV.silent = false;
+    if (aurora) { const a = aurora; aurora = null; a.stop(); host.send('launchSequenceEnd'); }
+    $('#launchfx').classList.remove('aur');
     clearTimeout(launchTimer);
     fx.warp(false);
     $('#launchfx').classList.remove('on', 'out', 'waiting', 'ready');
@@ -1200,10 +1274,16 @@
     backdropPaused = stack.some((s) => s.cover && !s.liveBackdrop) || !!(SV.rails && SV.rails.isOpen);
     syncBackdrop();
   }
-  function syncBackdrop() { bg.setActive(mode === 'home' && !away && !backdropPaused); }
+  // The compact HOME has its own quiet aurora: the big backdrop doesn't draw behind it.
+  function syncBackdrop() { bg.setActive(mode === 'home' && !away && !backdropPaused && !(SV.gamesView && SV.gamesView.on())); }
 
   function push(screen) {
     stack.push(screen);
+    if (!screen.el.classList.contains('pop-wrap') && !screen.el.querySelector('.fr-x')) {
+      const x = el(`<button class="fr-x" aria-label="${esc(T('Close'))}" title="${esc(T('Close'))}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`);
+      x.addEventListener('click', (e) => { e.stopPropagation(); if (isTop(screen.el)) pop(); });
+      screen.el.append(x);
+    }
     $('#overlays').append(screen.el);
     requestAnimationFrame(() => screen.el.classList.add('in'));
     audio.play('open');
@@ -1255,7 +1335,7 @@
     const focus = (i, scroll = true) => {
       const list = rows();
       if (!list.length) return;
-      idx = clamp(i, 0, list.length - 1);
+      idx = clamp(Number.isInteger(i) ? i : idx, 0, list.length - 1);
       list.forEach((r, k) => r.classList.toggle('focus', k === idx));
       if (scroll) list[idx].scrollIntoView({ block: 'nearest' });
       onFocus && onFocus(list[idx]);
@@ -1432,22 +1512,121 @@
 
   // ------------------------------------------------------------------ settings
 
-  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['widgets', 'WIDGETS'], ['social', 'SOCIAL'], ['discord', 'DISCORD'], ['developer', 'DEVELOPER'], ['performance', 'PERFORMANCE'], ['system', 'SYSTEM'], ['updates', 'UPDATES'], ['data', 'DATA']];
-  const TAB_GROUPS = [['LOOK', ['theme', 'backdrop', 'effects', 'texts', 'sound']], ['LIBRARY', ['games', 'accounts', 'feeds']], ['DESKTOP', ['nexus', 'widgets', 'social', 'discord']],
-    ['SYSTEM', ['performance', 'system', 'updates', 'data', 'developer']]];
+  const TABS = [['theme', 'THEME'], ['backdrop', 'BACKDROP'], ['effects', 'EFFECTS'], ['sound', 'SOUND'], ['texts', 'TEXTS'], ['feeds', 'FEEDS'], ['games', 'GAMES'], ['accounts', 'ACCOUNTS'], ['nexus', 'NEXUS'], ['widgets', 'WIDGETS'], ['social', 'SOCIAL'], ['discord', 'DISCORD'], ['developer', 'DEVELOPER'], ['performance', 'PERFORMANCE'], ['system', 'SYSTEM'], ['updates', 'UPDATES'], ['data', 'DATA'], ['icons', 'ICONS'], ['wallpaper', 'WALLPAPER'], ['roblox', 'ROBLOX'], ['homeicons', 'HOME ICONS'], ['deskwall', 'DESKTOP WALLPAPER'], ['creator', 'CREATOR'], ['leds', 'LED COLOURS']];
+  const TAB_GROUPS = [['LOOK', ['theme', 'wallpaper', 'backdrop', 'effects', 'icons', 'texts', 'sound']], ['LIBRARY', ['games', 'roblox', 'feeds']],
+    ['ACCOUNTS', ['accounts', 'discord', 'social']], ['DESKTOP', ['deskwall', 'widgets', 'creator', 'leds', 'homeicons', 'nexus']], ['SYSTEM', ['performance', 'system', 'updates', 'data', 'developer']]];
   const TAB_INFO = {
     theme: ['Theme', 'Colours, fonts, shapes and what shows on HOME.'], backdrop: ['Backdrop', 'The animated scene behind everything.'], effects: ['Effects', 'Motion, lights and transitions.'],
     texts: ['Texts', 'Every piece of wording on screen.'], sound: ['Sound', 'Sound packs, music and button sounds.'], games: ['Games', 'What is on your shelf.'],
     accounts: ['Accounts', 'Steam, Epic and Roblox sign-ins.'], feeds: ['Feeds', 'The rows under HOME.'], nexus: ['Nexus', 'Your desktop app bars.'], widgets: ['Widgets', 'Little windows on your desktop.'],
     social: ['Social', 'Sites beside HOME.'], discord: ['Discord', 'What your Discord profile shows.'], performance: ['Performance', 'Profiles, memory and shortcuts.'], system: ['System', 'Add-ons, behaviour and language.'],
     updates: ['Updates', 'New versions and your backups.'], data: ['Data', 'See what is inside your settings before loading them.'], developer: ['Developer', 'Roblox Studio and dev tools.'],
+    icons: ['Icons', 'Covers, banners, icons and launch videos for each game, kept with this profile.'], wallpaper: ['Wallpaper', 'Your own picture, GIF or video behind the launcher.'],
+    roblox: ['Roblox', 'Your Roblox games and places, and how Roblox starts.'], homeicons: ['Home icons', 'Your own buttons, placed anywhere on HOME, on any screen.'], deskwall: ['Desktop wallpaper', 'Live wallpapers behind your desktop icons, on every screen.'], creator: ['Creator', 'Design your own icons and widgets.'], leds: ['LED colours', 'Your RGB lights, through OpenRGB.'], accounts: ['Accounts', 'Steam, Epic and Roblox sign-ins.'],
   };
   const TAB_ICON = (k) => ICON[k] || ICON.settings;
+  // Pages that hand the reader off to another page say so in one line.
+  const sectionsOf = (list) => {
+    const out = [];
+    for (const r of list) { if (r.classList && r.classList.contains('row-head')) out.push({ head: r, rows: [] }); else if (out.length) out[out.length - 1].rows.push(r); else out.push({ head: null, rows: [r] }); }
+    return out;
+  };
+  const WALLPAPER_HEADS = /PHOTO|VIDEO/;
   // Changing these is easiest with the real thing behind it, so the backdrop keeps running on these tabs.
   const LIVE_TABS = new Set(['theme', 'backdrop', 'effects']);
   const pct = (v) => Math.round(v * 100) + '%';
 
+  // The pages built here and in the other files, plus the 2.9 pages that are made out of them.
   function settingsRows(tab, rerender) {
+    if (tab === 'icons') return iconRows(rerender);
+    if (tab === 'homeicons') return SV.homeIcons ? SV.homeIcons.rows(rerender) : [];
+    if (tab === 'roblox') return [
+      ...SV.roblox.placeRows(rerender),
+      heading('HOW ROBLOX STARTS'),
+      R.toggle('Roblox opens its game list', 'Picking Roblox on HOME shows your saved places first. Off goes straight to the account picker.', at('lists.roblox')),
+      R.button('Roblox accounts', 'Sign in, rename, pictures: Settings → ACCOUNTS.', 'OPEN', () => openSettings('accounts')),
+      R.button('Roblox add-on switches', 'Friends row, explore rows, avatars: Settings → SYSTEM.', 'OPEN', () => openSettings('system')),
+      R.button('Roblox dev hub', 'Studio projects, commissions, notes and tools.', 'OPEN', () => { while (stack.length) pop(); SV.dev.open(); }),
+    ];
+    if (tab === 'deskwall' && SV.deskWall) return SV.deskWall.rows(rerender);
+    if (tab === 'creator' && SV.creator) return SV.creator.rows(rerender);
+    if (tab === 'leds' && SV.leds) return SV.leds.rows(rerender);
+    if (tab === 'effects' && SV.hoverFx) return [...SV.hoverFx.rows(rerender), ...(settingsRowsBase(tab, rerender) || [])];
+    if (tab === 'wallpaper') {
+      const parts = sectionsOf(settingsRowsBase('backdrop', rerender)).filter((s) => s.head && WALLPAPER_HEADS.test(s.head.textContent));
+      return [
+        heading('WALLPAPER'),
+        el(`<div class="row-note">${esc(T('Kept with the profile you are on. The effects from BACKDROP are drawn over it; set the backdrop style to Minimal for just your picture.'))}</div>`),
+        ...parts.flatMap((s) => [s.head, ...s.rows]),
+      ];
+    }
+    let list = settingsRowsBase(tab, rerender) || [];
+    if (tab === 'backdrop') list = sectionsOf(list).filter((s) => !(s.head && WALLPAPER_HEADS.test(s.head.textContent))).flatMap((s) => (s.head ? [s.head, ...s.rows] : s.rows))
+      .concat([R.button('Your own picture or video', 'They are on the WALLPAPER page now.', 'OPEN', () => openSettings('wallpaper'))]);
+    if (tab === 'theme') list = [
+      heading('MODE'),
+      ...(SV.gamesView ? SV.gamesView.rows() : []),
+      R.toggle('Black and white', 'Everything in shades of grey: pictures, GIFs, videos and the backdrop too. Kept with this profile.', at('theme.mono'), () => { changed('games'); rerender(); }),
+      ...(cfg.theme.mono ? [
+        heading('KEEP IN COLOUR'),
+        ...[['icons', 'Game art, icons and pictures', 'Covers, banners, HOME icons, widgets and the NEXUS bar.'], ['videos', 'Videos', 'Backdrop and game videos.'],
+          ['launch', 'Launch and transition videos', 'The launch screen, opening and transition videos.'], ['backdrop', 'Backdrop and wallpaper', 'The animated scene and your wallpaper behind HOME.'],
+          ['ui', 'Menus and highlights', 'Your theme colours on buttons, bars and selections.']]
+          .map(([k, label, desc]) => R.toggle(label, desc, { get: () => (cfg.theme.monoExclude || []).includes(k), set: (v) => { const s = new Set(cfg.theme.monoExclude || []); if (v) s.add(k); else s.delete(k); cfg.theme.monoExclude = [...s]; } }, () => changed('games'))),
+      ] : [
+        R.toggle('Black and white icons and pictures', 'Game art, HOME icons, widgets and the NEXUS bar. The rest keeps its colour.', at('theme.monoIcons'), () => changed('games')),
+        R.toggle('Black and white videos', 'Backdrop and game videos.', at('theme.monoVideos'), () => changed('games')),
+        R.toggle('Black and white launch and transition videos', 'The video when a game starts, the opening video and transitions.', at('theme.monoTransitions'), () => changed('games')),
+      ]),
+      R.slider('Size of menus and frames', 'Everything except HOME: menus, the dev hub, data, clips… Settings has its own SCALE button.', at('layout.frameScale'), 0.9, 1.6, 0.05, (v) => Math.round(v * 100) + '%'),
+      ...list,
+    ];
+    if (tab === 'widgets' && SV.homeWidgets) list = [...SV.homeWidgets.rows(rerender), ...widgetLookRows(), ...list];
+    return list;
+  }
+
+  // Settings → WIDGETS → HOW THEY LOOK (the HOME widgets)
+  function widgetLookRows() {
+    const ws = cfg.home.widgetStyle = cfg.home.widgetStyle || { size: 'm', bg: 'glass', hover: 'lift', radius: 0.7, labels: true, opacity: 1 };
+    const P = (k) => prop(ws, k);
+    const redraw = () => { changed(); SV.homeWidgets && SV.homeWidgets.render(); };
+    return [
+      heading('HOW THEY LOOK ON HOME'),
+      R.choice('Size', '', P('size'), [['s', 'Small'], ['m', 'Medium'], ['l', 'Large'], ['xl', 'Extra large']], redraw),
+      R.choice('Background', '', P('bg'), [['glass', 'Dark glass'], ['solid', 'Solid'], ['accent', 'Accent colour'], ['outline', 'Outline only'], ['none', 'None']], redraw),
+      R.choice('When the mouse is over one', '', P('hover'), [['lift', 'Lifts up'], ['grow', 'Grows'], ['glow', 'Glows'], ['none', 'Nothing']], redraw),
+      R.slider('Corner roundness', '', P('radius'), 0, 2, 0.1, (v) => (v ? v.toFixed(1) : 'square')),
+      R.slider('Opacity', '', P('opacity'), 0.3, 1, 0.05, (v) => Math.round(v * 100) + '%'),
+      R.toggle('Small labels', 'The line under each value.', P('labels'), redraw),
+    ];
+  }
+
+  // Settings → ICONS: every game's pictures and launch video for the profile you are on.
+  function iconRows(rerender) {
+    const art = cfg.art = cfg.art || {};
+    const SLOTS = [['cover', 'COVER', 'media'], ['hero', 'BANNER', 'media'], ['icon', 'ICON', 'media'], ['launchVideo', 'VIDEO', 'video']];
+    const rowFor = (g) => {
+      const mine = art[g.id] || {}, set = SLOTS.filter(([k]) => mine[k]).map(([, l]) => l);
+      const r = R.buttons(g.name, set.length ? `This profile: ${set.join(', ').toLowerCase()}` : 'Normal artwork', [
+        ...SLOTS.map(([k, label, kind]) => [mine[k] ? label + ' ✓' : label, () => pick(kind).then((f) => { if (f.url) { setThemeArt(g, k, f.url); rerender(); } })]),
+        ...(set.length ? [['RESET', () => { for (const [k] of SLOTS) if (mine[k]) setThemeArt(g, k, ''); rerender(); }, 'danger']] : []),
+      ]);
+      r.classList.add('icon-row');
+      const src = artSrc(g, 'icon') || artSrc(g, 'cover');
+      r.querySelector('.row-l').insertAdjacentHTML('afterbegin', `<span class="icon-thumb">${src ? SV.media.html(src, 'icon-img') : `<b>${esc((g.name[0] || '?').toUpperCase())}</b>`}</span>`);
+      return r;
+    };
+    const n = Object.keys(art).length;
+    return [
+      heading('ICONS FOR ' + String(cfg.profile.name || 'THIS PROFILE').toUpperCase()),
+      el(`<div class="row-note">${esc(T('Pick a picture, GIF or video for any game. Only the profile you are on uses it; switching profiles switches them. Dragging a picture onto a game on HOME does the same.'))}</div>`),
+      ...(n ? [R.button('Reset every game', `${n} games have their own pictures in this profile.`, 'RESET ALL', () => confirmMenu('Remove this profile\'s pictures?', 'REMOVE THEM', () => { cfg.art = {}; changed('games'); SV.nexus && SV.nexus.syncIcons(); rerender(); }), true)] : []),
+      heading('GAMES · ' + cfg.games.length),
+      ...cfg.games.map(rowFor),
+    ];
+  }
+
+  function settingsRowsBase(tab, rerender) {
     if (tab === 'theme') {
       const swatches = el('<div class="swatches"></div>');
       const keys = Object.keys(PRESETS);
@@ -1483,6 +1662,8 @@
           ['CLEAN', () => lookPreset('clean', rerender)], ['BALANCED', () => lookPreset('balanced', rerender)], ['LOUD', () => lookPreset('loud', rerender)],
         ]),
         heading('FONTS'),
+        R.button('skyvaint.com style', 'Inter Tight headlines, Chakra Petch menus and text, JetBrains Mono labels, in grey chrome. One click.', 'USE IT', () => { Object.assign(cfg.theme, { font: 'intertight', bodyFont: 'chakra', monoFont: 'mono', titleCase: 'upper', menuStyle: 'site' }); changed('games'); rerender(); toast('skyvaint.com style on'); }),
+        R.choice('Menu style', 'How Settings, sheets and menus look.', at('theme.menuStyle'), [['site', 'skyvaint.com (clean, chrome titles)'], ['classic', 'Classic']], () => changed()),
         R.choice('Headline font', 'Typeface for titles. "(web)" ones download the first time.', at('theme.font'), fontChoices(Object.entries(FONTS).map(([k, f]) => [k, f[0]]))),
         R.choice('Text font', 'Typeface for descriptions and buttons.', at('theme.bodyFont'), fontChoices([['manrope', 'Manrope'], ['rajdhani', 'Rajdhani'], ['mono', 'JetBrains Mono'], ['orbitron', 'Orbitron']])),
         R.choice('Label font', 'The small tags like [ STEAM ].', at('theme.monoFont'), fontChoices([['mono', 'JetBrains Mono'], ['manrope', 'Manrope'], ['rajdhani', 'Rajdhani'], ['pixel', 'Press Start 2P']])),
@@ -1533,7 +1714,7 @@
         R.slider('Ticker speed', 'How fast the headline strip scrolls.', at('theme.tickerSpeed'), 0.3, 3, 0.1, (v) => v.toFixed(1) + '×'),
         R.text('Ticker text', 'Your own words, separated by commas. Empty uses your game names.', at('theme.tickerText'), 'GG, NO MERCY, CLUTCH', 'games'),
         R.slider('Interface size', 'Scales the whole HOME screen.', at('theme.uiScale'), 0.85, 1.15, 0.05, pct),
-        R.toggle('Feature panel', 'Large artwork panel beside the game details.', at('theme.hero')),
+        R.toggle('Banner (feature panel)', 'The big artwork panel beside the game details on HOME. Off hides it.', at('theme.hero')),
         R.toggle('Ticker', 'Scrolling headline strip.', at('theme.ticker')),
         R.toggle('Vignette', 'Darkened screen edges.', at('theme.vignette')),
         ...(SV.themes ? SV.themes.rows(rerender) : []),
@@ -1691,14 +1872,19 @@
       R.toggle('High-performance GPU', 'Draws the launcher on your dedicated graphics card (NVIDIA) instead of the integrated one. Smoother, uses more battery. Needs a restart.', at('perf.dgpu')),
       R.toggle('Unlock frame rate', 'Lets the launcher draw faster than your monitor (no v-sync). Needs a restart. Can tear.', at('perf.uncapped')),
       heading('SPACE'),
-      R.choice('Opening', 'What plays when the launcher opens.', at('fx.bootStyle'), [['flow', 'Neon lines, then a fade'], ['space', 'Warp to a planet'], ['bolt', 'Lightning bolt']]),
+      R.choice('Opening', 'What plays when the launcher opens.', at('fx.bootStyle'), [['sound', 'PS2 sound and auroras'], ['flow', 'Neon lines, then a fade'], ['space', 'Warp to a planet'], ['bolt', 'Lightning bolt']], rerender),
+      ...(cfg.fx.bootStyle === 'sound' ? [
+        R.file('Opening sound', 'Plays while your wallpaper rises out of black. Empty uses the one kept with the launcher.', at('fx.introSound'), 'audio'),
+        R.slider('The drop', 'Seconds into the sound where HOME comes in. 14.35 is the hit at the end of the PS2 sound.', at('fx.introDrop'), 0.5, 30, 0.05, (v) => v.toFixed(2) + ' s'),
+        R.toggle('Profiles on the drop', 'The profile picker opens as HOME comes in.', at('fx.introProfiles')),
+      ] : []),
       R.toggle('Slash wipe', 'Slabs sweep across when minimizing, hiding to the tray and coming back.', at('fx.wipe')),
       R.toggle('Fade the window', 'Hiding to the tray, minimizing and coming back fade the whole window in and out of transparency.', at('fx.fadeWindow')),
       R.toggle('Warp in and out', 'Warps out when hiding to the tray or mini, and back in when HOME returns.', at('fx.space')),
       R.toggle('Away mode', 'Dims and pauses HOME while a game has the focus, with a short re-entry when you come back.', at('fx.focusFx')),
       R.button('Preview opening', '', 'PLAY', () => { while (stack.length) pop(); setTimeout(boot, 300); }),
       heading('LAUNCH'),
-      R.choice('Launch transition', 'How the screen wipes when a game starts.', at('fx.launchStyle'), [['slabs', 'Slabs'], ['blinds', 'Blinds'], ['iris', 'Iris'], ['flash', 'Flash']]),
+      R.choice('Launch transition', 'How the screen wipes when a game starts. Auroras: your aurora colours on every screen spin and merge to black, SKYVAINT comes in, then a 3-second fade into the game (no launch video).', at('fx.launchStyle'), [['aurora', 'Auroras, then SKYVAINT'], ['slabs', 'Slabs'], ['blinds', 'Blinds'], ['iris', 'Iris'], ['flash', 'Flash']]),
       R.toggle('Warp tunnel', 'Stars streak past while a game starts.', at('fx.warp')),
       R.toggle('Confetti', 'Cannons fire from both corners on launch.', at('fx.confetti')),
       R.toggle('Screen shake', 'A jolt when you hit START.', at('fx.shake')),
@@ -1712,6 +1898,7 @@
       const ev = (key, label, desc) => R.toggle(label, desc, at('sound.events.' + key));
       const custom = (key, label) => R.file(label, 'Replace with your own audio file.  ← clears it.', at('sound.custom.' + key), 'audio');
       return [
+        R.toggle('Only ambience', 'Silences every other launcher sound: clicks, hovers, the opening, launch sounds, videos and HOME music. Your own sounds stay saved.', at('sound.onlyAmbience'), (v) => { if (v && !(cfg.sound.ambient > 0)) { cfg.sound.ambient = 0.5; cfg.sound.ambientKind = 'console'; changed(); } rerender(); }),
         R.slider('Master volume', 'All launcher sounds.', at('sound.master'), 0, 1, 0.05, pct),
         R.choice('Sound pack', `${packs.length} packs — the timbre of every interface sound.`, at('sound.pack'), packs, () => setTimeout(() => audio.play('pick'), 80)),
         R.button('Preview', 'Play the start-up chime with the current pack.', 'PLAY', () => audio.play('boot')),
@@ -1723,7 +1910,9 @@
         ev('launch', 'Launch sound', 'Plays when a game starts.'),
         R.slider('Pitch', 'Shifts every interface sound up or down.', at('sound.pitch'), -12, 12, 1, (v) => (v > 0 ? '+' : '') + v + ' st'),
         R.slider('Echo', 'Adds a trailing echo to the sounds.', at('sound.echo'), 0, 1, 0.05, pct),
-        R.slider('Ambient hum', 'Low drone under the HOME screen.', at('sound.ambient'), 0, 1, 0.05, pct),
+        R.choice('Home ambience', 'Plays while you are in the launcher; fades out when you leave or start a game.', at('sound.ambientKind'), [['console', 'PS2-style pads'], ['hum', 'Low hum']]),
+        R.slider('Ambience volume', '0 turns it off.', at('sound.ambient'), 0, 1, 0.05, pct),
+        R.file('Your own ambience', 'An audio file, looped instead of the ones above.  ← clears it.', at('sound.ambientFile'), 'audio'),
         heading('BACKGROUND MUSIC'),
         R.button('Add a track', `${(cfg.sound.bgmTracks || []).length} track(s). Your own music plays behind HOME.`, 'ADD', () => pick('audio').then((f) => { if (f.url) { (cfg.sound.bgmTracks = cfg.sound.bgmTracks || []).push(f.url); changed(); rerender(); toast('Track added'); } })),
         ...(cfg.sound.bgmTracks || []).map((u, i) => R.buttons(`Track ${i + 1}`, decodeURIComponent(u.split('/').pop()).slice(0, 60), [
@@ -1791,6 +1980,8 @@
     if (tab === 'nexus') return SV.nexus.rows(rerender);
     if (tab === 'updates') return SV.updates.rows(rerender);
     if (tab === 'data') return [
+      ...SV.assets.rows(rerender),
+      heading('YOUR DATA'),
       R.button('Open my data', 'See the main profile, main menu, videos, NEXUS bars and more, for your settings and every backup.', 'OPEN', () => SV.data.open()),
       R.button('Switch profile', 'Choose another profile or make a new one.', 'OPEN', () => { while (stack.length) pop(); SV.features.pick(); }),
       R.button('Backups', 'Back up now, or put an older one back.', 'UPDATES', () => { while (stack.length) pop(); openSettings('updates'); }),
@@ -1826,6 +2017,9 @@
       R.choice('When the game closes', 'Only applies to games started from here.', at('behavior.onGameExit'), [['home', 'Return to HOME'], ['none', 'Do nothing']]),
       R.toggle('Ask which account', 'Prompt for an Epic account each time when more than one is saved. Off uses the last one per game.', at('behavior.promptAccount')),
       R.choice('Closing the window', 'Alt + F4 never quits; the launcher keeps running.', at('behavior.closeAction'), [['hidden', 'Hide to tray'], ['mini', 'Shrink to mini']]),
+      R.choice('Screen', screens.length > 1 ? 'Where HOME opens. MORE → Next screen moves it any time.' : 'Where HOME opens when you have more than one screen.', at('behavior.screen'),
+        [['cursor', 'The screen with the mouse'], ['primary', 'The main screen'], ['last', 'The last one it was on'], ...screens.map((s) => [s.name, s.label])],
+        (v) => { save(); if (v !== 'cursor' && v !== 'last') host.send('moveScreen', { to: v }); }),
       R.choice('Start with Windows', 'Starts first thing when you sign in, ahead of your other start-up apps.', startChoice, [['off', 'Off'], ['home', 'On — HOME on screen'], ['hidden', 'On — in tray'], ['mini', 'On — as mini']]),
       R.toggle('Opening animation', 'Bolt intro when HOME first appears.', at('behavior.bootAnim')),
       R.toggle('Mini stays on top', 'Keep the mini widget above other windows.', at('behavior.miniOnTop')),
@@ -1955,7 +2149,7 @@
       headP.textContent = T(info[1]);
       paintNav();
       setLive();
-      body.replaceChildren(...settingsRows(tab, (i) => { if (root.isConnected) show(tab, i ?? p.idx); }));
+      body.replaceChildren(...settingsRows(tab, (i) => { if (root.isConnected) show(tab, typeof i === 'number' ? i : p.idx); }));
       if (changedTab) { body.scrollTop = 0; body.style.animation = 'none'; void body.offsetWidth; body.style.animation = ''; }
       paintMe();
       p.focus(focusIdx);
@@ -2474,6 +2668,7 @@
 
   input.onAction = (a) => {
     if (mode !== 'home' || document.body.classList.contains('booting')) return;
+    if (away) setAway(false); // keyboard or controller: back from away at once
     konami = a === KONAMI[konami] ? konami + 1 : a === KONAMI[0] ? 1 : 0;
     if (konami === KONAMI.length) { konami = 0; if (!document.body.classList.contains('overdrive')) return overdrive(); }
     if (launching) { if (a === 'back' || a === 'confirm') host.send('launchSkip'); return; }
@@ -2483,6 +2678,7 @@
       return leaveTo('mini');
     }
     if (stack.length) stack[stack.length - 1].action(a);
+    else if (SV.gamesView && SV.gamesView.active() && SV.gamesView.action(a) !== false) return;
     else homeAction(a);
   };
   SV.onPad = (on, id) => toast(on ? 'Controller connected' + (id ? ' — ' + id.split('(')[0].trim() : '') : 'Controller disconnected');
@@ -2494,7 +2690,8 @@
     const body = document.body;
     body.classList.remove('preinit');
     // Your own intro video plays first, then the normal opening (or straight to HOME if that is off).
-    if (mode === 'home' && cfg.fx.introVideo && !introPlayed && !wokeUp && SV.effects) {
+    // The PS2 sound opening replaces your own intro video (it stays saved, unused, in case you switch back).
+    if (mode === 'home' && cfg.fx.introVideo && cfg.fx.bootStyle !== 'sound' && !introPlayed && !wokeUp && SV.effects) {
       introPlayed = true;
       // Your video is the opening: straight to HOME after it, unless you want the built-in one as well.
       return SV.effects.intro(cfg.fx.introVideo, cfg.fx.introThenOpening ? boot : () => { body.classList.remove('preinit'); body.classList.add('entered'); });
@@ -2502,6 +2699,17 @@
     if (mode !== 'home' || !cfg.behavior.bootAnim || wokeUp) { body.classList.add('entered'); return; }
     $('#bootName').innerHTML = [...cfg.texts.brand].map((c, i) => `<span style="--i:${i}">${c === ' ' ? '&nbsp;' : esc(c)}</span>`).join('');
     $('#bootWelcome').textContent = cfg.texts.welcome ? `${cfg.texts.welcome}, ${cfg.profile.name}`.toUpperCase() : '';
+    // Compact HOME: the aurora with your PS2 sound, the panels fly in partway through.
+    if (SV.gamesView && SV.gamesView.on() && SV.gamesView.intro({
+      src: cfg.fx.introSound || 'audio/intro.mp3', drop: +cfg.fx.introDrop || 14.35,
+      volume: cfg.sound.onlyAmbience ? 0 : Math.min(1, ((cfg.sound && cfg.sound.master != null) ? cfg.sound.master : 0.6) * 1.6),
+    })) return;
+    // Your sound over your wallpaper, and the profiles on the drop.
+    if (cfg.fx.bootStyle === 'sound' && SV.soundIntro && SV.soundIntro.play({
+      src: cfg.fx.introSound || 'audio/intro.mp3', drop: +cfg.fx.introDrop || 14.35, colors: auroraColors(), profiles: cfg.fx.introProfiles !== false && !!(cfg.setup && cfg.setup.done),
+      volume: cfg.sound.onlyAmbience ? 0 : Math.min(1, ((cfg.sound && cfg.sound.master != null) ? cfg.sound.master : 0.6) * 1.6),
+      onEnter: () => body.classList.add('entered'),
+    })) return;
     // Neon lines, then a fade straight into HOME.
     if (cfg.fx.bootStyle === 'flow' && cfg.backdrop.motion && SV.intro && SV.intro.play({
       accent: cfg.theme.accent, accent2: cfg.theme.accent2, bg: cfg.theme.bg, sound: (name) => audio.play(name),
@@ -2573,7 +2781,21 @@
     if (saved && from < 7) { autostart = true; cfg.behavior.autostartMode = 'home'; host.send('setAutostart', { on: true }); }
     // 2.8: the neon opening is the one you see, and it follows your own intro video if you have one.
     if (saved && from < 8) { cfg.fx.bootStyle = 'flow'; cfg.behavior.bootAnim = true; if (cfg.fx.introVideo) cfg.fx.introThenOpening = true; }
-    cfg.v = 8;
+    // 2.9: the PS2 sound over your wallpaper is the opening, with the profiles on its drop.
+    if (saved && from < 9) { cfg.fx.bootStyle = 'sound'; cfg.behavior.bootAnim = true; cfg.fx.introThenOpening = false; }
+    // 2.9: the aurora launch is how games start.
+    if (saved && from < 10) { cfg.fx.launchStyle = 'aurora'; cfg.fx.launchQuiet = true; cfg.theme.menuStyle = 'site'; }
+    // Lightning on hover off for everything (it can be switched back on per kind of button).
+    if (saved && from < 11 && cfg.fx.hoverFx) cfg.fx.hoverFx.thunder = {};
+    // The PS2-style sounds you asked for. Your own sound files, where you set some, still win over them.
+    if (saved && from < 12) cfg.sound.pack = 'console2k';
+    // The PS2-style ambience while you are in the launcher.
+    if (saved && from < 13) { cfg.sound.ambientKind = 'console'; if (!(cfg.sound.ambient > 0)) cfg.sound.ambient = 0.5; }
+    // The compact launcher like the Epic Games Launcher, in a small window (asked for by you).
+    if (saved && from < 14) { cfg.home.view = 'games'; cfg.home.window = true; }
+    // Max memory saver and a 300 MB limit (asked for by you).
+    if (saved && from < 15) { cfg.perf.memorySaver = 'max'; cfg.perf.memoryLimit = 300; }
+    cfg.v = 15;
     // Configs from before per-account import: whichever Steam accounts already have games on the shelf count as done.
     if (!cfg.imported.steamAccounts)
       cfg.imported.steamAccounts = [...new Set(scan.filter((s) => s.platform === 'steam' && known(s)).flatMap((s) => s.owners || []))];
@@ -2633,14 +2855,26 @@
   // Coming back after installing or signing in to a store: look again, so its games appear without a restart.
   const setupShown = () => mode === 'home' && !sub && shown.some((g) => g.setup);
   for (const t of ['steamState', 'epicState']) host.on(t, () => setTimeout(() => { if (setupShown() && !stack.length && !launching) { const keep = sel; renderHome(); select(keep, true); } }, 0));
-  host.on('focus', (m) => {
-    if (m.on && setupShown()) rescanStores(true);
-    if (!cfg.fx.focusFx || mode !== 'home') return;
-    document.body.classList.toggle('away', !m.on);
-    away = !m.on;
+  function setAway(on) {
+    if (on === away) return;
+    document.body.classList.toggle('away', on);
+    away = on;
     syncBackdrop();
-    if (m.on && cfg.backdrop.motion) SV.space.play('refocus');
+    if (!on && cfg.backdrop.motion) SV.space.play('refocus');
+  }
+  host.on('focus', (m) => {
+    audio.holdAmbient(!m.on || launching);
+    if (m.on && setupShown()) rescanStores(true);
+    if (!cfg.fx.focusFx || mode !== 'home') return setAway(false);
+    setAway(!m.on);
   });
+  // Windows doesn't always say the launcher is in front again (after a game closes, or on another screen), which
+  // left HOME dimmed until a click. Moving the mouse over it, a key or the controller brings it back at once.
+  const back = () => { if (away) setAway(false); };
+  addEventListener('pointermove', back, { passive: true });
+  addEventListener('keydown', back, true);
+  addEventListener('gamepadconnected', back);
+  host.on('mode', (m) => { if (m.mode === 'home') back(); });
   host.on('soundLibrary', (m) => { cfg.sound.library = m.sounds || []; save(); });
 
   // The sound browser: groups, then every sound in the group; choosing one plays it and offers what to use it for.
@@ -2701,15 +2935,18 @@
       audio.play('hover', cfg.sound.hoverVolume ?? 0.6);
     }, cfg.sound.hoverDwell ?? 70);
   }, { passive: true });
-  host.on('playSound', (m) => m.url && audio.preview(m.url));
+  host.on('playSound', (m) => m.url && audio.effect(m.url));
   host.on('notice', (m) => { audio.play(m.ok ? 'pick' : 'error'); toast(m.text, m.ok ? '' : 'bad'); });
   let discordStatus = 'Off';
   host.on('discordStatus', (m) => { discordStatus = m.status; const n = document.querySelector('.discord-status'); if (n) n.textContent = m.status; });
   host.on('running', (m) => { running = new Set(m.ids || []); if (m.stats) stats = m.stats; updateRunning(); });
   host.on('stats', (m) => { stats = { ...stats, ...m.stats }; renderStats(); SV.quests.refresh(); if (mode === 'home' && !launching) renderContinue(); });
   host.on('launchFailed', (m) => {
+    const wasAurora = !!aurora;
+    if (wasAurora) endLaunch();
     audio.play('error');
     toast('Could not start: ' + m.error, 'bad');
+    if (wasAurora) return;
     const now = $('#lfSteps .lf-step.now');
     if (!launching || !now) return endLaunch();
     // Leave the failed step on screen long enough to read which one it was.
@@ -2725,10 +2962,10 @@
     get cfg() { return cfg; },
     get mode() { return mode; },
     get launching() { return launching; },
-    $, el, esc, clamp, hash, shiftHue, meshSVG, toast, hints, at, prop, lastPlayed, T,
+    $, el, esc, clamp, hash, shiftHue, meshSVG, toast, hints, at, prop, lastPlayed, T, setThemeArt,
     stack, push, pop, isTop, panel, popover, syncCover, row, heading, R, pick, ask, openMenu, confirmMenu, changed, save, openSettings, leaveTo, openTasks, refreshList, launchDirect, exitList,
     get inList() { return !!sub; },
-    launchFx, endLaunch, armLaunchTimeout, renderStats, renderActions, artSrc, scanOf, isInstalled, launch, jumpTo, playtime,
+    launchFx, endLaunch, armLaunchTimeout, syncBackdrop, fit, renderStats, renderActions, artSrc, scanOf, isInstalled, launch, jumpTo, playtime,
     get running() { return running; },
     get stats() { return stats; },
   };

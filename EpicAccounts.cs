@@ -93,14 +93,14 @@ internal static class EpicAccounts
 
 	public static async Task<bool> LaunchUri(string uri, Func<bool> gameStarted)
 	{
-		for (int attempt = 0; attempt < 3; attempt++)
+		for (int attempt = 0; attempt < 2; attempt++)
 		{
 			int seen = Count(ReadLog());
-			Process.Start(new ProcessStartInfo(uri)
+			Detached.Start(new ProcessStartInfo(uri)
 			{
 				UseShellExecute = true
-			})?.Dispose();
-			for (int i = 0; i < 12; i++)
+			});
+			for (int i = 0; i < 30; i++)
 			{
 				await Task.Delay(600);
 				if (Count(ReadLog()) > seen || gameStarted())
@@ -113,11 +113,14 @@ internal static class EpicAccounts
 		static int Count(string text)
 		{
 			int n = 0;
-			int i2 = 0;
-			while ((i2 = text.IndexOf("Started processing URI", i2, StringComparison.Ordinal)) >= 0)
+			foreach (string sign in new[] { "Started processing URI", "LaunchAppTask: Preparing to launch", "New foreground process" })
 			{
-				n++;
-				i2 += "Started processing URI".Length;
+				int i2 = 0;
+				while ((i2 = text.IndexOf(sign, i2, StringComparison.Ordinal)) >= 0)
+				{
+					n++;
+					i2 += sign.Length;
+				}
 			}
 			return n;
 		}
@@ -315,18 +318,18 @@ internal static class EpicAccounts
 		(string, string)? command = GameScanner.ProtocolCommand("com.epicgames.launcher");
 		if (command.HasValue && File.Exists(command.Value.Item1))
 		{
-			Process.Start(new ProcessStartInfo(command.Value.Item1, silent ? "-silent" : "")
+			Detached.Start(new ProcessStartInfo(command.Value.Item1, silent ? "-silent" : "")
 			{
 				UseShellExecute = true,
 				WorkingDirectory = Path.GetDirectoryName(command.Value.Item1)
-			})?.Dispose();
+			});
 		}
 		else
 		{
-			Process.Start(new ProcessStartInfo("com.epicgames.launcher://store")
+			Detached.Start(new ProcessStartInfo("com.epicgames.launcher://store")
 			{
 				UseShellExecute = true
-			})?.Dispose();
+			});
 		}
 	}
 }

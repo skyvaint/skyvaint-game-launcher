@@ -5,12 +5,13 @@
   const { $, el, esc } = A;
   const gb = (b) => (b / 1073741824 >= 100 ? Math.round(b / 1073741824) : (b / 1073741824).toFixed(1)) + ' GB';
 
-  const who = $('#topbar .status');
+  const who = $('#topbar .status .live') || $('#topbar .status'); // only the status text, and only on click
   const panel = el(`
     <div id="syspanel">
       <div class="sp-head"><span class="sp-avatar"></span><div><b class="sp-name"></b><small class="tag">[ ${esc(A.T('THIS PC'))} ]</small></div></div>
       <div class="sp-meters"></div>
       <div class="sp-vol"><button class="sp-mute" title="Mute"></button><input type="range" min="0" max="100" step="1"><b class="sp-volnum">—</b></div>
+      <div class="sp-mixer"></div>
       <div class="sp-btns"><button class="btn small" data-a="mini">MINI MODE</button><button class="btn small" data-a="home">HOME</button><button class="btn small ghost" data-a="tasks">STOP APPS</button></div>
     </div>`);
   document.body.append(panel);
@@ -57,19 +58,65 @@
     panel.classList.add('on');
     host.send('systemStats');
     clearInterval(timer);
-    timer = setInterval(() => host.send('systemStats'), 1500);
+    host.send('mixer');
+    timer = setInterval(() => { host.send('systemStats'); if (!mixDrag) host.send('mixer'); }, 1500);
   }
   function hide(now) {
     clearTimeout(closeTimer);
     closeTimer = setTimeout(() => { open = false; panel.classList.remove('on'); clearInterval(timer); }, now ? 0 : 260);
   }
 
-  who.addEventListener('mouseenter', show);
-  who.addEventListener('mouseleave', () => hide());
-  who.addEventListener('click', () => (open ? hide(true) : show()));
+  who.addEventListener('click', (e) => { e.stopPropagation(); open ? hide(true) : show(); });
+  // Clicking anywhere else closes it again.
+  document.addEventListener('mousedown', (e) => { if (open && !panel.contains(e.target) && !who.contains(e.target)) hide(true); });
   panel.addEventListener('mouseenter', show);
-  panel.addEventListener('mouseleave', () => { if (!dragging) hide(); });
+  panel.addEventListener('mouseleave', () => { if (!dragging && !mixDrag) hide(); });
   host.on('systemStats', (m) => { if (open) paint(m); else last = m; });
+
+  // The mixer: every app making sound, each with its own volume and mute (like Windows' volume mixer).
+  const mixer = $('.sp-mixer', panel);
+  let mixDrag = false, mixKey = '';
+  host.on('mixer', (m) => {
+    if (!open || mixDrag) return;
+    const apps = m.apps || [];
+    const key = apps.map((a) => a.key).join('|');
+    if (key !== mixKey) {
+      mixKey = key;
+      mixer.innerHTML = apps.length ? `<div class="tag sp-mixhead">[ ${esc(A.T('APPS'))} ]</div>` + apps.map((a) => `
+        <div class="sp-app" data-k="${esc(a.key)}"><button class="sp-amute"></button><span class="sp-aname" title="${esc(a.name)}">${esc(a.name)}</span>
+        <input type="range" min="0" max="100" step="1"><b class="sp-anum"></b></div>`).join('') : '';
+    }
+    for (const a of apps) {
+      const row = mixer.querySelector(`[data-k="${CSS.escape(a.key)}"]`);
+      if (!row) continue;
+      row.querySelector('input').value = a.level;
+      row.querySelector('.sp-anum').textContent = a.muted ? A.T('MUTED') : a.level + '%';
+      row.querySelector('.sp-amute').innerHTML = SPEAKER(a.muted);
+      row.classList.toggle('muted', a.muted);
+    }
+  });
+  let mixAt = 0;
+  mixer.addEventListener('pointerdown', (e) => { if (e.target.matches('input')) mixDrag = true; });
+  mixer.addEventListener('input', (e) => {
+    const row = e.target.closest('.sp-app');
+    if (!row) return;
+    row.querySelector('.sp-anum').textContent = e.target.value + '%';
+    const now = performance.now();
+    if (now - mixAt > 60) { mixAt = now; host.send('mixerSet', { key: row.dataset.k, level: +e.target.value }); }
+  });
+  mixer.addEventListener('change', (e) => {
+    const row = e.target.closest('.sp-app');
+    mixDrag = false;
+    if (row) host.send('mixerSet', { key: row.dataset.k, level: +e.target.value });
+    setTimeout(() => host.send('mixer'), 150);
+  });
+  mixer.addEventListener('click', (e) => {
+    const b = e.target.closest('.sp-amute'), row = b && b.closest('.sp-app');
+    if (!row) return;
+    host.send('mixerSet', { key: row.dataset.k, mute: !row.classList.contains('muted') });
+    audio.play('toggle');
+    setTimeout(() => host.send('mixer'), 150);
+  });
 
   // Volume: changes as you drag, sent at most every 60 ms.
   let sendAt = 0;

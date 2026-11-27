@@ -2,7 +2,15 @@
 window.SV = window.SV || {};
 
 SV.host = (() => {
-  const wv = window.chrome && window.chrome.webview;
+  // WebView2 (the WinForms shell) or Tauri (the new shell): both look the same to the rest of this file.
+  const tauri = window.__TAURI__;
+  // Messages wait until the shell's answers can be heard, so 'ready' never gets its 'init' too early.
+  let heard = null;
+  // Tauri first: on Windows it also runs in WebView2, so chrome.webview exists there too.
+  const wv = (tauri && tauri.core ? {
+    postMessage: (m) => { (heard || Promise.resolve()).then(() => tauri.core.invoke('msg', { m })).catch((e) => console.error('[shell]', e)); },
+    addEventListener: (_t, fn) => { heard = tauri.event.listen('host', (e) => fn({ data: e.payload })); },
+  } : null) || (window.chrome && window.chrome.webview) || null;
   const handlers = {};
 
   const on = (type, fn) => (handlers[type] = handlers[type] || []).push(fn);
@@ -83,6 +91,22 @@ SV.host = (() => {
       emit({ type: 'init', config, stats, scan: mockScan(), mode: mockMode, autostart: false, epic: { installed: true, active: epicActive }, steam, robloxImport: null });
     } else if (type === 'saveConfig') {
       try { localStorage.setItem(KEY, JSON.stringify(d.config)); } catch {}
+    } else if (type === 'screens') {
+      emit({ type: 'screens', screens: [{ name: '\\\\.\\DISPLAY1', label: 'Screen 1 · 1920×1080 · main', primary: true, current: true }, { name: '\\\\.\\DISPLAY2', label: 'Screen 2 · 2560×1440', primary: false, current: false }] });
+    } else if (type === 'studioProjects') {
+      setTimeout(() => emit({ type: 'studioProjects', cloud: [
+        { name: 'Blue Lock Rivals', placeId: 101, universeId: 1001, playing: 12840, visits: 98000000, updated: Date.now() - 864e5, thumb: '' },
+        { name: 'Lobby test', placeId: 102, universeId: 1002, playing: 3, visits: 1400, updated: Date.now() - 9 * 864e5, thumb: '' },
+        { name: 'Soccer sim', placeId: 103, universeId: 1003, playing: 0, visits: 220, updated: Date.now() - 30 * 864e5, thumb: '' }],
+        local: [{ name: 'Shop UI.rbxl', path: 'C:\\Places\\Shop UI.rbxl', folder: 'Documents', exists: true }, { name: 'Map v2.rbxl', path: 'C:\\Places\\Map v2.rbxl', folder: 'Desktop', exists: true }] }), 250);
+    } else if (type === 'nowPlaying') {
+      emit({ type: 'nowPlaying', title: 'Midnight City', artist: 'M83', app: 'Spotify', art: '', position: 40, duration: 243, playing: true });
+    } else if (type === 'systemStats') {
+      emit({ type: 'systemStats', cpu: 23, ramUsed: 9.1e9, ramTotal: 16e9, drives: [] });
+    } else if (type === 'memoryNow') {
+      emit({ type: 'memory', mb: 612, limit: 0 });
+    } else if (type === 'localizeAssets') {
+      setTimeout(() => emit({ type: 'assetsLocalized', map: {}, failed: d.urls || [] }), 300);
     } else if (type === 'saveDrop') {
       emit({ type: 'dropSaved', token: d.token, url: d.data });
     } else if (type === 'dataFiles') {
@@ -185,6 +209,9 @@ SV.host = (() => {
       setTimeout(() => emit({ type: 'gameDetails', token: d.token, details: d.kind === 'roblox'
         ? { universeId: 500, placeId: d.placeId, name: 'Future Soccer', description: 'A mock description of the game.\nSecond line.', creator: 'Mock Studio', playing: 12345, visits: 98765432, maxPlayers: 12, created: '2023-01-02', updated: new Date().toISOString(), genre: 'Sports', upVotes: 900, downVotes: 100, favorites: 45000, shots: [], icon: '' }
         : { name: 'Mock', description: 'A mock Steam description.', developers: 'Mock Dev', publishers: 'Mock Pub', genres: 'Action, Shooter', released: 'Aug 21, 2012', metacritic: 83, recommendations: 4200000, shots: [] } }), 500);
+    } else if (type === 'mixer') { window.__mix = window.__mix || [{ key: 'spotify', name: 'Spotify', level: 70, muted: false }, { key: 'discord', name: 'Discord', level: 45, muted: false }, { key: 'robloxplayerbeta', name: 'Roblox', level: 100, muted: true }];
+      emit({ type: 'mixer', apps: window.__mix });
+    } else if (type === 'mixerSet') { const a = (window.__mix || []).find((x) => x.key === d.key); if (a) { if (d.level != null) a.level = d.level; if (d.mute != null) a.muted = d.mute; }
     } else if (type === 'systemStats') {
       mockVol = mockVol ?? 42;
       setTimeout(() => emit({ type: 'systemStats', cpu: 10 + Math.random() * 30, ramTotal: 34359738368, ramUsed: 15e9 + Math.random() * 2e9, volume: mockVol, muted: !!mockMuted,

@@ -160,5 +160,5 @@
   });
   host.on('mode', (m) => { if (m.mode === 'home' && pendingPick) { const show = pendingPick; pendingPick = null; setTimeout(show, 900); } });
 
-  SV.dev = { open: hub, rows: settingsRows, addCommission };
+  SV.dev = { open: hub, rows: settingsRows, addCommission, commissionMenu, due, money, isOpen: open, STATUS };
 })();
