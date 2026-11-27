@@ -1,6 +1,7 @@
 // Settings → INSTALLATION: the apps this launcher works with, each one a click to install (or update) through
 // winget, Windows' own app installer. Installed ones are marked; a store you just installed is scanned for games.
-// BT4 is a mod for Budokai Tenkaichi 3: it needs PCSX2 and your own copy of the game, then the Budokai picker.
+// BT4 is the custom Budokai Tenkaichi 4 (a mod of Budokai Tenkaichi 3): it runs on PCSX2 with your own copy of the
+// game, and plays online with a friend over Parsec (you host, they join as player 2 with only Parsec).
 (() => {
   const A = SV.app, { host } = SV;
   const { el, toast } = A;
@@ -20,7 +21,7 @@
     ]],
     ['EMULATORS', [
       ['PCSX2Team.PCSX2', 'PCSX2', 'PlayStation 2 emulator. Budokai Tenkaichi runs on it.'],
-      ['bt4', 'Budokai Tenkaichi 4 (BT4)', 'A fan mod of Budokai Tenkaichi 3: needs PCSX2 and your own copy of the game. SET UP opens the Budokai picker, where you choose the game file or mod.'],
+      ['bt4', 'Budokai Tenkaichi 4 (custom BT4)', 'The custom BT4, on PCSX2 with your own copy of the game (pick the file or mod in the Budokai picker). Play it online: host and your friend joins as player 2 over Parsec, they only need Parsec. Or join a friend\'s Parsec link.'],
     ]],
     ['TOOLS', [
       ['OpenRGB.OpenRGB', 'OpenRGB', 'Controls your RGB lights. LED COLOURS uses it.'],
@@ -71,10 +72,18 @@
     host.send('installApp', { id, upgrade: !!upgrade });
     redraw && redraw();
   }
-  function bt4() {
+  // BT4: PCSX2 first (and Parsec to play online), then the Budokai picker, set to online when asked.
+  function bt4(online) {
     if (!isIn('PCSX2Team.PCSX2')) return install('PCSX2Team.PCSX2', 'PCSX2');
-    const g = A.cfg.games.find((x) => x.target === 'sv:budokai');
-    if (g && SV.budokai) return SV.budokai.open(g);
+    if (online && !isIn('Parsec.Parsec')) return install('Parsec.Parsec', 'Parsec');
+    const c = A.cfg;
+    c.features = c.features || {};
+    const f = (c.features.budokai = c.features.budokai || {});
+    f.on = true;
+    if (online) { f.parsec = true; c.budokai = c.budokai || {}; c.budokai.emu = 'pcsx2'; c.budokai.psMode = 'parsec'; }
+    A.changed();
+    const g = c.games.find((x) => x.target === 'sv:budokai');
+    if (g && SV.budokai) { while (A.stack.length) A.pop(); return SV.budokai.open(g); }
     toast('Turn on Budokai Tenkaichi in Settings → GAMES first.', 'bad');
   }
 
@@ -90,8 +99,14 @@
       out.push(heading(group));
       for (const [id, name, desc] of list) {
         if (id === 'bt4') {
-          const ready = isIn('PCSX2Team.PCSX2');
-          out.push(R.button(name, desc + (ready ? '' : '  PCSX2 first.'), busy.has('PCSX2Team.PCSX2') ? 'INSTALLING…' : ready ? 'SET UP' : 'INSTALL PCSX2', bt4));
+          const ps2 = isIn('PCSX2Team.PCSX2'), parsec = isIn('Parsec.Parsec'), going = busy.has('PCSX2Team.PCSX2') || busy.has('Parsec.Parsec');
+          const need = [!ps2 && 'PCSX2', !parsec && 'Parsec (online only)'].filter(Boolean);
+          out.push(going ? R.button(name, desc + '  Installing…', 'INSTALLING…', () => {})
+            : !ps2 ? R.button(name, desc + '  Needs ' + need.join(' and ') + '.', 'INSTALL PCSX2', () => bt4(false))
+            : R.buttons(name, desc + (parsec ? '  Ready to play, online too.' : '  Parsec gets installed when you pick PLAY ONLINE.'), [
+              ['PLAY', () => bt4(false), 'ghost'],
+              [parsec ? 'PLAY ONLINE' : 'INSTALL PARSEC', () => bt4(true)],
+            ]));
           continue;
         }
         const on = isIn(id), going = busy.has(id), bad = failed.get(id);
