@@ -872,3 +872,50 @@ body.compact .st-body .row.focus::before, body.compact .row.focus { background-c
 /* compact settings: the close button has the top-right corner to itself (SCALE used to sit under it) */
 body.compact .st-head { padding-right: 3.8rem; }
 body.compact .st-screen .fr-x { top: 1.1rem; right: 1.1rem; }
+/* EXPLORE (js/explore.js): other people's themes, card designs, widgets and Rainmeter skins */
+.overlay.ex-screen { display: block; background: rgba(0, 0, 0, .55); }
+.ex { position: absolute; inset: 1.2rem; display: flex; flex-direction: column; border-radius: 1rem; background: #121216; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), 0 2rem 4rem rgba(0, 0, 0, .6); padding: 1.3rem 1.6rem 0; overflow: hidden; }
+.ex-head { display: flex; align-items: center; gap: 1.6rem; }
+.ex-head h2 { font: 800 1.6rem/1 var(--body); text-transform: none; margin-top: .3rem; }
+.ex-tabs { display: flex; gap: .3rem; flex: 1; }
+.ex-tabs button { background: none; border: 0; color: #a3a3a3; font: 600 .92rem/1 var(--body); padding: .55rem .9rem; border-radius: .5rem; cursor: pointer; transition: color .25s, background-color .25s; }
+.ex-tabs button:hover { color: #fff; background: rgba(255, 255, 255, .06); }
+.ex-tabs button.on { color: #fff; background: rgba(255, 255, 255, .12); }
+.ex-search { flex: 0 1 18rem; }
+.ex-tools { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
+.ex-grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 1.1rem .9rem; align-content: start; padding: .3rem .3rem 1.3rem; scrollbar-width: thin; }
+.ex-grid.inner { overflow: visible; padding: 0; }
+.ex-card { display: flex; flex-direction: column; gap: .4rem; text-align: left; background: none; border: 0; padding: 0; color: #f2f2f2; cursor: pointer; }
+.ex-prev { position: relative; display: block; aspect-ratio: 4 / 3; border-radius: .6rem; overflow: hidden; background: #1b1b22; transition: transform .4s var(--soft, ease), box-shadow .25s; }
+.ex-prev > img, .ex-prev > .shop-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ex-prev .shop-art svg { width: 100%; height: 100%; }
+.ex-card:hover .ex-prev { transform: translateY(-3px); }
+.ex-card.on .ex-prev { box-shadow: 0 0 0 2px #fff; }
+.ex-card.locked { opacity: .55; }
+.ex-card b { font: 600 .88rem/1.2 var(--body); }
+.ex-card small { font: 500 .6rem/1.3 var(--mono); color: #8a8a8a; letter-spacing: .06em; }
+.ex-glyph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 2.6rem; font-style: normal; }
+.ex-cardprev { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: .7rem; padding: 1rem; background: radial-gradient(circle at 30% 20%, rgba(var(--a), .25), transparent 60%); }
+.ex-cardprev i { height: 70%; max-width: 45%; background: linear-gradient(160deg, #3a3a46, #1d1d25); }
+.ex-empty { grid-column: 1 / -1; color: #8a8a8a; padding: 1.4rem .2rem; }
+.ex-foot { flex: none; padding: .8rem 0 1rem; border-top: 1px solid rgba(255, 255, 255, .06); font: 500 .74rem var(--body); color: #8a8a8a; }
+.ex-sub { grid-column: 1 / -1; margin: 1.4rem 0 .6rem; }
+.ex-rm { grid-column: 1 / -1; display: flex; flex-direction: column; gap: .3rem; }
+.ex-rm-row { display: flex; align-items: center; gap: .9rem; padding: .6rem .8rem; border-radius: .55rem; background: rgba(255, 255, 255, .03); }
+.ex-rm-row.on { background: rgba(255, 255, 255, .08); }
+.ex-rm-row span { flex: 1; display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+.ex-rm-row b { font: 600 .9rem var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ex-rm-row small { font: 500 .62rem var(--mono); color: #8a8a8a; }
+.ex-rm-row select { background: #1c1c22; color: #ddd; border: 1px solid rgba(255, 255, 255, .1); border-radius: .4rem; padding: .3rem .4rem; font: 500 .78rem var(--body); }
+.gv-tabs .gv-explore { margin-left: .6rem; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
+/* card designs: the covers of the compact launcher */
+.gv-cover { border-radius: var(--gv-r, .55rem); }
+body[data-gv-shape="square"] .gv-cover { aspect-ratio: 1; }
+body[data-gv-shape="wide"] .gv-cover { aspect-ratio: 16 / 9; }
+body[data-gv-shape="wide"] .gv-grid { grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
+body[data-gv-border="accent"] .gv-card.on .gv-cover { box-shadow: 0 0 0 2px var(--accent), 0 .7rem 1.6rem rgba(0, 0, 0, .5); }
+body[data-gv-border="none"] .gv-card.on .gv-cover { box-shadow: 0 .9rem 1.8rem rgba(0, 0, 0, .6); transform: translateY(-4px); }
+body.gv-glow .gv-card.on .gv-cover, body.gv-glow .gv-card:hover .gv-cover { box-shadow: 0 0 0 2px var(--accent), 0 0 1.6rem rgba(var(--a), .55); }
+body[data-gv-hover="grow"] .gv-card:hover .gv-cover { transform: scale(1.05); }
+body[data-gv-hover="tilt"] .gv-card:hover .gv-cover { transform: perspective(40rem) rotateX(6deg) rotateY(-6deg) scale(1.03); }
+body.gv-nonames .gv-card b, body.gv-nonames .gv-card small { display: none; }

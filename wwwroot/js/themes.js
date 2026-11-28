@@ -35,6 +35,7 @@
 
   /// Applies a theme; the look you had is kept as "previous" so you can go straight back.
   function apply(th) {
+    if (SV.reqs && !SV.reqs.gate(th.req, th.name, () => SV.reqs.pack(th.name, th.data, th.images))) return;
     const t = T();
     t.previous = { name: 'Your look before ' + th.name, data: snapshot(), at: Date.now() };
     put(th.data);
@@ -79,7 +80,7 @@
   async function toCode(th) {
     // Your pictures are files on this PC, so a code sent to someone else leaves them out.
     th = { ...th, data: { ...th.data, art: undefined } };
-    const json = JSON.stringify({ n: th.name, b: th.by || '', d: portable(th.data) });
+    const json = JSON.stringify({ n: th.name, b: th.by || '', d: portable(th.data), ...(th.req && th.req.games && th.req.games.length ? { r: th.req } : {}), ...(th.images && th.images.length ? { i: th.images.filter((u) => /^https:/.test(u)) } : {}) });
     const packed = await pipe(new TextEncoder().encode(json), new CompressionStream('deflate-raw'));
     let s = ''; for (let i = 0; i < packed.length; i += 0x8000) s += String.fromCharCode(...packed.subarray(i, i + 0x8000));
     return 'SVT1.' + btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -92,7 +93,9 @@
     const data = {};
     for (const k of KEYS) if (o.d && o.d[k] && typeof o.d[k] === 'object') data[k] = o.d[k];
     if (!Object.keys(data).length) throw new Error('That code has no look in it.');
-    return { id: newId(), name: String(o.n || 'Shared theme').slice(0, 40), by: String(o.b || '').slice(0, 30), data, at: Date.now() };
+    const req = o.r && Array.isArray(o.r.games) ? { games: o.r.games.map((g) => String(g).slice(0, 60)).filter(Boolean).slice(0, 8) } : undefined;
+    const images = Array.isArray(o.i) ? o.i.filter((u) => typeof u === 'string' && /^https:/.test(u)).slice(0, 60) : undefined;
+    return { id: newId(), name: String(o.n || 'Shared theme').slice(0, 40), by: String(o.b || '').slice(0, 30), data, at: Date.now(), ...(req ? { req } : {}), ...(images ? { images } : {}) };
   }
   const copy = (text) => { try { navigator.clipboard.writeText(text); } catch {} };
 
@@ -172,7 +175,7 @@
     const rows = {};
     const isOn = (th) => T().current && T().current === th.id;
     const card = (th, owned) => ({
-      html: art(th), name: th.name, sub: (isOn(th) ? 'ON · ' : '') + (th.by ? 'BY ' + th.by.toUpperCase() : owned ? 'YOURS' : ''), picked: isOn(th),
+      html: art(th), name: th.name, sub: (SV.reqs && !SV.reqs.meets(th.req).ok ? 'NEEDS ' + SV.reqs.meets(th.req).missing.join(', ').toUpperCase() + ' · ' : '') + (isOn(th) ? 'ON · ' : '') + (th.by ? 'BY ' + th.by.toUpperCase() : owned ? 'YOURS' : ''), picked: isOn(th),
       run: () => menu(th, owned),
     });
     const lists = {
@@ -193,7 +196,9 @@
         { label: 'APPLY', sub: 'Your current look is kept: BACK returns to it', run: () => { apply(inLib || th); build(); } },
         ...(!owned && !inLib ? [{ label: 'GET', sub: 'Add it to your themes', run: () => { const c = { ...clone(th), id: newId(), at: Date.now() }; t.library.unshift(c); A.save(); toast(th.name + ' added to your themes'); build(); } }] : []),
         { label: 'SHARE CODE', sub: 'Copy a code anyone can paste in', run: () => share(th) },
+        ...(SV.reqs ? [{ label: 'GET AS IMAGE PACK', sub: 'Its pictures in a folder, without changing your look', run: () => SV.reqs.pack(th.name, th.data, th.images) }] : []),
         ...(owned ? [
+          { label: 'REQUIREMENTS', sub: th.req && th.req.games && th.req.games.length ? 'Needs ' + th.req.games.join(', ') : 'Games someone needs to use it (e.g. REMATCH)', run: () => SV.reqs.edit(th, build) },
           { label: 'UPDATE WITH MY CURRENT LOOK', run: () => { th.data = snapshot(); th.at = Date.now(); A.save(); toast(th.name + ' updated'); } },
           { label: 'RENAME', run: () => A.ask({ tag: 'THEMES', title: 'RENAME', label: 'Name', value: th.name, done: (v) => { th.name = v.trim() || th.name; A.save(); build(); } }) },
           { label: 'DELETE', danger: true, run: () => A.confirmMenu(`Delete ${th.name}?`, 'DELETE', () => { t.library = t.library.filter((x) => x !== th); if (t.current === th.id) t.current = ''; A.save(); build(); }) },
@@ -267,5 +272,5 @@
     ];
   }
 
-  SV.themes = { open, apply, back, snapshot, toCode, fromCode, rows };
+  SV.themes = { open, apply, back, snapshot, toCode, fromCode, rows, art, FEATURED, get library() { return T().library; }, add: (th) => { T().library.unshift(th); A.save(); } };
 })();

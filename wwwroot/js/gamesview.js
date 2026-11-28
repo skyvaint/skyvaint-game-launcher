@@ -63,7 +63,7 @@
       <canvas class="gv-bg"></canvas><div class="gv-pic"></div>
       <header class="gv-head gv-fly" style="--d:0">
         <b class="gv-brand">${esc((A.cfg.texts && A.cfg.texts.brand) || 'SKYVAINT')}</b>
-        <nav class="gv-tabs"><button data-t="games">Games</button><button data-t="roblox">Roblox</button><button data-t="apps">Apps</button></nav>
+        <nav class="gv-tabs"><button data-t="games">Games</button><button data-t="roblox">Roblox</button><button data-t="apps">Apps</button><button class="gv-explore" data-x="1">Explore</button></nav>
         <span class="gv-gap"></span>
         <button class="gv-ib" data-w="settings" title="Settings">${ICON.gear}</button>
         <span class="gv-sep"></span>
@@ -87,6 +87,7 @@
     document.body.append(root);
     const head = root.querySelector('.gv-head');
     head.addEventListener('click', (e) => {
+      if (e.target.closest('[data-x]')) return SV.explore && SV.explore.open();
       const b = e.target.closest('[data-t]');
       if (b) return setTab(b.dataset.t);
       const w = e.target.closest('[data-w]');
@@ -404,6 +405,7 @@
     return [
       R.choice('HOME style', 'Compact is the small launcher like the Epic Games Launcher: Games, Roblox and Apps, covers you can drag into your own order, ENTER plays. Classic is the animated full-screen HOME.',
         { get: () => H().view || 'classic', set: (v) => { H().view = v; if (v === 'games' && H().window == null) H().window = true; } }, [['games', 'Compact'], ['classic', 'Classic']], () => sync()),
+      ...(SV.explore ? SV.explore.rows() : []),
       R.file('Background picture', 'A picture or video behind the compact HOME, instead of the aurora.  ← clears it.', { get: () => H().gvBg || '', set: (v) => { H().gvBg = v; render(); } }, 'image'),
       R.slider('Background darkness', 'How much the picture is darkened under the panels.', { get: () => (H().gvBgDim == null ? 0.35 : H().gvBgDim), set: (v) => { H().gvBgDim = v; render(); } }, 0, 0.9, 0.05, (v) => Math.round(v * 100) + '%'),
       R.slider('Background blur', '', { get: () => +H().gvBgBlur || 0, set: (v) => { H().gvBgBlur = v; render(); } }, 0, 30, 1, (v) => (v ? v + ' px' : 'OFF')),

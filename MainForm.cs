@@ -2130,7 +2130,7 @@ public sealed partial class MainForm : Form
 			Quit();
 			break;
 		default:
-			if (!OnAccountMessage(m) && !OnInstallMessage(m) && !OnLedMessage(m) && !OnDesktopMessage(m) && !OnLaunchSeqMessage(m) && !OnLibraryMessage(m) && !OnAssetMessage(m) && !OnScreenMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m) && !OnUpdateMessage(m) && !OnSetupMessage(m) && !OnBudokaiMessage(m) && !OnCareMessage(m))
+			if (!OnAccountMessage(m) && !OnInstallMessage(m) && !OnRainmeterMessage(m) && !OnLedMessage(m) && !OnDesktopMessage(m) && !OnLaunchSeqMessage(m) && !OnLibraryMessage(m) && !OnAssetMessage(m) && !OnScreenMessage(m) && !OnTaskMessage(m) && !OnExtraMessage(m) && !OnFeedsMessage(m) && !OnSocialMessage(m) && !OnUpdateMessage(m) && !OnSetupMessage(m) && !OnBudokaiMessage(m) && !OnCareMessage(m))
 			{
 				OnClipMessage(m);
 			}
@@ -2852,6 +2852,13 @@ public sealed partial class MainForm : Form
 			["token"] = token
 		};
 		// A game file (ISO, CHD, RVZ…): it can be gigabytes, so only its path comes back, nothing is copied.
+		if (kind == "rmskin")
+		{
+			using OpenFileDialog rmd = new OpenFileDialog { Filter = "Rainmeter skins|*.rmskin" };
+			if (rmd.ShowDialog(this) == DialogResult.OK) { reply["path"] = rmd.FileName; reply["name"] = Path.GetFileName(rmd.FileName); }
+			Send(reply);
+			return;
+		}
 		if (kind == "iso")
 		{
 			using OpenFileDialog iso = new OpenFileDialog { Filter = "Games, mods and archives|*.iso;*.chd;*.cso;*.zso;*.bin;*.gz;*.rvz;*.wbfs;*.gcz;*.ciso;*.wia;*.gcm;*.zip;*.7z;*.rar|Save data (memory cards)|*.ps2;*.mcd;*.mc2;*.bin;*.max;*.psu|All files|*.*", Multiselect = true };

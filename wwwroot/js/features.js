@@ -65,6 +65,9 @@
       R.toggle('Ask which profile at start', 'Shows WHAT PROFILE TO LOAD when the launcher opens.', at('profiles.ask'), () => A.save()),
       R.button('Switch profile', `Now: ${current() ? current().name : 'none yet'}`, 'OPEN', () => { while (A.stack.length) A.pop(); pick(); }),
       R.button('New profile from this look', 'Saves your look now as a new profile.', 'NEW', () => newProfile(rerender)),
+      // Profiles that need a game this PC doesn't have: hidden from the switcher, but their pictures can still be had.
+      ...P().list.filter((x) => SV.reqs && !SV.reqs.meets(x.req).ok).map((x) => R.buttons(x.name + ' (hidden)', 'Needs ' + SV.reqs.meets(x.req).missing.join(', ') + '. Install it to use this profile, or take its pictures.', [
+        ['IMAGE PACK', () => SV.reqs.pack(x.name, x.look, [x.avatar])], ['REQUIREMENTS', () => SV.reqs.edit(x, rerender), 'ghost']])),
     ];
   }
 
@@ -86,6 +89,7 @@
 
   function load(x) {
     const p = P();
+    if (x.id !== p.current && SV.reqs && !SV.reqs.gate(x.req, x.name, () => SV.reqs.pack(x.name, x.look, [x.avatar]))) return;
     if (p.current !== x.id) {
       keep();
       p.current = x.id;
@@ -120,6 +124,8 @@
       { label: 'RENAME', run: () => A.ask({ tag: 'PROFILES', title: 'RENAME', label: 'Name', value: x.name, done: (v) => { x.name = v.trim() || x.name; if (p.current === x.id) A.cfg.profile.name = x.name; A.save(); refresh(); } }) },
       { label: 'PICTURE', run: () => A.pick('image').then((r) => { if (r.url) { x.avatar = r.url; if (p.current === x.id) A.cfg.profile.avatar = x.avatar; A.save(); refresh(); } }) },
       { label: 'GIVE IT THE LOOK I HAVE NOW', run: () => { x.look = SV.themes.snapshot(); A.save(); toast('Saved'); refresh(); } },
+      { label: 'REQUIREMENTS', sub: x.req && x.req.games && x.req.games.length ? 'Needs ' + x.req.games.join(', ') : 'Only shows when a game is on this PC (e.g. REMATCH)', run: () => SV.reqs.edit(x, refresh) },
+      { label: 'GET AS IMAGE PACK', sub: 'Its pictures in a folder', run: () => SV.reqs.pack(x.name, x.look, [x.avatar]) },
       ...(p.list.length > 1 ? [{ label: 'DELETE', danger: true, run: () => A.confirmMenu('Delete ' + x.name + '?', 'DELETE', () => { p.list = p.list.filter((y) => y !== x); if (p.current === x.id) p.current = p.list[0].id; A.save(); refresh(); }) }] : []),
     ]);
   }
@@ -152,7 +158,8 @@
     const box = root.querySelector('.prof-row'), info = root.querySelector('.prof-info');
     const glows = [...root.querySelectorAll('.prof-glow')];
     let glowOn = 0;
-    const items = () => [...P().list, { add: true }];
+    const usable = (x) => x.id === P().current || !SV.reqs || SV.reqs.meets(x.req).ok;
+    const items = () => [...P().list.filter(usable), { add: true }];
     function glow(color) {
       // Two layers crossfading: animating the gradient itself would repaint the whole screen every frame.
       const next = glows[1 - glowOn];
@@ -225,7 +232,7 @@
   function quick(node) {
     const p = P();
     A.popover(node, 'PROFILES', [
-      ...p.list.map((x) => ({ icon: picOf(x, 'pop-pic'), bg: swatch(x.look), round: true, label: x.name, sub: presetOf(x), on: x.id === p.current, tag: x.id === p.current ? 'NOW' : '', run: () => { if (x.id !== p.current) load(x); } })),
+      ...p.list.filter((x) => x.id === p.current || !SV.reqs || SV.reqs.meets(x.req).ok).map((x) => ({ icon: picOf(x, 'pop-pic'), bg: swatch(x.look), round: true, label: x.name, sub: presetOf(x), on: x.id === p.current, tag: x.id === p.current ? 'NOW' : '', run: () => { if (x.id !== p.current) load(x); } })),
       'sep',
       { icon: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>', label: 'New profile', sub: 'Starts with the look you have now', run: () => newProfile(() => {}) },
       { icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="18" rx="1.500"/><rect x="14" y="3" width="7" height="18" rx="1.500"/></svg>', label: 'All profiles', sub: 'Pictures, names and looks', run: pick },
